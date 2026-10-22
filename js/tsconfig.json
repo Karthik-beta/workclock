@@ -5,6 +5,7 @@
     "moduleResolution": "nodenext",
     "strict": true,
     "resolveJsonModule": true,
+    "skipLibCheck": true,
     "noEmit": true
   },
   "include": ["test/**/*.ts", "vitest.config.ts"]
