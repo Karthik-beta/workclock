@@ -64,6 +64,8 @@ convention = "pep257"
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["D"]
+# businesstimedelta is untyped, so its objects can only be annotated as Any.
+"tests/python/upstream/**" = ["ANN401"]
 
 [tool.mypy]
 strict = true
