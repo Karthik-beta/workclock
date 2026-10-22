@@ -1,0 +1,41 @@
+name: Bug report
+description: A result that is wrong, an error, or a crash.
+labels: ["type:bug"]
+body:
+  - type: dropdown
+    id: package
+    attributes:
+      label: Package
+      options:
+        - Rust (crates.io)
+        - Python (workclock)
+        - Python (workclock.compat)
+        - JavaScript (npm)
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: workclock version
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: Include the schedule, the inputs and their time zones.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result
+    validations:
+      required: true
