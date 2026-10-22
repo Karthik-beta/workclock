@@ -1,0 +1,14 @@
+[package]
+name = "workclock"
+description = "Business-time arithmetic over working hours, breaks, holidays and time zones, including overnight shifts"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
+keywords = ["business-hours", "working-hours", "sla", "timezone", "shift"]
+categories = ["date-and-time"]
+
+[lints]
+workspace = true
