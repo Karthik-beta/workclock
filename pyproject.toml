@@ -29,7 +29,14 @@ Issues = "https://github.com/Karthik-beta/workclock/issues"
 Changelog = "https://github.com/Karthik-beta/workclock/blob/main/CHANGELOG.md"
 
 [dependency-groups]
-dev = ["mypy", "pytest", "ruff"]
+dev = [
+    "businesstimedelta==1.0.1",
+    "holidays",
+    "mypy",
+    "pytest",
+    "pytz",
+    "ruff",
+]
 
 [tool.maturin]
 manifest-path = "crates/workclock-py/Cargo.toml"
@@ -61,6 +68,11 @@ convention = "pep257"
 [tool.mypy]
 strict = true
 files = ["python", "tests/python"]
+
+[[tool.mypy.overrides]]
+# Neither ships type information; types-pytz would be another dependency.
+module = ["businesstimedelta.*", "pytz.*"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests/python"]
