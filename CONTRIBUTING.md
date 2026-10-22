@@ -29,6 +29,20 @@ Versions follow [SemVer 2.0.0](https://semver.org/spec/v2.0.0.html), and the
 Rust crate also follows Cargo's
 [SemVer compatibility rules](https://doc.rust-lang.org/cargo/reference/semver.html).
 
+## Development
+
+### Rust
+
+Requires stable Rust via [rustup](https://rustup.rs), plus `cargo install --locked cargo-deny cargo-audit`.
+
+```sh
+cargo fmt --all
+cargo clippy --workspace --all-targets --all-features -- -D warnings -W clippy::pedantic
+cargo test --workspace --all-features
+cargo deny check
+cargo audit
+```
+
 ## Standards
 
 **Rust**
