@@ -1,0 +1,25 @@
+{
+  "name": "workclock",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Fast, correct business-time arithmetic: working hours, SLAs and shifts",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Karthik-beta/workclock.git",
+    "directory": "js"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "wasm-pack build ../crates/workclock-wasm --target nodejs --out-dir ../../js/pkg/node --out-name workclock",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  }
+}
