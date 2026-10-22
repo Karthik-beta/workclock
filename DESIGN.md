@@ -177,3 +177,96 @@ outside, `sub` lands on the start of the working time that `add` consumed
 | A9 | same | `sub(Mon 2026-01-12 10:00, 1h)` | Mon 2026-01-12 09:00 |
 | A10 | same | `sub(Sat 10:00, 1h)` | Fri 16:00 |
 | A11 | 9–17 Mon–Fri, break 12–13 | `add(Mon 12:30, 0h)` (inside the break) | Mon 12:30 |
+
+## Time zones and DST
+
+Rule times are wall-clock times in the rule's zone. Durations are elapsed real
+time, so a shift that spans a DST transition is an hour shorter or longer than
+its wall-clock length.
+
+When a rule boundary is not a unique local time, it is resolved with the
+*compatible* strategy used by jiff's default, RFC 5545 and JavaScript
+Temporal:
+
+- **Gap** (spring forward): a time that does not exist moves forward by the
+  length of the gap. 02:30 on a day when clocks jump from 02:00 to 03:00
+  becomes 03:30.
+- **Overlap** (fall back): a time that occurs twice resolves to the earlier
+  occurrence.
+
+If resolution leaves a block's start at or after its end, the block is empty
+for that day (D8).
+
+All examples use America/New_York unless noted. Clocks jump forward on
+Sunday 2026-03-08 and back on Sunday 2026-11-01.
+
+| ID | Schedule | Query | Result |
+|---|---|---|---|
+| D1 | 22–06 every day | `between(Sat 2026-03-07 22:00 EST, Sun 06:00 EDT)` | 7h |
+| D2 | 22–06 every day | `between(Sat 2026-10-31 22:00 EDT, Sun 06:00 EST)` | 9h |
+| D3 | 22–06 every day | `add(Sat 2026-03-07 22:00 EST, 7h)` | Sun 2026-03-08 06:00 EDT |
+| D4 | 02:30–04:00 Sun | working time on 2026-03-08 | 03:30–04:00 EDT, 0.5h |
+| D5 | 01:30–03:00 Sun | working time on 2026-11-01 | 01:30 EDT–03:00 EST, 2.5h |
+| D6 | 00–00 every day, Europe/London | `between(Sun 2026-03-29 00:00 GMT, Mon 00:00 BST)` | 23h |
+| D7 | 00–00 every day, holiday 2026-03-08 | `between(Sat 2026-03-07 00:00, Tue 2026-03-10 00:00)` | 48h |
+| D8 | 02:30–03:00 Sun | working time on 2026-03-08 | none, 0h |
+| D9 | 02:00–02:30 Sun | working time on 2026-03-08 | 03:00–03:30 EDT, 0.5h |
+
+## Inputs and precision
+
+| Binding | Instants | Durations | Precision |
+|---|---|---|---|
+| Rust | `jiff::Timestamp` or `jiff::Zoned` | `jiff::SignedDuration` | nanoseconds |
+| Python | timezone-aware `datetime` | `timedelta` | microseconds |
+| JavaScript | `Date` or ISO 8601 string with an offset | number of milliseconds | milliseconds |
+
+Time zones are IANA names. Python accepts `zoneinfo.ZoneInfo` (via `.key`) and
+pytz zones (via `.zone`) and converts them to names.
+
+Results combine input instants, input durations and rule boundaries, and a
+rule boundary is a wall-clock time shifted by a whole-second UTC offset. Results
+are therefore exact at each binding's precision; nothing is rounded.
+
+**Naive datetimes.** The typed Python API raises `ValueError` for a datetime
+without `tzinfo`, and the JavaScript API rejects an ISO string without an
+offset. Only the compatibility layer treats naive datetimes as UTC, as
+businesstimedelta does.
+
+| ID | Binding | Input | Result |
+|---|---|---|---|
+| N1 | Python typed | `schedule.between(datetime(2026, 1, 5, 10), aware)` | `ValueError` |
+| N2 | JavaScript | `schedule.between("2026-01-05T10:00", "2026-01-05T12:00Z")` | error |
+| N3 | Python compat | `rule.difference(datetime(2026, 1, 5, 10), datetime(2026, 1, 5, 12))`, 9–17 UTC | 2h |
+
+## Errors and termination
+
+Every search is bounded, and failures are errors, never hangs
+([seppemans/businesstimedelta#9](https://github.com/seppemans/businesstimedelta/issues/9)).
+Library code does not panic.
+
+- **No working time.** Building a schedule fails if it has no available rule,
+  or if its available time minus its breaks is empty over a 14-day reference
+  window (Monday 2001-01-01 onward, UTC). Holidays are excluded from this
+  check because there are finitely many of them.
+- **Search bound.** `add` and `sub` stop with the same error if they cross
+  366 days, plus one day per holiday date, without finding working time. This
+  is a safety net: after a successful build it can only trip for schedules
+  whose rules use different zones whose DST changes keep them apart for
+  longer than that.
+- **Past the last holiday.** Holidays are a finite set; searching beyond the
+  last date simply finds no more time off
+  ([seppemans/businesstimedelta#8](https://github.com/seppemans/businesstimedelta/issues/8),
+  [#10](https://github.com/seppemans/businesstimedelta/issues/10)).
+- **Out of range.** A result outside the supported range (years -9999 to
+  9999) is an error.
+- **Unknown zone.** An unknown IANA name is an error when the schedule is
+  built.
+
+| ID | Schedule | Query | Result |
+|---|---|---|---|
+| E1 | no rules | build | no-working-time error |
+| E2 | 9–17 with no working days | build | no-working-time error |
+| E3 | 9–17 Mon–Fri, break 9–17 Mon–Fri | build | no-working-time error |
+| E4 | 9–17 Mon–Fri, holidays every date from 2026-01-01 to 2035-12-29 | `add(2026-01-01 00:00, 1h)` | Mon 2035-12-31 10:00 |
+| E5 | 9–17 Mon–Fri | `add(9999-12-31 16:00, 2h)` | out-of-range error |
+| E6 | zone `Mars/Olympus_Mons` | build | unknown-zone error |
