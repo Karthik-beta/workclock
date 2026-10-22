@@ -257,8 +257,8 @@ Library code does not panic.
   last date simply finds no more time off
   ([seppemans/businesstimedelta#8](https://github.com/seppemans/businesstimedelta/issues/8),
   [#10](https://github.com/seppemans/businesstimedelta/issues/10)).
-- **Out of range.** A result outside the supported range (years -9999 to
-  9999) is an error.
+- **Out of range.** A result outside jiff's timestamp range
+  (`-009999-01-02T01:59:59Z` to `9999-12-30T22:00:00Z`) is an error.
 - **Unknown zone.** An unknown IANA name is an error when the schedule is
   built.
 
@@ -268,7 +268,7 @@ Library code does not panic.
 | E2 | 9–17 with no working days | build | no-working-time error |
 | E3 | 9–17 Mon–Fri, break 9–17 Mon–Fri | build | no-working-time error |
 | E4 | 9–17 Mon–Fri, holidays every date from 2026-01-01 to 2035-12-29 | `add(2026-01-01 00:00, 1h)` | Mon 2035-12-31 10:00 |
-| E5 | 9–17 Mon–Fri | `add(9999-12-31 16:00, 2h)` | out-of-range error |
+| E5 | 9–17 Mon–Fri | `add(Thu 9999-12-30 16:00, 2h)` | out-of-range error |
 | E6 | zone `Mars/Olympus_Mons` | build | unknown-zone error |
 
 ## Compatibility layer
