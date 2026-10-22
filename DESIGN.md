@@ -125,3 +125,55 @@ upstream
 | Z3 | 9–17 Mon–Fri America/Los_Angeles, holiday 2026-01-26 in the schedule's zone | `between(Mon 09:00 PST, Mon 17:00 PST)` | 0h |
 | Z4 | same, holiday explicitly in UTC | same | 1h |
 | Z5 | 9–18 Mon–Fri America/Santiago, break 12–13 | `between(2016-01-18 09:00, 18:00)` in America/Los_Angeles | 4h |
+
+## Operations
+
+Let `W` be the schedule's working time and `|W ∩ [a, b)|` the working time
+inside `[a, b)`.
+
+### between(a, b)
+
+- `a <= b`: `|W ∩ [a, b)|`.
+- `a > b`: `-between(b, a)`. The result is signed, like `b - a` for plain
+  timedeltas, which resolves upstream
+  [seppemans/businesstimedelta#12](https://github.com/seppemans/businesstimedelta/issues/12).
+- `between(a, a)` is zero.
+
+| ID | Schedule | Query | Result |
+|---|---|---|---|
+| B1 | 9–17 Mon–Fri | `between(Mon 10:00, Mon 12:00)` | 2h |
+| B2 | same | `between(Fri 16:00, next Mon 10:00)` | 2h |
+| B3 | same | `between(Sat 10:00, Sun 10:00)` | 0h |
+| B4 | same | `between(Mon 12:00, Mon 10:00)` | -2h |
+| B5 | same | `between(Mon 10:00, Mon 10:00)` | 0h |
+
+### add(t, d) and sub(t, d)
+
+- `d > 0`: `add` returns the earliest instant `x >= t` with
+  `|W ∩ [t, x)| = d`. `sub` returns the latest instant `x <= t` with
+  `|W ∩ [x, t)| = d`.
+- `d = 0`: both return `t` unchanged, even outside working time.
+- `d < 0`: `add(t, d) = sub(t, -d)` and `sub(t, d) = add(t, -d)`.
+
+Because `add` returns the *earliest* such instant, a result that exhausts a
+block lands on the block's end, not on the start of the next block (A2). For
+`sub` the result lands on a block's start.
+
+For every `t` and `d`, `between(t, add(t, d)) = d`. The reverse,
+`sub(add(t, d), d) = t`, holds only when `t` is inside working time: from
+outside, `sub` lands on the start of the working time that `add` consumed
+(A4 then A9).
+
+| ID | Schedule | Query | Result |
+|---|---|---|---|
+| A1 | 9–17 Mon–Fri | `add(Mon 10:00, 2h)` | Mon 12:00 |
+| A2 | same | `add(Mon 16:00, 1h)` | Mon 17:00 |
+| A3 | same | `add(Mon 17:00, 1h)` | Tue 10:00 |
+| A4 | same | `add(Sat 10:00, 1h)` | Mon 2026-01-12 10:00 |
+| A5 | same | `add(Sat 10:00, 0h)` | Sat 10:00 |
+| A6 | same | `add(Mon 10:00, -2h)` | Fri 2026-01-02 16:00 |
+| A7 | same | `sub(Tue 09:00, 1h)` | Mon 16:00 |
+| A8 | same | `sub(Sat 10:00, 0h)` | Sat 10:00 |
+| A9 | same | `sub(Mon 2026-01-12 10:00, 1h)` | Mon 2026-01-12 09:00 |
+| A10 | same | `sub(Sat 10:00, 1h)` | Fri 16:00 |
+| A11 | 9–17 Mon–Fri, break 12–13 | `add(Mon 12:30, 0h)` (inside the break) | Mon 12:30 |
