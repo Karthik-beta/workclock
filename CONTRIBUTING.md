@@ -43,6 +43,19 @@ cargo deny check
 cargo audit
 ```
 
+### Python
+
+Requires [uv](https://docs.astral.sh/uv/) and a Rust toolchain. `uv sync` builds
+the extension with maturin and rebuilds it when Rust sources change.
+
+```sh
+uv sync
+uv run ruff check
+uv run ruff format --check
+uv run mypy
+uv run pytest
+```
+
 ## Standards
 
 **Rust**
