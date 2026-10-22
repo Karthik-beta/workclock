@@ -270,3 +270,71 @@ Library code does not panic.
 | E4 | 9–17 Mon–Fri, holidays every date from 2026-01-01 to 2035-12-29 | `add(2026-01-01 00:00, 1h)` | Mon 2035-12-31 10:00 |
 | E5 | 9–17 Mon–Fri | `add(9999-12-31 16:00, 2h)` | out-of-range error |
 | E6 | zone `Mars/Olympus_Mons` | build | unknown-zone error |
+
+## Compatibility layer
+
+`workclock.compat` mirrors businesstimedelta 1.0.1: `WorkDayRule`,
+`LunchTimeRule`, `HolidayRule`, `Rules` and `BusinessTimeDelta`, with the same
+arguments, defaults, operators and `hours`/`seconds` properties. It runs on the
+same engine as the typed API. Migrating is one line:
+
+```python
+import workclock.compat as businesstimedelta
+```
+
+Where 1.0.1 is correct, compat returns exactly what it returns. Upstream
+behaviours that callers may rely on are kept even where the typed API differs:
+
+- `difference` is always non-negative (C1).
+- Adding or subtracting zero snaps to the next or previous working instant
+  (C2, C3).
+- `start_time == end_time` is an empty rule, as upstream's own test expects
+  (C4).
+- `hours` is whole hours, and `seconds` is the remainder below one hour (C5).
+- `difference` drops microseconds (C6).
+- Naive datetimes are UTC, and every rule's `tz` defaults to UTC rather than
+  inheriting a schedule zone.
+
+Upstream defects are fixed:
+
+- Overnight shifts are counted correctly (C7).
+- Holidays past the end of a list, or in another zone, no longer raise or
+  loop forever.
+- A time-off block that starts inside a working period always shortens it.
+- A schedule without working time raises instead of hanging (C4).
+
+`HolidayRule` accepts a list of dates or a python-holidays object. The dates
+are copied once, at construction. python-holidays objects fill in years on
+demand, so compat first fills in every year from 1970 to 2100, plus any years
+the object already holds; dates outside that window are not holidays (C8, C9).
+
+DST overlaps resolve to the earlier occurrence, while upstream's pytz
+`localize()` picks the later one. Results therefore differ for rule
+boundaries inside a repeated hour.
+
+Every difference is listed in `MIGRATING.md`.
+
+| ID | Rules | Call | compat | 1.0.1 |
+|---|---|---|---|---|
+| C1 | 9–17 Mon–Fri UTC | `difference(Mon 12:00, Mon 10:00)` | 2h | same |
+| C2 | same | `Sat 10:00 + BusinessTimeDelta(rule, hours=0)` | Mon 2026-01-12 09:00 | same |
+| C3 | same | `Sat 10:00 - BusinessTimeDelta(rule, hours=0)` | Fri 17:00 | same |
+| C4 | 09:00–09:00 Mon–Fri | `difference(Mon 12:00, Tue 12:00)`; then `+ BusinessTimeDelta(rule, hours=1)` | 0h; raises | 0h; hangs |
+| C5 | 9–17 Mon–Fri UTC | `BusinessTimeDelta(rule, timedelta=timedelta(hours=2, seconds=1))` | `hours == 2`, `seconds == 1` | same |
+| C6 | same | `difference(Mon 10:00, Mon 10:00:00.999999)` | 0h, 0s | same |
+| C7 | 22–06 Mon–Fri UTC | O1, O2, O3 | 8h; Tue 02:00; Tue 02:00 | 0h; Wed 02:00; `OverflowError` |
+| C8 | 9–17 Mon–Fri UTC, `HolidayRule(holidays.US())` | `difference(Fri 2026-07-03 09:00, 17:00)` (Independence Day, observed) | 0h | 0h |
+| C9 | same | `difference(Mon 2101-07-04 09:00, 17:00)` (outside the window) | 8h | `TypeError` |
+
+## Decisions
+
+| Decision | Choice | Why |
+|---|---|---|
+| Sign of `between(a, b)` for `b < a` | negative | Antisymmetric like timedelta subtraction; fixes upstream issue 12 in the typed API. |
+| `add(t, 0)` outside working time | returns `t` | Follows from the definition of `add`; snapping would make `add(t, 0) != t`. Compat keeps snapping. |
+| `start_time == end_time` | 24-hour shift | Consistent with `end <= start` meaning overnight; expresses round-the-clock coverage. |
+| Holiday vs overnight shift | removes calendar time only | A holiday is defined as 00:00–24:00; keeps rules independent and composable. |
+| DST disambiguation | compatible | Same as jiff, RFC 5545 and Temporal, so the three bindings agree with their ecosystems. |
+| Holiday zone default | schedule's zone | Avoids the UTC/local mismatch behind upstream issue 9. |
+| python-holidays objects | eager 1970–2100 | Keeps "convert once at construction"; no per-date or per-year FFI. |
+| Duration-to-business-days (upstream issue 3) | not in 0.1.0 | A formatting feature, not a correctness fix. |
