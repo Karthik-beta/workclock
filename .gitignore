@@ -8,3 +8,7 @@ node_modules/
 /dist/
 /js/LICENSE
 /js/NOTICE
+/js/*.tgz
+/python.json
+/js.json
+lcov.info
