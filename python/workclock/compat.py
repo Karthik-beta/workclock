@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import bisect
 import datetime as _dt
-from collections.abc import Iterable
-from typing import Union
+from collections.abc import Collection, Iterable
+from typing import Union, overload
 
 from workclock import _workclock
 from workclock._errors import NoWorkingTimeError
@@ -100,7 +100,7 @@ class WorkDayRule(Rule):
         self,
         start_time: _dt.time = _dt.time(9),
         end_time: _dt.time = _dt.time(18),
-        working_days: list[int] | None = None,
+        working_days: Collection[int] | None = None,
         tz: Zone = _UTC,
         time_off: bool = False,
     ) -> None:
@@ -108,7 +108,9 @@ class WorkDayRule(Rule):
         super().__init__(tz, time_off)
         self.start_time = start_time
         self.end_time = end_time
-        self.working_days = [0, 1, 2, 3, 4] if working_days is None else working_days
+        self.working_days: Collection[int] = (
+            [0, 1, 2, 3, 4] if working_days is None else working_days
+        )
 
     def _engine_rule(self, kind: type[WorkDay | Break]) -> list[WorkDay | Break]:
         if self.start_time == self.end_time:
@@ -129,7 +131,7 @@ class LunchTimeRule(WorkDayRule):
         self,
         start_time: _dt.time = _dt.time(12),
         end_time: _dt.time = _dt.time(13),
-        working_days: list[int] | None = None,
+        working_days: Collection[int] | None = None,
         tz: Zone = _UTC,
     ) -> None:
         """Create a break; ``working_days`` defaults to Monday to Friday."""
@@ -300,6 +302,10 @@ class BusinessTimeDelta:
             return NotImplemented
         return self.timedelta == other.timedelta
 
+    @overload
+    def __add__(self, other: BusinessTimeDelta) -> BusinessTimeDelta: ...
+    @overload
+    def __add__(self, other: _dt.datetime) -> _dt.datetime: ...
     def __add__(self, other: object) -> BusinessTimeDelta | _dt.datetime:
         """Add another delta under the same rule, or move a datetime forward."""
         if isinstance(other, BusinessTimeDelta) and other.rule == self.rule:
@@ -313,10 +319,20 @@ class BusinessTimeDelta:
             return self.rule._add(dt, self.timedelta)
         raise NotImplementedError
 
+    @overload
+    def __radd__(self, other: BusinessTimeDelta) -> BusinessTimeDelta: ...
+    @overload
+    def __radd__(self, other: _dt.datetime) -> _dt.datetime: ...
     def __radd__(self, other: object) -> BusinessTimeDelta | _dt.datetime:
         """Move a datetime forward by this delta."""
-        return self.__add__(other)
+        if isinstance(other, (BusinessTimeDelta, _dt.datetime)):
+            return self.__add__(other)
+        raise NotImplementedError
 
+    @overload
+    def __sub__(self, other: BusinessTimeDelta) -> BusinessTimeDelta: ...
+    @overload
+    def __sub__(self, other: _dt.datetime) -> _dt.datetime: ...
     def __sub__(self, other: object) -> BusinessTimeDelta | _dt.datetime:
         """Subtract another delta under the same rule, or move a datetime back."""
         if isinstance(other, BusinessTimeDelta) and other.rule == self.rule:
@@ -330,9 +346,15 @@ class BusinessTimeDelta:
             return self.rule._sub(dt, self.timedelta)
         return NotImplemented
 
+    @overload
+    def __rsub__(self, other: BusinessTimeDelta) -> BusinessTimeDelta: ...
+    @overload
+    def __rsub__(self, other: _dt.datetime) -> _dt.datetime: ...
     def __rsub__(self, other: object) -> BusinessTimeDelta | _dt.datetime:
         """Move a datetime back by this delta."""
-        return self.__sub__(other)
+        if isinstance(other, (BusinessTimeDelta, _dt.datetime)):
+            return self.__sub__(other)
+        return NotImplemented
 
     @property
     def hours(self) -> int:
