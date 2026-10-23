@@ -5,8 +5,7 @@ import pytest
 from hypothesis import settings
 
 # Tests that take `btd` run against every implementation listed here.
-# workclock.compat joins businesstimedelta once it exists (M5).
-IMPLEMENTATIONS = ["businesstimedelta"]
+IMPLEMENTATIONS = ["businesstimedelta", "workclock.compat"]
 
 
 # The oracle is slow, so the default run is light; use
