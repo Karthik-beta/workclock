@@ -1,6 +1,7 @@
 use std::fmt;
 
-/// An error from building a schedule or from searching it.
+/// An error from building a [`Schedule`](crate::Schedule) or from searching
+/// it.
 ///
 /// # Examples
 ///

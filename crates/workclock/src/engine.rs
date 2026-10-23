@@ -67,7 +67,6 @@ pub(crate) fn each_date(dates: RangeInclusive<Date>) -> impl Iterator<Item = Dat
 }
 
 /// Sorts `blocks` and merges the ones that overlap or touch.
-#[cfg_attr(not(test), expect(dead_code, reason = "used once Schedule is added"))]
 pub(crate) fn union(blocks: &mut Vec<Block>) {
     blocks.sort_unstable_by_key(|b| b.start);
     let mut merged: Vec<Block> = Vec::with_capacity(blocks.len());
@@ -82,7 +81,6 @@ pub(crate) fn union(blocks: &mut Vec<Block>) {
 
 /// Removes `off` from `on`. Both must be sorted and merged, as [`union`]
 /// leaves them.
-#[cfg_attr(not(test), expect(dead_code, reason = "used once Schedule is added"))]
 pub(crate) fn subtract(on: &[Block], off: &[Block]) -> Vec<Block> {
     let mut out = Vec::with_capacity(on.len());
     let mut off = off.iter().peekable();
