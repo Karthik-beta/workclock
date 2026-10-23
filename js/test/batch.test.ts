@@ -94,7 +94,7 @@ describe("errors name the failing item", () => {
 
   test("a fractional epoch value", () => {
     expect(() => office.addMany(Float64Array.of(0, 1, 2.5), HOUR)).toThrow(
-      new RangeError("item 2: instants must be whole milliseconds since the epoch"),
+      new RangeError("item 2: instants must be whole milliseconds since the epoch, got 2.5"),
     );
   });
 
@@ -110,6 +110,12 @@ describe("errors name the failing item", () => {
     const call = () => always.addMany(["2026-01-05T09:00:00Z", "9999-12-30T00:00:00Z"], 48 * HOUR);
     expect(call).toThrow(OutOfRangeError);
     expect(call).toThrow(/^item 1: result is outside the supported range -009999-01-02T01:59:59Z to 9999-12-30T22:00:00Z$/);
+  });
+
+  test("an epoch value out of range", () => {
+    const call = () => office.addMany(Float64Array.of(0, 8.64e15 + 1), HOUR);
+    expect(call).toThrow(OutOfRangeError);
+    expect(call).toThrow("item 1: 8640000000000001 is outside the supported range");
   });
 
   test("an input that is not an array", () => {

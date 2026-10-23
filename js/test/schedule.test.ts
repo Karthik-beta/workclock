@@ -162,6 +162,9 @@ describe("errors", () => {
 
   test("a Date past the supported range throws OutOfRangeError", () => {
     expect(() => always.add(new Date(8.64e15), 0)).toThrow(OutOfRangeError);
+    expect(() => always.add(new Date(8.64e15), 0)).toThrow(
+      "+275760-09-13T00:00:00.000Z is outside the supported range",
+    );
   });
 
   test.each(["-009999-01-02T01:59:59Z", "9999-12-30T22:00:00Z"])(
@@ -275,8 +278,23 @@ describe("malformed input", () => {
       '"2026-01-05T09:00:00.0001Z" has digits below a millisecond',
     ],
     [() => office.between(new Date(Number.NaN), "2026-01-06T09:00:00Z"), "invalid Date"],
+    [
+      () => office.between("9999-12-31T23:00:00Z", "2026-01-06T09:00:00Z"),
+      '"9999-12-31T23:00:00Z" is not an ISO 8601 instant with a UTC offset in the supported range',
+    ],
+    [
+      () => office.between("+010000-01-01T00:00:00Z", "2026-01-06T09:00:00Z"),
+      '"+010000-01-01T00:00:00Z" is not an ISO 8601 instant with a UTC offset in the supported range',
+    ],
     [() => office.add("2026-01-05T09:00:00Z", 1.5), "durations must be whole numbers of milliseconds"],
-    [() => office.add("2026-01-05T09:00:00Z", Number.NaN), "durations must be whole numbers of milliseconds"],
+    [() => office.add("2026-01-05T09:00:00Z", Number.NaN), "got NaN"],
+    [() => office.add("2026-01-05T09:00:00Z", -Infinity), "got -Infinity"],
+    [
+      () => office.add("2026-01-05T09:00:00Z", 2 ** 53),
+      "durations must be whole numbers of milliseconds within ±Number.MAX_SAFE_INTEGER, got 9007199254740992",
+    ],
+    [() => office.add("2026-01-05T09:00:00Z", 1e16), "got 10000000000000000"],
+    [() => office.add("2026-01-05T09:00:00Z", 1.5), "got 1.5"],
   ])("throws RangeError: %s", (call, message) => {
     expect(call).toThrow(RangeError);
     expect(call).toThrow(message);
