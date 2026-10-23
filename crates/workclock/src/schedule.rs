@@ -6,6 +6,9 @@ use crate::holiday::HolidayDates;
 use crate::workday::Shifts;
 use crate::{Break, Error, Rule, WorkDay};
 
+/// How much time is evaluated at once when walking along a schedule.
+const CHUNK: SignedDuration = SignedDuration::from_hours(7 * 24);
+
 /// Working time defined by rules, evaluated in IANA time zones.
 ///
 /// Working time is the union of every [`WorkDay`] minus every [`Break`] and
@@ -49,6 +52,44 @@ impl Schedule {
     #[must_use]
     pub fn builder() -> ScheduleBuilder {
         ScheduleBuilder::default()
+    }
+
+    /// Returns the working time between `a` and `b`.
+    ///
+    /// The result is negative when `b` is before `a`, like subtracting two
+    /// instants, so `between(a, b) == -between(b, a)`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use jiff::civil::time;
+    /// use jiff::{SignedDuration, Timestamp};
+    /// use workclock::{Schedule, Weekdays, WorkDay};
+    ///
+    /// let schedule = Schedule::builder()
+    ///     .rule(WorkDay::new(time(9, 0, 0, 0), time(17, 0, 0, 0), Weekdays::MON_TO_FRI))
+    ///     .build()?;
+    /// let friday: Timestamp = "2026-01-09T16:00:00Z".parse()?;
+    /// let monday: Timestamp = "2026-01-12T10:00:00Z".parse()?;
+    /// assert_eq!(schedule.between(friday, monday), SignedDuration::from_hours(2));
+    /// assert_eq!(schedule.between(monday, friday), SignedDuration::from_hours(-2));
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    pub fn between(&self, a: impl Into<Timestamp>, b: impl Into<Timestamp>) -> SignedDuration {
+        let (a, b) = (a.into(), b.into());
+        if b < a {
+            return -self.between(b, a);
+        }
+        let mut total = SignedDuration::ZERO;
+        let mut lo = a;
+        while lo < b {
+            let hi = lo.checked_add(CHUNK).unwrap_or(Timestamp::MAX).min(b);
+            for block in self.working_time(lo, hi, true) {
+                total += block.end.duration_since(block.start);
+            }
+            lo = hi;
+        }
+        total
     }
 
     /// Working time inside `[lo, hi)`, sorted and merged. Holidays are left
@@ -209,8 +250,8 @@ fn lookup(name: &str) -> Result<TimeZone, Error> {
 
 #[cfg(test)]
 mod tests {
-    use jiff::civil::{date, time};
-    use jiff::Timestamp;
+    use jiff::civil::{date, time, Time};
+    use jiff::{SignedDuration, Timestamp, Zoned};
 
     use super::Schedule;
     use crate::{Break, Error, Holidays, Weekdays, WorkDay};
@@ -230,6 +271,81 @@ mod tests {
             .into_iter()
             .map(|b| format!("{}/{}", b.start, b.end))
             .collect()
+    }
+
+    fn between(schedule: &Schedule, a: &str, b: &str) -> SignedDuration {
+        let (a, b): (Timestamp, Timestamp) = (a.parse().unwrap(), b.parse().unwrap());
+        schedule.between(a, b)
+    }
+
+    fn h(hours: i64) -> SignedDuration {
+        SignedDuration::from_hours(hours)
+    }
+
+    #[test]
+    fn between_is_signed_and_zero_on_equal_instants() {
+        // B1, B4, B5
+        let schedule = Schedule::builder().rule(office()).build().unwrap();
+        let (ten, noon) = ("2026-01-05T10:00:00Z", "2026-01-05T12:00:00Z");
+        assert_eq!(between(&schedule, ten, noon), h(2));
+        assert_eq!(between(&schedule, noon, ten), h(-2));
+        assert_eq!(between(&schedule, ten, ten), h(0));
+    }
+
+    #[test]
+    fn between_counts_overnight_shifts_and_breaks() {
+        // O1, K1, K2
+        let nights = Schedule::builder().rule(night()).build().unwrap();
+        let lunch = Break::new(time(12, 0, 0, 0), time(13, 0, 0, 0), Weekdays::MON_TO_FRI);
+        let office = Schedule::builder()
+            .rule(office())
+            .rule(lunch)
+            .build()
+            .unwrap();
+        assert_eq!(
+            between(&nights, "2026-01-05T22:00:00Z", "2026-01-06T06:00:00Z"),
+            h(8)
+        );
+        assert_eq!(
+            between(&office, "2026-01-05T09:00:00Z", "2026-01-05T17:00:00Z"),
+            h(7)
+        );
+        assert_eq!(
+            between(&office, "2026-01-05T12:30:00Z", "2026-01-05T14:00:00Z"),
+            h(1)
+        );
+    }
+
+    #[test]
+    fn between_spans_many_chunks_and_accepts_zoned_instants() {
+        let schedule = Schedule::builder()
+            .time_zone("Europe/London")
+            .rule(office())
+            .build()
+            .unwrap();
+        let a = "2026-01-05T00:00[Europe/London]".parse::<Zoned>().unwrap();
+        let b = "2027-01-04T00:00[Europe/London]".parse::<Zoned>().unwrap();
+        assert_eq!(
+            schedule.between(&a, &b),
+            SignedDuration::from_hours(52 * 40)
+        );
+    }
+
+    #[test]
+    fn between_reaches_the_ends_of_jiff_range() {
+        let schedule = Schedule::builder()
+            .rule(WorkDay::new(
+                Time::midnight(),
+                Time::midnight(),
+                Weekdays::ALL,
+            ))
+            .build()
+            .unwrap();
+        let month = SignedDuration::from_hours(30 * 24);
+        let first = Timestamp::MIN.checked_add(month).unwrap();
+        let last = Timestamp::MAX.checked_sub(month).unwrap();
+        assert_eq!(schedule.between(Timestamp::MIN, first), month);
+        assert_eq!(schedule.between(last, Timestamp::MAX), month);
     }
 
     #[test]
