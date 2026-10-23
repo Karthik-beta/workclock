@@ -164,6 +164,23 @@ describe("errors", () => {
     expect(() => always.add(new Date(8.64e15), 0)).toThrow(OutOfRangeError);
   });
 
+  test.each([
+    ["WorkclockError", WorkclockError, "unknown"],
+    ["NoWorkingTimeError", NoWorkingTimeError, "no_working_time"],
+    ["OutOfRangeError", OutOfRangeError, "out_of_range"],
+    ["UnknownZoneError", UnknownZoneError, "unknown_zone"],
+  ] as const)("a constructed %s has its name and kind", (name, Class, kind) => {
+    const error = new Class("x");
+    expect(error).toBeInstanceOf(Class);
+    expect(error).toBeInstanceOf(WorkclockError);
+    expect(error).toMatchObject({ name, kind, message: "x" });
+    for (const Other of [NoWorkingTimeError, OutOfRangeError, UnknownZoneError]) {
+      if (Other !== Class) {
+        expect(error).not.toBeInstanceOf(Other);
+      }
+    }
+  });
+
   test("other errors are not WorkclockErrors", () => {
     expect(new Error("x")).not.toBeInstanceOf(WorkclockError);
     expect(Object.assign(new Error("x"), { kind: "other" })).not.toBeInstanceOf(WorkclockError);
