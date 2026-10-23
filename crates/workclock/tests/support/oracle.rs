@@ -64,7 +64,7 @@ impl Oracle {
             workdays,
             breaks,
             holidays,
-            search_limit: SignedDuration::from_hours(24 * (366 + holiday_dates)),
+            search_limit: SignedDuration::from_hours(24 * (366 + 7 * holiday_dates)),
         };
 
         let window_start: Timestamp = "2001-01-01T00:00:00Z".parse().unwrap();

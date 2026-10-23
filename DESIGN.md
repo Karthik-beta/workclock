@@ -264,11 +264,17 @@ Library code does not panic.
   or if its available time minus its breaks is empty over a 14-day reference
   window (Monday 2001-01-01 onward, UTC). Holidays are excluded from this
   check because there are finitely many of them.
-- **Search bound.** `add` and `sub` stop with the same error if they cross
-  366 days, plus one day per holiday date, without finding working time. This
-  is a safety net: after a successful build it can only trip for schedules
-  whose rules use different zones whose DST changes keep them apart for
-  longer than that.
+- **Search bound.** `add`, `sub`, `next_period` and `previous_period` stop
+  with the same error if they cross 366 days, plus seven days per holiday
+  date, without finding working time. Without holidays, a schedule whose
+  rules share one zone repeats every week, except that a DST change can skip
+  a week's working time (D8), which happens at most twice a year. A holiday
+  removes one day of calendar time, which can hide one week's working time
+  (E7, E8), so each date can lengthen a gap by at most a week. After a
+  successful build the bound can therefore trip only for schedules whose rules
+  use different zones whose DST changes keep them apart for longer than a
+  year, or, in theory, for decades of holidays that all fall on the only
+  working day.
 - **Past the last holiday.** Holidays are a finite set; searching beyond the
   last date simply finds no more time off
   ([seppemans/businesstimedelta#8](https://github.com/seppemans/businesstimedelta/issues/8),
@@ -286,6 +292,8 @@ Library code does not panic.
 | E4 | 9–17 Mon–Fri, holidays every date from 2026-01-01 to 2035-12-29 | `add(2026-01-01 00:00, 1h)` | Mon 2035-12-31 10:00 |
 | E5 | 9–17 Mon–Fri | `add(Thu 9999-12-30 16:00, 2h)` | out-of-range error |
 | E6 | zone `Mars/Olympus_Mons` | build | unknown-zone error |
+| E7 | 9–17 Mondays only, holidays every Monday from 2026-01-12 to 2027-03-15 (62 dates) | `add(Tue 2026-01-06 00:00, 1h)` | Mon 2027-03-22 10:00 |
+| E8 | same | `sub(Mon 2027-03-22 09:00, 1h)` | Mon 2026-01-05 16:00 |
 
 ### Error types
 

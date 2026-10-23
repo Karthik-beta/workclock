@@ -28,7 +28,7 @@ businesstimedelta's absolute value, so existing code sees no change there.
 | Holidays in a different zone from the working hours can loop forever ([#9](https://github.com/seppemans/businesstimedelta/issues/9)) | Terminates with the correct result |
 | A time-off block that starts inside a working period does not always shorten it | Working time is always the union of working hours minus the union of time off |
 | A rule without working time (such as `start_time == end_time`) hangs on addition | Raises `workclock.NoWorkingTimeError`; `difference` returns zero |
-| Any search can run forever | Searches give up after 366 days, plus one day per holiday date, without working time |
+| Any search can run forever | Searches give up after 366 days, plus seven days per holiday date, without working time |
 
 ## Intentional differences
 

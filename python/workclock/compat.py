@@ -70,7 +70,7 @@ class Rule:
         """Return the block that contains ``dt``, or the first one after it.
 
         A naive ``dt`` is UTC. Raises `NoWorkingTimeError` if no block starts
-        within 366 days plus one per holiday date, and `OutOfRangeError` if
+        within 366 days plus seven per holiday date, and `OutOfRangeError` if
         ``dt`` or the block is outside the supported range.
         """
         return self._schedule().next_period(localize_unlocalized_dt(dt))

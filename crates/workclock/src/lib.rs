@@ -29,8 +29,8 @@
 //! ```
 //!
 //! Every fallible operation returns [`Error`], and no operation panics or
-//! loops forever: searches give up after crossing 366 days, plus one day per
-//! holiday date, without finding working time.
+//! loops forever: searches give up after crossing 366 days, plus seven days
+//! per holiday date, without finding working time.
 
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]

@@ -59,7 +59,7 @@ Schedule errors are instances of `WorkclockError`, with a `kind`:
 
 | Class | `kind` | Thrown when |
 |---|---|---|
-| `NoWorkingTimeError` | `"no_working_time"` | The rules have no working time, or a search finds none within 366 days, plus one day per holiday date. |
+| `NoWorkingTimeError` | `"no_working_time"` | The rules have no working time, or a search finds none within 366 days, plus seven days per holiday date. |
 | `OutOfRangeError` | `"out_of_range"` | An instant or a result is outside the supported range. |
 | `UnknownZoneError` | `"unknown_zone"` | A time zone is not in the IANA database. |
 
