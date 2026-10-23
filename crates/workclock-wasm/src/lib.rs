@@ -203,7 +203,8 @@ impl Schedule {
     /// days, plus one day per holiday date.
     /// @throws {OutOfRangeError} If `t` or the result is outside the supported
     /// range.
-    /// @throws {TypeError} If `t` is neither a `Date` nor a string.
+    /// @throws {TypeError} If `t` is neither a `Date` nor a string, or `ms` is
+    /// not a number.
     /// @throws {RangeError} If `t` is malformed, or `ms` is not a whole number
     /// within ±`Number.MAX_SAFE_INTEGER`.
     /// @example
@@ -214,9 +215,9 @@ impl Schedule {
     pub fn add(
         &self,
         #[wasm_bindgen(unchecked_param_type = "Instant")] t: &JsValue,
-        ms: f64,
+        #[wasm_bindgen(unchecked_param_type = "number")] ms: &JsValue,
     ) -> Result<js_sys::Date, JsValue> {
-        let result = self.0.add(instant(t)?, duration(ms)?);
+        let result = self.0.add(instant(t)?, duration(number(ms)?)?);
         result.map(date).map_err(|e| engine_error(&e))
     }
 
@@ -231,15 +232,16 @@ impl Schedule {
     /// days, plus one day per holiday date.
     /// @throws {OutOfRangeError} If `t` or the result is outside the supported
     /// range.
-    /// @throws {TypeError} If `t` is neither a `Date` nor a string.
+    /// @throws {TypeError} If `t` is neither a `Date` nor a string, or `ms` is
+    /// not a number.
     /// @throws {RangeError} If `t` is malformed, or `ms` is not a whole number
     /// within ±`Number.MAX_SAFE_INTEGER`.
     pub fn sub(
         &self,
         #[wasm_bindgen(unchecked_param_type = "Instant")] t: &JsValue,
-        ms: f64,
+        #[wasm_bindgen(unchecked_param_type = "number")] ms: &JsValue,
     ) -> Result<js_sys::Date, JsValue> {
-        let result = self.0.sub(instant(t)?, duration(ms)?);
+        let result = self.0.sub(instant(t)?, duration(number(ms)?)?);
         result.map(date).map_err(|e| engine_error(&e))
     }
 
@@ -623,6 +625,16 @@ fn number_text(number: f64) -> String {
         // As JavaScript prints them, except that Rust never uses an exponent.
         number.to_string()
     }
+}
+
+/// `ms` as a number, without the coercion JavaScript would apply.
+fn number(ms: &JsValue) -> Result<f64, JsValue> {
+    ms.as_f64().ok_or_else(|| {
+        type_error(&format!(
+            "`ms` must be a number of milliseconds, got {}",
+            show(ms)
+        ))
+    })
 }
 
 fn duration(ms: f64) -> Result<SignedDuration, JsValue> {

@@ -273,6 +273,21 @@ describe("malformed input", () => {
     ],
     // @ts-expect-error instants are Dates or strings
     [() => office.between(0, "2026-01-05T09:00:00Z"), "expected a Date or an ISO 8601 string"],
+    [
+      // @ts-expect-error durations are numbers
+      () => office.add("2026-01-05T09:00:00Z", "3600000"),
+      '`ms` must be a number of milliseconds, got "3600000"',
+    ],
+    [
+      // @ts-expect-error durations are numbers
+      () => office.sub("2026-01-05T09:00:00Z", null),
+      "`ms` must be a number of milliseconds, got null",
+    ],
+    [
+      // @ts-expect-error the duration is required
+      () => office.add("2026-01-05T09:00:00Z"),
+      "`ms` must be a number of milliseconds, got undefined",
+    ],
   ])("throws TypeError: %s", (call, message) => {
     expect(call).toThrow(TypeError);
     expect(call).toThrow(message);
