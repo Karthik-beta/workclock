@@ -55,6 +55,13 @@ def test_amounts_combine_delta_and_keywords(office: Schedule) -> None:
     assert office.add(start, hours=4.5) == expected
 
 
+def test_a_number_as_delta_is_rejected(office: Schedule) -> None:
+    with pytest.raises(TypeError, match=r"delta must be a timedelta.*hours=.*seconds="):
+        office.add(utc(5, 9), 3600)  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="delta must be a timedelta"):
+        office.sub(utc(5, 9), 1.5)  # type: ignore[arg-type]
+
+
 def test_zero_and_negative_amounts(office: Schedule) -> None:
     saturday = datetime(2026, 1, 10, 10, tzinfo=UTC)
     assert office.add(saturday) == saturday
