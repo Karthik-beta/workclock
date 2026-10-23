@@ -33,6 +33,7 @@ dev = [
     "businesstimedelta==1.0.1",
     "holidays",
     "mypy",
+    "numpy",
     "pytest",
     "pytz",
     "ruff",
