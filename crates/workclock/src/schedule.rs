@@ -96,6 +96,7 @@ impl Schedule {
     /// assert_eq!(schedule.between(monday, friday), SignedDuration::from_hours(-2));
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
+    #[must_use]
     pub fn between(&self, a: impl Into<Timestamp>, b: impl Into<Timestamp>) -> SignedDuration {
         let (a, b) = (a.into(), b.into());
         if b < a {
