@@ -53,6 +53,16 @@ describe("betweenMany", () => {
     expect(office.betweenMany(new Float64Array(), new Float64Array())).toEqual(new Float64Array());
   });
 
+  test("takes a value typed as either form", () => {
+    const pick = (typed: boolean): Float64Array | Date[] => (typed ? instants : dates);
+    expect(Array.from(office.betweenMany(pick(true), pick(true)))).toEqual(
+      office.betweenMany(pick(false), pick(false)),
+    );
+    expect(Array.from(office.addMany(pick(true), HOUR), Number)).toEqual(
+      Array.from(office.addMany(pick(false), HOUR), Number),
+    );
+  });
+
   test("inputs of different lengths throw RangeError", () => {
     expect(() => office.betweenMany(dates, dates.slice(1))).toThrow(
       new RangeError(`batch inputs differ in length: ${dates.length} and ${dates.length - 1}`),
