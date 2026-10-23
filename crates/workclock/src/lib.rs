@@ -8,8 +8,11 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
+mod engine;
 mod error;
 mod weekdays;
+mod workday;
 
 pub use error::Error;
 pub use weekdays::Weekdays;
+pub use workday::{Break, WorkDay};
