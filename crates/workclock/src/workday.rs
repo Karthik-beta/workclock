@@ -2,7 +2,7 @@ use jiff::civil::Time;
 use jiff::tz::TimeZone;
 use jiff::Timestamp;
 
-use crate::engine::{local_dates, resolve, Block};
+use crate::engine::{each_date, local_dates, resolve, Block};
 use crate::Weekdays;
 
 /// Daily hours on some days of the week, in a time zone.
@@ -140,7 +140,7 @@ impl Shifts {
     /// Appends the parts of every shift inside `[lo, hi)`.
     pub(crate) fn blocks(&self, lo: Timestamp, hi: Timestamp, out: &mut Vec<Block>) {
         let overnight = self.end <= self.start;
-        for date in local_dates(lo, hi, &self.tz) {
+        for date in each_date(local_dates(lo, hi, &self.tz)) {
             if !self.days.contains(date.weekday()) {
                 continue;
             }
