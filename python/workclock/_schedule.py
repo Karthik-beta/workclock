@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone, tzinfo
-from typing import Optional, Union
+from typing import TYPE_CHECKING, Optional, Union, overload
 
-from workclock import _workclock
+from workclock import _arrays, _workclock
 from workclock._errors import (
     NoWorkingTimeError,
     OutOfRangeError,
@@ -16,6 +16,10 @@ from workclock._errors import (
     WorkclockError,
 )
 from workclock._zones import zone_name
+
+if TYPE_CHECKING:
+    import numpy as np
+    from numpy.typing import NDArray
 
 _TimeTuple = tuple[int, int, int, int]
 _HoursSpec = tuple[_TimeTuple, _TimeTuple, list[int], Optional[str]]
@@ -249,6 +253,106 @@ class Schedule:
         with _engine_errors():
             micros = self._schedule.sub(_micros(dt), amount)
         return _datetime(micros, dt.tzinfo)
+
+    @overload
+    def between_many(
+        self, starts: Sequence[datetime], ends: Sequence[datetime]
+    ) -> list[timedelta]: ...
+    @overload
+    def between_many(
+        self, starts: NDArray[np.datetime64], ends: NDArray[np.datetime64]
+    ) -> NDArray[np.timedelta64]: ...
+    def between_many(
+        self,
+        starts: Sequence[datetime] | NDArray[np.datetime64],
+        ends: Sequence[datetime] | NDArray[np.datetime64],
+    ) -> list[timedelta] | NDArray[np.timedelta64]:
+        """Return `between` for each pair of ``starts`` and ``ends`` in one call.
+
+        Accepts sequences of aware datetimes, or NumPy ``datetime64`` arrays
+        read as UTC, which give a ``timedelta64[us]`` array of the same shape.
+        """
+        if _arrays.is_array(starts):
+            shape = starts.shape
+            with _engine_errors():
+                micros = self._schedule.between_many(
+                    _arrays.to_micros(starts, "datetime64", shape),
+                    _arrays.to_micros(ends, "datetime64", shape),
+                )
+            return _arrays.from_micros(micros, "timedelta64", shape)
+        starts, ends = list(starts), list(ends)
+        with _engine_errors():
+            micros = self._schedule.between_many(
+                [_micros(t) for t in starts], [_micros(t) for t in ends]
+            )
+        return [timedelta(microseconds=m) for m in micros]
+
+    @overload
+    def add_many(
+        self, dts: Sequence[datetime], deltas: Sequence[timedelta] | timedelta
+    ) -> list[datetime]: ...
+    @overload
+    def add_many(
+        self,
+        dts: NDArray[np.datetime64],
+        deltas: NDArray[np.timedelta64] | timedelta,
+    ) -> NDArray[np.datetime64]: ...
+    def add_many(
+        self,
+        dts: Sequence[datetime] | NDArray[np.datetime64],
+        deltas: Sequence[timedelta] | NDArray[np.timedelta64] | timedelta,
+    ) -> list[datetime] | NDArray[np.datetime64]:
+        """Return `add` for each datetime and amount in one call.
+
+        ``deltas`` is one amount per datetime, or a single amount for all.
+        Accepts the same inputs as `between_many`.
+        """
+        return self._shift_many(self._schedule.add_many, dts, deltas)
+
+    @overload
+    def sub_many(
+        self, dts: Sequence[datetime], deltas: Sequence[timedelta] | timedelta
+    ) -> list[datetime]: ...
+    @overload
+    def sub_many(
+        self,
+        dts: NDArray[np.datetime64],
+        deltas: NDArray[np.timedelta64] | timedelta,
+    ) -> NDArray[np.datetime64]: ...
+    def sub_many(
+        self,
+        dts: Sequence[datetime] | NDArray[np.datetime64],
+        deltas: Sequence[timedelta] | NDArray[np.timedelta64] | timedelta,
+    ) -> list[datetime] | NDArray[np.datetime64]:
+        """Return `sub` for each datetime and amount in one call.
+
+        ``deltas`` is one amount per datetime, or a single amount for all.
+        Accepts the same inputs as `between_many`.
+        """
+        return self._shift_many(self._schedule.sub_many, dts, deltas)
+
+    def _shift_many(
+        self,
+        shift: Callable[[list[int], list[int]], list[int]],
+        dts: Sequence[datetime] | NDArray[np.datetime64],
+        deltas: Sequence[timedelta] | NDArray[np.timedelta64] | timedelta,
+    ) -> list[datetime] | NDArray[np.datetime64]:
+        if _arrays.is_array(dts):
+            shape = dts.shape
+            with _engine_errors():
+                micros = shift(
+                    _arrays.to_micros(dts, "datetime64", shape),
+                    _arrays.to_micros(deltas, "timedelta64", shape),
+                )
+            return _arrays.from_micros(micros, "datetime64", shape)
+        dts = list(dts)
+        if isinstance(deltas, timedelta):
+            amounts = [deltas // _MICROSECOND] * len(dts)
+        else:
+            amounts = [d // _MICROSECOND for d in deltas]
+        with _engine_errors():
+            micros = shift([_micros(t) for t in dts], amounts)
+        return [_datetime(m, t.tzinfo) for m, t in zip(micros, dts)]
 
 
 def _amount(
