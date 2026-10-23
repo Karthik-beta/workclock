@@ -279,7 +279,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
           toolchain: stable
-      - run: cargo publish -p workclock --locked
+      # crates.io only allows trusted publishing for a crate that exists, so the
+      # first release uses a token; the Release Process wiki page has the switch.
+      - run: cargo publish -p workclock --locked # zizmor: ignore[use-trusted-publishing]
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
