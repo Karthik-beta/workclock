@@ -7,22 +7,14 @@ mod support {
     pub mod spec;
 }
 
-use jiff::{SignedDuration, Timestamp};
+use jiff::SignedDuration;
 
-use support::fixture::{self, Expect, Op};
+use support::fixture::{self, instant, Op, Outcome};
 use support::oracle::{Oracle, OracleError};
 use support::spec::ScheduleSpec;
 
-#[derive(Debug, PartialEq)]
-enum Outcome {
-    Seconds(i64),
-    Instant(Timestamp),
-    Built,
-}
-
 fn run(spec: &ScheduleSpec, op: &Op) -> Result<Outcome, OracleError> {
     let oracle = Oracle::build(spec)?;
-    let instant = |s: &str| s.parse::<Timestamp>().expect("fixture instant is RFC 3339");
     Ok(match op {
         Op::Between { a, b } => Outcome::Seconds(oracle.between(instant(a), instant(b)).as_secs()),
         Op::Add { t, seconds } => {
@@ -48,15 +40,9 @@ fn oracle_matches_every_design_example() {
     let fixture = fixture::load();
     let mut failures = Vec::new();
     for case in &fixture.cases {
-        let actual = run(&fixture.schedules[&case.schedule], &case.op);
-        let expected = match &case.expect {
-            Expect::Seconds(s) => Ok(Outcome::Seconds(*s)),
-            Expect::Instant(t) => Ok(Outcome::Instant(
-                t.parse().expect("fixture instant is RFC 3339"),
-            )),
-            Expect::Error(e) => Err(e.as_str()),
-        };
-        if actual.as_ref().map_err(|e| error_name(*e)) != expected.as_ref().map_err(|e| *e) {
+        let actual = run(&fixture.schedules[&case.schedule], &case.op).map_err(error_name);
+        let expected = case.expected();
+        if actual != expected {
             failures.push(format!(
                 "{}: expected {expected:?}, got {actual:?}",
                 case.id
