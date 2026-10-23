@@ -133,6 +133,25 @@ def test_results_past_the_supported_range_are_errors() -> None:
         schedule.add(datetime(9999, 12, 30, 16, tzinfo=UTC), hours=2)
 
 
+def test_amounts_past_the_engine_range_are_errors(office: Schedule) -> None:
+    start = utc(5, 9)
+    huge = timedelta(days=999_999_999)
+    with pytest.raises(OutOfRangeError, match=r"amount .*days=999999999.* outside"):
+        office.add(start, huge)
+    with pytest.raises(OutOfRangeError, match=r"amount .*days=999999999.* outside"):
+        office.sub(start, huge)
+    with pytest.raises(OutOfRangeError, match=r"amount hours=1e\+20 is outside"):
+        office.add(start, hours=1e20)
+    with pytest.raises(OutOfRangeError, match="amount hours=inf is outside"):
+        office.add(start, hours=float("inf"))
+    with pytest.raises(OutOfRangeError, match=r"amount .* is outside"):
+        office.add(start, timedelta(microseconds=2**63))
+    with pytest.raises(OutOfRangeError, match="result is outside"):
+        office.add(start, timedelta(microseconds=2**63 - 1))
+    with pytest.raises(ValueError, match="amount hours=nan is not a number"):
+        office.add(start, hours=float("nan"))
+
+
 def test_invalid_rules_are_rejected() -> None:
     with pytest.raises(ValueError, match="days must be integers"):
         WorkDay(time(9), time(17), [7])

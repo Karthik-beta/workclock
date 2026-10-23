@@ -78,3 +78,11 @@ def test_errors_name_the_failing_item(nights: Schedule) -> None:
     near_end = datetime(9999, 12, 30, 21, tzinfo=UTC)
     with pytest.raises(OutOfRangeError, match="item 1"):
         nights.add_many([utc(5, 22), near_end], timedelta(hours=8))
+
+
+def test_amounts_past_the_engine_range_name_the_item(nights: Schedule) -> None:
+    huge = timedelta(days=999_999_999)
+    with pytest.raises(OutOfRangeError, match=r"item 0: amount .* is outside"):
+        nights.add_many([utc(5, 22)], huge)
+    with pytest.raises(OutOfRangeError, match=r"item 1: amount .* is outside"):
+        nights.sub_many([utc(5, 22), utc(5, 22)], [timedelta(hours=1), huge])
