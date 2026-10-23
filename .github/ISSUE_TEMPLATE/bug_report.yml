@@ -19,6 +19,12 @@ body:
       label: workclock version
     validations:
       required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Operating system and Python or Node.js version, or the Rust toolchain.
+      placeholder: Windows 11, Python 3.13
   - type: textarea
     id: repro
     attributes:
