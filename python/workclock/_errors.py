@@ -6,11 +6,14 @@ class WorkclockError(Exception):
 
 
 class NoWorkingTimeError(WorkclockError, ValueError):
-    """The schedule has no working time, or a search found none within a year."""
+    """The schedule has no working time, or a search found none within its bound.
+
+    The bound is 366 days, plus one day per holiday date.
+    """
 
 
 class OutOfRangeError(WorkclockError, OverflowError):
-    """The result is outside the supported range of datetimes."""
+    """An instant, amount or result is outside the supported range."""
 
 
 class UnknownZoneError(WorkclockError, ValueError):

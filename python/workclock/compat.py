@@ -4,6 +4,20 @@
 businesstimedelta working, on workclock's engine. The classes take the same
 arguments and defaults and support the same operators. Every intentional
 difference is listed in MIGRATING.md.
+
+>>> import datetime
+>>> import workclock.compat as businesstimedelta
+>>> rule = businesstimedelta.WorkDayRule(datetime.time(9), datetime.time(17))
+>>> friday = datetime.datetime(2026, 1, 9, 16)
+>>> print(friday + businesstimedelta.BusinessTimeDelta(rule, hours=2))
+2026-01-12 10:00:00+00:00
+>>> rule.difference(friday, datetime.datetime(2026, 1, 12, 10)).hours
+2
+
+Rules are checked when they are used rather than when they are created, so
+any method that computes with a rule raises `TypeError` or `ValueError` for
+invalid attributes, such as a ``working_days`` entry outside 0 to 6, and
+`TypeError` for rule types that compat does not run.
 """
 
 from __future__ import annotations
@@ -53,15 +67,27 @@ class Rule:
         self.time_off = time_off
 
     def next(self, dt: _dt.datetime) -> Period:
-        """Return the block that contains ``dt``, or the first one after it."""
+        """Return the block that contains ``dt``, or the first one after it.
+
+        A naive ``dt`` is UTC. Raises `NoWorkingTimeError` if no block starts
+        within 366 days plus one per holiday date, and `OutOfRangeError` if
+        ``dt`` or the block is outside the supported range.
+        """
         return self._schedule().next_period(localize_unlocalized_dt(dt))
 
     def previous(self, dt: _dt.datetime) -> Period:
-        """Return the block that contains ``dt``, or the last one before it."""
+        """Return the block that contains ``dt``, or the last one before it.
+
+        Raises the same errors as `next`.
+        """
         return self._schedule().previous_period(localize_unlocalized_dt(dt))
 
     def difference(self, dt1: _dt.datetime, dt2: _dt.datetime) -> BusinessTimeDelta:
-        """Return the business time between two datetimes, in either order."""
+        """Return the business time between two datetimes, in either order.
+
+        Naive datetimes are UTC. Raises `OutOfRangeError` if either is outside
+        the supported range.
+        """
         start, end = sorted(
             [localize_unlocalized_dt(dt1), localize_unlocalized_dt(dt2)]
         )
@@ -151,7 +177,11 @@ class HolidayRule(Rule):
         tz: Zone = _UTC,
         time_off: bool = True,
     ) -> None:
-        """Create a rule from ``holidays``; it is time off by default."""
+        """Create a rule from ``holidays``; it is time off by default.
+
+        Raises `TypeError` if ``holidays`` holds anything but
+        ``datetime.date`` objects.
+        """
         self.holidays = holidays
         super().__init__(tz, time_off)
         self._dates = sorted(_holiday_dates(holidays))
@@ -161,7 +191,10 @@ class HolidayRule(Rule):
         return f"<HolidayRule: {self.holidays}>"
 
     def next(self, dt: _dt.datetime) -> Period:
-        """Return the holiday that contains ``dt``, or the first one after it."""
+        """Return the holiday that contains ``dt``, or the first one after it.
+
+        Raises `NoWorkingTimeError` if there is no holiday after ``dt``.
+        """
         dt = localize_unlocalized_dt(dt)
         t = _micros(dt)
         first = max(bisect.bisect_left(self._dates, self._local_date(t)) - 1, 0)
@@ -172,7 +205,10 @@ class HolidayRule(Rule):
         raise NoWorkingTimeError(f"no holiday after {dt}")
 
     def previous(self, dt: _dt.datetime) -> Period:
-        """Return the holiday that contains ``dt``, or the last one before it."""
+        """Return the holiday that contains ``dt``, or the last one before it.
+
+        Raises `NoWorkingTimeError` if there is no holiday before ``dt``.
+        """
         dt = localize_unlocalized_dt(dt)
         t = _micros(dt)
         last = bisect.bisect_right(self._dates, self._local_date(t)) + 1
@@ -183,7 +219,11 @@ class HolidayRule(Rule):
         raise NoWorkingTimeError(f"no holiday before {dt}")
 
     def difference(self, dt1: _dt.datetime, dt2: _dt.datetime) -> BusinessTimeDelta:
-        """Return the holiday time between two datetimes, in either order."""
+        """Return the holiday time between two datetimes, in either order.
+
+        Raises `OutOfRangeError` if either datetime is outside the supported
+        range.
+        """
         a, b = sorted(
             [
                 _micros(localize_unlocalized_dt(dt1)),
@@ -307,7 +347,11 @@ class BusinessTimeDelta:
     @overload
     def __add__(self, other: _dt.datetime) -> _dt.datetime: ...
     def __add__(self, other: object) -> BusinessTimeDelta | _dt.datetime:
-        """Add another delta under the same rule, or move a datetime forward."""
+        """Add another delta under the same rule, or move a datetime forward.
+
+        Raises `NotImplementedError` for anything else, as businesstimedelta
+        does, and the errors of `Rule.next` when moving a datetime.
+        """
         if isinstance(other, BusinessTimeDelta) and other.rule == self.rule:
             return BusinessTimeDelta(
                 self.rule, timedelta=self.timedelta + other.timedelta
@@ -324,7 +368,10 @@ class BusinessTimeDelta:
     @overload
     def __radd__(self, other: _dt.datetime) -> _dt.datetime: ...
     def __radd__(self, other: object) -> BusinessTimeDelta | _dt.datetime:
-        """Move a datetime forward by this delta."""
+        """Move a datetime forward by this delta.
+
+        Raises the same errors as `__add__`.
+        """
         if isinstance(other, (BusinessTimeDelta, _dt.datetime)):
             return self.__add__(other)
         raise NotImplementedError
@@ -334,7 +381,12 @@ class BusinessTimeDelta:
     @overload
     def __sub__(self, other: _dt.datetime) -> _dt.datetime: ...
     def __sub__(self, other: object) -> BusinessTimeDelta | _dt.datetime:
-        """Subtract another delta under the same rule, or move a datetime back."""
+        """Subtract another delta under the same rule, or move a datetime back.
+
+        Returns ``NotImplemented`` for anything else, so Python raises
+        `TypeError`, and raises the errors of `Rule.previous` when moving a
+        datetime.
+        """
         if isinstance(other, BusinessTimeDelta) and other.rule == self.rule:
             return BusinessTimeDelta(
                 self.rule, timedelta=self.timedelta - other.timedelta
@@ -351,7 +403,10 @@ class BusinessTimeDelta:
     @overload
     def __rsub__(self, other: _dt.datetime) -> _dt.datetime: ...
     def __rsub__(self, other: object) -> BusinessTimeDelta | _dt.datetime:
-        """Move a datetime back by this delta."""
+        """Move a datetime back by this delta.
+
+        Raises the same errors as `__sub__`.
+        """
         if isinstance(other, (BusinessTimeDelta, _dt.datetime)):
             return self.__sub__(other)
         return NotImplemented
