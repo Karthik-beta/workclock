@@ -24,14 +24,19 @@ type HoursTuple = (TimeTuple, TimeTuple, Vec<i8>, Option<String>);
 /// `(dates, zone)` of a holiday rule; dates are `(year, month, day)`.
 type HolidaysTuple = (Vec<(i16, i8, i8)>, Option<String>);
 
-fn engine_error(error: &Error) -> PyErr {
+/// The `(kind, message)` arguments of an `EngineError`.
+fn describe(error: &Error) -> (&'static str, String) {
     let kind = match error {
         Error::NoWorkingTime => "no_working_time",
         Error::OutOfRange => "out_of_range",
         Error::UnknownZone { .. } => "unknown_zone",
         _ => "unknown",
     };
-    EngineError::new_err((kind, error.to_string()))
+    (kind, error.to_string())
+}
+
+fn engine_error(error: &Error) -> PyErr {
+    EngineError::new_err(describe(error))
 }
 
 fn time((hour, minute, second, micro): TimeTuple) -> PyResult<Time> {
@@ -117,6 +122,62 @@ impl Schedule {
         let result = self.0.sub(instant(t)?, SignedDuration::from_micros(d));
         Ok(result.map_err(|e| engine_error(&e))?.as_microsecond())
     }
+
+    fn between_many(&self, py: Python<'_>, a: Vec<i64>, b: Vec<i64>) -> PyResult<Vec<i64>> {
+        let schedule = &self.0;
+        batch(py, a, b, |a, b| {
+            let duration = schedule.between(core_instant(a)?, core_instant(b)?);
+            i64::try_from(duration.as_micros()).map_err(|_| Error::OutOfRange)
+        })
+    }
+
+    fn add_many(&self, py: Python<'_>, t: Vec<i64>, d: Vec<i64>) -> PyResult<Vec<i64>> {
+        let schedule = &self.0;
+        batch(py, t, d, |t, d| {
+            let result = schedule.add(core_instant(t)?, SignedDuration::from_micros(d))?;
+            Ok(result.as_microsecond())
+        })
+    }
+
+    fn sub_many(&self, py: Python<'_>, t: Vec<i64>, d: Vec<i64>) -> PyResult<Vec<i64>> {
+        let schedule = &self.0;
+        batch(py, t, d, |t, d| {
+            let result = schedule.sub(core_instant(t)?, SignedDuration::from_micros(d))?;
+            Ok(result.as_microsecond())
+        })
+    }
+}
+
+fn core_instant(micros: i64) -> Result<Timestamp, Error> {
+    Timestamp::from_microsecond(micros).map_err(|_| Error::OutOfRange)
+}
+
+/// Applies `op` to each pair without holding the GIL. The first error stops
+/// the batch and names the index it occurred at.
+fn batch(
+    py: Python<'_>,
+    left: Vec<i64>,
+    right: Vec<i64>,
+    op: impl Fn(i64, i64) -> Result<i64, Error> + Sync,
+) -> PyResult<Vec<i64>> {
+    if left.len() != right.len() {
+        return Err(PyValueError::new_err(format!(
+            "batch inputs differ in length: {} and {}",
+            left.len(),
+            right.len()
+        )));
+    }
+    py.detach(|| {
+        left.into_iter()
+            .zip(right)
+            .enumerate()
+            .map(|(i, (l, r))| op(l, r).map_err(|e| (i, e)))
+            .collect::<Result<Vec<i64>, (usize, Error)>>()
+    })
+    .map_err(|(i, error)| {
+        let (kind, message) = describe(&error);
+        EngineError::new_err((kind, format!("item {i}: {message}")))
+    })
 }
 
 #[pymodule]
