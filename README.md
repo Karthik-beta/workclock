@@ -129,6 +129,22 @@ businesstimedelta 1.0.1 has had no release since 2019. workclock fixes:
 Every rule is specified with examples in [DESIGN.md](DESIGN.md), and each
 binding is checked against a brute-force oracle with property-based tests.
 
+### Fast
+
+Medians on a 2017 laptop (Intel i5-8250U, Windows 11), from Python:
+
+| Case | businesstimedelta 1.0.1 | workclock | Speed-up |
+|---|---|---|---|
+| One call, a 5½-hour span | 388 µs | 8.2 µs | 47× |
+| One call, a year with bank holidays | 217 ms | 137 µs | 1,580× |
+| 1,000,000 pairs | 24.5 min | 3.34 s (`between_many` on NumPy arrays) | 440× |
+
+The same single call takes 2.1 µs from Rust and 2.5 µs from JavaScript.
+`workclock.compat` takes 56 µs, because it rebuilds the schedule on every call
+to match businesstimedelta's mutable rules. [benchmarks/RESULTS.md](benchmarks/RESULTS.md)
+has every case with p95s, and [DESIGN.md](DESIGN.md#performance) explains where
+the time goes.
+
 ## Prior art & credits
 
 workclock builds on [businesstimedelta](https://github.com/seppemans/businesstimedelta)
