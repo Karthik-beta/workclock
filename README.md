@@ -12,6 +12,7 @@ Python and JavaScript — a maintained, drop-in replacement for
 cargo add workclock
 pip install workclock
 uv add workclock
+uv pip install workclock
 npm i workclock
 ```
 

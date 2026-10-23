@@ -60,6 +60,18 @@ Tests marked `slow` are deselected by default; `uv run pytest -m slow` runs
 them. Property tests run 40 examples each; `uv run pytest
 --hypothesis-profile=deep` runs 500.
 
+The `uv-install` CI job builds a wheel and installs it into fresh projects
+outside the checkout. To reproduce it locally:
+
+```sh
+uv build --wheel --out-dir dist
+cd "$(mktemp -d)"
+uv init --bare --python 3.13 fresh-project
+cd fresh-project
+uv add /path/to/checkout/dist/workclock-*.whl
+uv run python -c "import workclock; print(workclock.__version__)"
+```
+
 ### JavaScript
 
 Requires Node.js 22 or later, [wasm-pack](https://github.com/drager/wasm-pack)
