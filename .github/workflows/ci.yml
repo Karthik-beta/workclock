@@ -236,7 +236,7 @@ jobs:
   # Single status check for branch protection, so adding a job never
   # requires editing the protection rule.
   ci-ok:
-    if: always()
+    if: ${{ !cancelled() }}
     needs: [fmt, clippy, test, coverage, docs, msrv, deny, audit, python-lint, python-test, wasm]
     runs-on: ubuntu-latest
     timeout-minutes: 15
