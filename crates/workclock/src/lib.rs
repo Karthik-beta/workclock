@@ -7,3 +7,7 @@
 
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
+
+mod error;
+
+pub use error::Error;
