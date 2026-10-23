@@ -1,3 +1,5 @@
+use std::ops::Range;
+
 use jiff::tz::TimeZone;
 use jiff::{SignedDuration, Timestamp};
 
@@ -168,6 +170,131 @@ impl Schedule {
             return self.forward(t, d.checked_neg().ok_or(Error::OutOfRange)?);
         }
         self.backward(t, d)
+    }
+
+    /// Returns the period of working time that contains `t`, or the first one
+    /// after it.
+    ///
+    /// A period is a maximal stretch of working time. If `t` is inside one,
+    /// the returned range starts at `t`. A period never runs longer than the
+    /// search bound, so round-the-clock schedules end it there.
+    ///
+    /// # Errors
+    ///
+    /// The same as [`add`](Self::add): [`Error::NoWorkingTime`] after the
+    /// search bound, and [`Error::OutOfRange`] at the end of the range of
+    /// [`Timestamp`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use jiff::civil::time;
+    /// use jiff::Timestamp;
+    /// use workclock::{Schedule, Weekdays, WorkDay};
+    ///
+    /// let schedule = Schedule::builder()
+    ///     .rule(WorkDay::new(time(9, 0, 0, 0), time(17, 0, 0, 0), Weekdays::MON_TO_FRI))
+    ///     .build()?;
+    /// let saturday: Timestamp = "2026-01-10T10:00:00Z".parse()?;
+    /// let period = schedule.next_period(saturday)?;
+    /// assert_eq!(period.start.to_string(), "2026-01-12T09:00:00Z");
+    /// assert_eq!(period.end.to_string(), "2026-01-12T17:00:00Z");
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    pub fn next_period(&self, t: impl Into<Timestamp>) -> Result<Range<Timestamp>, Error> {
+        let t = t.into();
+        let mut found: Option<Block> = None;
+        let mut lo = t;
+        while lo < Timestamp::MAX {
+            let hi = lo.checked_add(CHUNK).unwrap_or(Timestamp::MAX);
+            for block in self.working_time(lo, hi, true) {
+                match &mut found {
+                    None if block.start.duration_since(t) > self.search_limit => {
+                        return Err(Error::NoWorkingTime);
+                    }
+                    None => found = Some(block),
+                    // Chunks split periods at their edges; join the pieces.
+                    Some(period) if block.start == period.end => period.end = block.end,
+                    Some(period) => return Ok(period.start..period.end),
+                }
+            }
+            match found {
+                Some(period) if period.end < hi => return Ok(period.start..period.end),
+                Some(period) if period.end.duration_since(period.start) >= self.search_limit => {
+                    let end = period.start.checked_add(self.search_limit);
+                    return Ok(period.start..end.unwrap_or(Timestamp::MAX));
+                }
+                None if hi.duration_since(t) > self.search_limit => {
+                    return Err(Error::NoWorkingTime);
+                }
+                _ => lo = hi,
+            }
+        }
+        found
+            .map(|period| period.start..period.end)
+            .ok_or(Error::OutOfRange)
+    }
+
+    /// Returns the period of working time that contains the instant just
+    /// before `t`, or the last one before it.
+    ///
+    /// A period is a maximal stretch of working time. If `t` is inside one,
+    /// the returned range ends at `t`. A period never runs longer than the
+    /// search bound, so round-the-clock schedules start it there.
+    ///
+    /// # Errors
+    ///
+    /// The same as [`sub`](Self::sub): [`Error::NoWorkingTime`] after the
+    /// search bound, and [`Error::OutOfRange`] at the start of the range of
+    /// [`Timestamp`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use jiff::civil::time;
+    /// use jiff::Timestamp;
+    /// use workclock::{Schedule, Weekdays, WorkDay};
+    ///
+    /// let schedule = Schedule::builder()
+    ///     .rule(WorkDay::new(time(9, 0, 0, 0), time(17, 0, 0, 0), Weekdays::MON_TO_FRI))
+    ///     .build()?;
+    /// let saturday: Timestamp = "2026-01-10T10:00:00Z".parse()?;
+    /// let period = schedule.previous_period(saturday)?;
+    /// assert_eq!(period.start.to_string(), "2026-01-09T09:00:00Z");
+    /// assert_eq!(period.end.to_string(), "2026-01-09T17:00:00Z");
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    pub fn previous_period(&self, t: impl Into<Timestamp>) -> Result<Range<Timestamp>, Error> {
+        let t = t.into();
+        let mut found: Option<Block> = None;
+        let mut hi = t;
+        while hi > Timestamp::MIN {
+            let lo = hi.checked_sub(CHUNK).unwrap_or(Timestamp::MIN);
+            for block in self.working_time(lo, hi, true).into_iter().rev() {
+                match &mut found {
+                    None if t.duration_since(block.end) > self.search_limit => {
+                        return Err(Error::NoWorkingTime);
+                    }
+                    None => found = Some(block),
+                    Some(period) if block.end == period.start => period.start = block.start,
+                    Some(period) => return Ok(period.start..period.end),
+                }
+            }
+            match found {
+                Some(period) if period.start > lo => return Ok(period.start..period.end),
+                Some(period) if period.end.duration_since(period.start) >= self.search_limit => {
+                    let start = period.end.checked_sub(self.search_limit);
+                    return Ok(start.unwrap_or(Timestamp::MIN)..period.end);
+                }
+                None if t.duration_since(lo) > self.search_limit => {
+                    return Err(Error::NoWorkingTime);
+                }
+                _ => hi = lo,
+            }
+        }
+        found
+            .map(|period| period.start..period.end)
+            .ok_or(Error::OutOfRange)
     }
 
     /// `add` for `d >= 0`.
@@ -603,6 +730,89 @@ mod tests {
             schedule.add(at("2026-01-01T00:00:00Z"), h(1)),
             Ok(at("2035-12-31T10:00:00Z"))
         );
+    }
+
+    #[test]
+    fn periods_start_or_end_at_t_inside_working_time() {
+        let schedule = Schedule::builder().rule(office()).build().unwrap();
+        let t = at("2026-01-05T10:00:00Z");
+        assert_eq!(schedule.next_period(t), Ok(t..at("2026-01-05T17:00:00Z")));
+        assert_eq!(
+            schedule.previous_period(t),
+            Ok(at("2026-01-05T09:00:00Z")..t)
+        );
+    }
+
+    #[test]
+    fn periods_skip_the_one_that_ends_or_starts_at_t() {
+        let schedule = Schedule::builder().rule(office()).build().unwrap();
+        assert_eq!(
+            schedule.next_period(at("2026-01-05T17:00:00Z")),
+            Ok(at("2026-01-06T09:00:00Z")..at("2026-01-06T17:00:00Z"))
+        );
+        assert_eq!(
+            schedule.previous_period(at("2026-01-06T09:00:00Z")),
+            Ok(at("2026-01-05T09:00:00Z")..at("2026-01-05T17:00:00Z"))
+        );
+    }
+
+    #[test]
+    fn periods_span_chunk_edges() {
+        // Round-the-clock work with holidays three weeks apart: each period is
+        // 20 days long, so it spans several 7-day chunks.
+        let all_week = WorkDay::new(Time::midnight(), Time::midnight(), Weekdays::ALL);
+        let schedule = Schedule::builder()
+            .rule(all_week)
+            .rule(Holidays::new([date(2026, 1, 4), date(2026, 1, 25)]))
+            .build()
+            .unwrap();
+        let period = at("2026-01-05T00:00:00Z")..at("2026-01-25T00:00:00Z");
+        for hour in [0, 1, 170, 300, 479] {
+            let t = period.start + h(hour);
+            assert_eq!(schedule.next_period(t), Ok(t..period.end));
+            let t = period.end - h(hour);
+            assert_eq!(schedule.previous_period(t), Ok(period.start..t));
+        }
+    }
+
+    #[test]
+    fn round_the_clock_periods_stop_at_the_search_bound() {
+        let all_day = WorkDay::new(Time::midnight(), Time::midnight(), Weekdays::ALL);
+        let always = Schedule::builder().rule(all_day).build().unwrap();
+        let t = at("2026-01-05T10:00:00Z");
+        let year = h(366 * 24);
+        assert_eq!(always.next_period(t), Ok(t..t + year));
+        assert_eq!(always.previous_period(t), Ok(t - year..t));
+    }
+
+    #[test]
+    fn periods_report_the_search_bound_and_range_ends() {
+        let all_day = WorkDay::new(Time::midnight(), Time::midnight(), Weekdays::ALL);
+        let always = Schedule::builder().rule(all_day).build().unwrap();
+        let last = Timestamp::MAX.checked_sub(h(1)).unwrap();
+        assert_eq!(always.next_period(last), Ok(last..Timestamp::MAX));
+        let first = Timestamp::MIN.checked_add(h(1)).unwrap();
+        assert_eq!(always.previous_period(first), Ok(Timestamp::MIN..first));
+        assert_eq!(always.next_period(Timestamp::MAX), Err(Error::OutOfRange));
+        assert_eq!(
+            always.previous_period(Timestamp::MIN),
+            Err(Error::OutOfRange)
+        );
+
+        let schedule = Schedule::builder()
+            .rule(
+                WorkDay::new(time(9, 0, 0, 0), time(10, 0, 0, 0), Weekdays::ALL)
+                    .time_zone("Etc/GMT+3"),
+            )
+            .rule(
+                Break::new(time(9, 0, 0, 0), time(10, 0, 0, 0), Weekdays::ALL)
+                    .time_zone("America/Sao_Paulo"),
+            )
+            .build()
+            .unwrap();
+        let t = at("2021-01-01T00:00:00Z");
+        assert_eq!(schedule.next_period(t), Err(Error::NoWorkingTime));
+        assert_eq!(schedule.previous_period(t), Err(Error::NoWorkingTime));
     }
 
     #[test]
