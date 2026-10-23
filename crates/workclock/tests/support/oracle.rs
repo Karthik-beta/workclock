@@ -36,15 +36,15 @@ impl Oracle {
         };
         let rule = |r: &RuleSpec| {
             Ok(Rule {
-                start: r.start.parse().expect("rule start is HH:MM"),
-                end: r.end.parse().expect("rule end is HH:MM"),
-                days: r.days.iter().map(|d| weekday(d)).collect(),
+                start: r.start_time(),
+                end: r.end_time(),
+                days: r.weekdays(),
                 tz: zone(r.zone.as_ref())?,
             })
         };
         let holidays = |h: &HolidaySpec| {
             Ok(Holidays {
-                dates: expand_dates(h),
+                dates: h.all_dates(),
                 tz: zone(h.zone.as_ref())?,
             })
         };
@@ -215,34 +215,4 @@ fn resolve(date: Date, time: Time, tz: &TimeZone) -> Option<Timestamp> {
         .compatible()
         .ok()
         .map(|z| z.timestamp())
-}
-
-fn weekday(name: &str) -> Weekday {
-    match name {
-        "mon" => Weekday::Monday,
-        "tue" => Weekday::Tuesday,
-        "wed" => Weekday::Wednesday,
-        "thu" => Weekday::Thursday,
-        "fri" => Weekday::Friday,
-        "sat" => Weekday::Saturday,
-        "sun" => Weekday::Sunday,
-        other => panic!("unknown weekday {other:?}"),
-    }
-}
-
-fn expand_dates(h: &HolidaySpec) -> BTreeSet<Date> {
-    let mut dates: BTreeSet<Date> = h
-        .dates
-        .iter()
-        .map(|d| d.parse().expect("date is YYYY-MM-DD"))
-        .collect();
-    for [from, to] in &h.ranges {
-        let to: Date = to.parse().expect("date is YYYY-MM-DD");
-        let mut d: Date = from.parse().expect("date is YYYY-MM-DD");
-        while d <= to {
-            dates.insert(d);
-            d = d.tomorrow().expect("holiday range within jiff's range");
-        }
-    }
-    dates
 }
