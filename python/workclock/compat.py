@@ -1,0 +1,364 @@
+"""Drop-in replacement for businesstimedelta 1.0.1.
+
+``import workclock.compat as businesstimedelta`` keeps code written for
+businesstimedelta working, on workclock's engine. The classes take the same
+arguments and defaults and support the same operators. Every intentional
+difference is listed in MIGRATING.md.
+"""
+
+from __future__ import annotations
+
+import bisect
+import datetime as _dt
+from collections.abc import Iterable
+from typing import Union
+
+from workclock import _workclock
+from workclock._errors import NoWorkingTimeError
+from workclock._schedule import Break, Holidays, Schedule, WorkDay, _datetime, _micros
+from workclock._zones import zone_name
+
+__all__ = [
+    "BusinessTimeDelta",
+    "HolidayRule",
+    "LunchTimeRule",
+    "Rule",
+    "Rules",
+    "WorkDayRule",
+    "localize_unlocalized_dt",
+]
+
+_UTC = _dt.timezone.utc
+_ZERO = _dt.timedelta(0)
+# python-holidays objects fill in years on demand; these are filled in up front.
+_HOLIDAY_YEARS = range(1970, 2101)
+
+Zone = Union[str, _dt.tzinfo]
+Period = tuple[_dt.datetime, _dt.datetime]
+
+
+def localize_unlocalized_dt(dt: _dt.datetime) -> _dt.datetime:
+    """Return ``dt`` unchanged if it is aware, and as UTC if it is naive."""
+    if dt.tzinfo is not None and dt.tzinfo.utcoffset(dt) is not None:
+        return dt
+    return dt.replace(tzinfo=_UTC)
+
+
+class Rule:
+    """Base class for rules: blocks of either working time or time off."""
+
+    def __init__(self, tz: Zone = _UTC, time_off: bool = False) -> None:
+        """Set the rule's time zone and whether it is time off."""
+        self.tz = tz
+        self.time_off = time_off
+
+    def next(self, dt: _dt.datetime) -> Period:
+        """Return the block that contains ``dt``, or the first one after it."""
+        return self._schedule().next_period(localize_unlocalized_dt(dt))
+
+    def previous(self, dt: _dt.datetime) -> Period:
+        """Return the block that contains ``dt``, or the last one before it."""
+        return self._schedule().previous_period(localize_unlocalized_dt(dt))
+
+    def difference(self, dt1: _dt.datetime, dt2: _dt.datetime) -> BusinessTimeDelta:
+        """Return the business time between two datetimes, in either order."""
+        start, end = sorted(
+            [localize_unlocalized_dt(dt1), localize_unlocalized_dt(dt2)]
+        )
+        try:
+            result = self._schedule().between(start, end)
+        except NoWorkingTimeError:
+            result = _ZERO
+        return BusinessTimeDelta(self, hours=result.days * 24, seconds=result.seconds)
+
+    def _schedule(self) -> Schedule:
+        """Return an engine schedule of this rule's blocks."""
+        raise TypeError(
+            f"{type(self).__name__} is not supported by workclock.compat, which "
+            "runs WorkDayRule, LunchTimeRule, HolidayRule and Rules on its engine"
+        )
+
+    def _add(self, dt: _dt.datetime, td: _dt.timedelta) -> _dt.datetime:
+        if td == _ZERO:
+            return self.next(dt)[0]
+        return self._schedule().add(dt, td)
+
+    def _sub(self, dt: _dt.datetime, td: _dt.timedelta) -> _dt.datetime:
+        if td == _ZERO:
+            return self.previous(dt)[1]
+        return self._schedule().sub(dt, td)
+
+
+class WorkDayRule(Rule):
+    """Working hours on some days of the week.
+
+    ``end_time`` before ``start_time`` is an overnight shift. Equal times make
+    an empty rule, as in businesstimedelta.
+    """
+
+    def __init__(
+        self,
+        start_time: _dt.time = _dt.time(9),
+        end_time: _dt.time = _dt.time(18),
+        working_days: list[int] | None = None,
+        tz: Zone = _UTC,
+        time_off: bool = False,
+    ) -> None:
+        """Create a rule; ``working_days`` defaults to Monday to Friday."""
+        super().__init__(tz, time_off)
+        self.start_time = start_time
+        self.end_time = end_time
+        self.working_days = [0, 1, 2, 3, 4] if working_days is None else working_days
+
+    def _engine_rule(self, kind: type[WorkDay | Break]) -> list[WorkDay | Break]:
+        if self.start_time == self.end_time:
+            return []
+        rule = kind(
+            self.start_time, self.end_time, self.working_days, time_zone=self.tz
+        )
+        return [rule]
+
+    def _schedule(self) -> Schedule:
+        return Schedule(self._engine_rule(WorkDay))
+
+
+class LunchTimeRule(WorkDayRule):
+    """Time off on some days of the week, by default 12:00 to 13:00."""
+
+    def __init__(
+        self,
+        start_time: _dt.time = _dt.time(12),
+        end_time: _dt.time = _dt.time(13),
+        working_days: list[int] | None = None,
+        tz: Zone = _UTC,
+    ) -> None:
+        """Create a break; ``working_days`` defaults to Monday to Friday."""
+        super().__init__(start_time, end_time, working_days, tz, time_off=True)
+
+
+class HolidayRule(Rule):
+    """Dates that are not worked: a list of dates or a python-holidays object.
+
+    The dates are read once. A python-holidays object is filled in for every
+    year from 1970 to 2100 first; later or earlier dates are not holidays.
+    """
+
+    def __init__(
+        self,
+        holidays: Iterable[_dt.date],
+        tz: Zone = _UTC,
+        time_off: bool = True,
+    ) -> None:
+        """Create a rule from ``holidays``; it is time off by default."""
+        self.holidays = holidays
+        super().__init__(tz, time_off)
+        self._dates = sorted(_holiday_dates(holidays))
+
+    def __repr__(self) -> str:
+        """Return the rule as businesstimedelta shows it."""
+        return f"<HolidayRule: {self.holidays}>"
+
+    def next(self, dt: _dt.datetime) -> Period:
+        """Return the holiday that contains ``dt``, or the first one after it."""
+        dt = localize_unlocalized_dt(dt)
+        t = _micros(dt)
+        first = max(bisect.bisect_left(self._dates, self._local_date(t)) - 1, 0)
+        for day in self._dates[first:]:
+            start, end = self._bounds(day)
+            if end > t:
+                return _datetime(max(start, t), dt.tzinfo), _datetime(end, dt.tzinfo)
+        raise NoWorkingTimeError(f"no holiday after {dt}")
+
+    def previous(self, dt: _dt.datetime) -> Period:
+        """Return the holiday that contains ``dt``, or the last one before it."""
+        dt = localize_unlocalized_dt(dt)
+        t = _micros(dt)
+        last = bisect.bisect_right(self._dates, self._local_date(t)) + 1
+        for day in reversed(self._dates[:last]):
+            start, end = self._bounds(day)
+            if start < t:
+                return _datetime(start, dt.tzinfo), _datetime(min(end, t), dt.tzinfo)
+        raise NoWorkingTimeError(f"no holiday before {dt}")
+
+    def difference(self, dt1: _dt.datetime, dt2: _dt.datetime) -> BusinessTimeDelta:
+        """Return the holiday time between two datetimes, in either order."""
+        a, b = sorted(
+            [
+                _micros(localize_unlocalized_dt(dt1)),
+                _micros(localize_unlocalized_dt(dt2)),
+            ]
+        )
+        low = bisect.bisect_left(
+            self._dates, self._local_date(a) - _dt.timedelta(days=1)
+        )
+        high = bisect.bisect_right(
+            self._dates, self._local_date(b) + _dt.timedelta(days=1)
+        )
+        total = 0
+        for day in self._dates[low:high]:
+            start, end = self._bounds(day)
+            total += max(0, min(end, b) - max(start, a))
+        result = _dt.timedelta(microseconds=total)
+        return BusinessTimeDelta(self, hours=result.days * 24, seconds=result.seconds)
+
+    def _add(self, dt: _dt.datetime, td: _dt.timedelta) -> _dt.datetime:
+        if td == _ZERO:
+            return self.next(dt)[0]
+        dt = localize_unlocalized_dt(dt)
+        left = td
+        x = dt
+        while True:
+            start, end = self.next(x)
+            length = end.astimezone(_UTC) - start.astimezone(_UTC)
+            if length >= left:
+                return (start.astimezone(_UTC) + left).astimezone(dt.tzinfo)
+            left -= length
+            x = end
+
+    def _sub(self, dt: _dt.datetime, td: _dt.timedelta) -> _dt.datetime:
+        if td == _ZERO:
+            return self.previous(dt)[1]
+        dt = localize_unlocalized_dt(dt)
+        left = td
+        x = dt
+        while True:
+            start, end = self.previous(x)
+            length = end.astimezone(_UTC) - start.astimezone(_UTC)
+            if length >= left:
+                return (end.astimezone(_UTC) - left).astimezone(dt.tzinfo)
+            left -= length
+            x = start
+
+    def _engine_rule(self) -> Holidays:
+        return Holidays(self._dates, time_zone=self.tz)
+
+    def _local_date(self, t: int) -> _dt.date:
+        return _dt.date(*_workclock.local_date(zone_name(self.tz), t))
+
+    def _bounds(self, day: _dt.date) -> tuple[int, int]:
+        return _workclock.day_bounds(zone_name(self.tz), (day.year, day.month, day.day))
+
+
+class Rules(Rule):
+    """Combines rules: working time minus time off."""
+
+    def __init__(
+        self, rules: Iterable[Rule], tz: Zone = _UTC, time_off: bool = False
+    ) -> None:
+        """Split ``rules`` into available rules and time off."""
+        rules = list(rules)
+        self.available_rules = [x for x in rules if not x.time_off]
+        self.unavailable_rules = [x for x in rules if x.time_off]
+        super().__init__(tz, time_off)
+
+    def _schedule(self) -> Schedule:
+        engine_rules: list[WorkDay | Break | Holidays] = []
+        for rule in self.available_rules:
+            if not isinstance(rule, WorkDayRule):
+                raise _unsupported(rule, "working time")
+            engine_rules += rule._engine_rule(WorkDay)
+        for rule in self.unavailable_rules:
+            if isinstance(rule, WorkDayRule):
+                engine_rules += rule._engine_rule(Break)
+            elif isinstance(rule, HolidayRule):
+                engine_rules.append(rule._engine_rule())
+            else:
+                raise _unsupported(rule, "time off")
+        return Schedule(engine_rules)
+
+
+class BusinessTimeDelta:
+    """An amount of business time under a rule.
+
+    Add it to or subtract it from a datetime to move by that much business
+    time. Adding zero moves to the start of the next block of working time,
+    and subtracting zero to the end of the previous one, as in
+    businesstimedelta.
+    """
+
+    def __init__(
+        self,
+        rule: Rule,
+        hours: float = 0,
+        seconds: float = 0,
+        timedelta: _dt.timedelta | None = None,
+    ) -> None:
+        """Create a delta from ``timedelta``, or from ``hours`` and ``seconds``."""
+        self.rule = rule
+        if timedelta:
+            self.timedelta = timedelta
+        else:
+            self.timedelta = _dt.timedelta(seconds=seconds, hours=hours)
+
+    def __repr__(self) -> str:
+        """Return the delta as businesstimedelta shows it."""
+        return f"<BusinessTimeDelta {self.hours} hours {self.seconds} seconds>"
+
+    def __eq__(self, other: object) -> bool:
+        """Compare the amounts of two deltas."""
+        if not isinstance(other, BusinessTimeDelta):
+            return NotImplemented
+        return self.timedelta == other.timedelta
+
+    def __add__(self, other: object) -> BusinessTimeDelta | _dt.datetime:
+        """Add another delta under the same rule, or move a datetime forward."""
+        if isinstance(other, BusinessTimeDelta) and other.rule == self.rule:
+            return BusinessTimeDelta(
+                self.rule, timedelta=self.timedelta + other.timedelta
+            )
+        if isinstance(other, _dt.datetime):
+            dt = localize_unlocalized_dt(other)
+            if self.timedelta < _ZERO:
+                return self.rule._sub(dt, -self.timedelta)
+            return self.rule._add(dt, self.timedelta)
+        raise NotImplementedError
+
+    def __radd__(self, other: object) -> BusinessTimeDelta | _dt.datetime:
+        """Move a datetime forward by this delta."""
+        return self.__add__(other)
+
+    def __sub__(self, other: object) -> BusinessTimeDelta | _dt.datetime:
+        """Subtract another delta under the same rule, or move a datetime back."""
+        if isinstance(other, BusinessTimeDelta) and other.rule == self.rule:
+            return BusinessTimeDelta(
+                self.rule, timedelta=self.timedelta - other.timedelta
+            )
+        if isinstance(other, _dt.datetime):
+            dt = localize_unlocalized_dt(other)
+            if self.timedelta < _ZERO:
+                return self.rule._add(dt, -self.timedelta)
+            return self.rule._sub(dt, self.timedelta)
+        return NotImplemented
+
+    def __rsub__(self, other: object) -> BusinessTimeDelta | _dt.datetime:
+        """Move a datetime back by this delta."""
+        return self.__sub__(other)
+
+    @property
+    def hours(self) -> int:
+        """Whole hours in the delta."""
+        return int(self.timedelta.total_seconds() // (60 * 60))
+
+    @property
+    def seconds(self) -> int:
+        """Seconds in the delta beyond its whole hours."""
+        return int(self.timedelta.total_seconds() % (60 * 60))
+
+
+def _holiday_dates(holidays: Iterable[_dt.date]) -> set[_dt.date]:
+    if isinstance(holidays, dict) and hasattr(holidays, "years"):
+        for year in _HOLIDAY_YEARS:
+            holidays.get(_dt.date(year, 1, 1))
+    dates = set()
+    for day in holidays:
+        if isinstance(day, _dt.datetime) or not isinstance(day, _dt.date):
+            raise TypeError(f"holidays must be datetime.date objects, got {day!r}")
+        dates.add(day)
+    return dates
+
+
+def _unsupported(rule: Rule, role: str) -> TypeError:
+    return TypeError(
+        f"{type(rule).__name__} cannot be used as {role} in Rules under "
+        "workclock.compat; see MIGRATING.md"
+    )

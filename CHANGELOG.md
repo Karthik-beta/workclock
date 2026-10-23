@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   zones. Errors subclass `WorkclockError` and the matching built-in exception.
 - Python: `between_many`, `add_many` and `sub_many` process a batch in one
   call, from lists or NumPy `datetime64`/`timedelta64` arrays.
+- Python: `workclock.compat`, a drop-in replacement for businesstimedelta
+  1.0.1 that fixes overnight shifts and upstream issues 8, 9 and 10. See
+  `MIGRATING.md`.
 - Searches are bounded: a schedule without working time, or a result outside
   the supported range, returns an `Error` instead of looping or panicking.
 
