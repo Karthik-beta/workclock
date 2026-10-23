@@ -9,5 +9,7 @@
 #![deny(missing_docs)]
 
 mod error;
+mod weekdays;
 
 pub use error::Error;
+pub use weekdays::Weekdays;
