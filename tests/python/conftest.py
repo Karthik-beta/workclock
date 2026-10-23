@@ -2,10 +2,17 @@ import importlib
 from types import ModuleType
 
 import pytest
+from hypothesis import settings
 
 # Tests that take `btd` run against every implementation listed here.
 # workclock.compat joins businesstimedelta once it exists (M5).
 IMPLEMENTATIONS = ["businesstimedelta"]
+
+
+# The oracle is slow, so the default run is light; use
+# `pytest --hypothesis-profile=deep` for a thorough one.
+settings.register_profile("default", max_examples=40, deadline=None)
+settings.register_profile("deep", max_examples=500, deadline=None)
 
 
 def pytest_configure(config: pytest.Config) -> None:
