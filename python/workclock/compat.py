@@ -197,6 +197,9 @@ class HolidayRule(Rule):
         """
         dt = localize_unlocalized_dt(dt)
         t = _micros(dt)
+        # One date of slack: bounds are midnights resolved in the rule's zone,
+        # which around a DST change need not line up with the local date of
+        # ``t``. The loop checks each holiday's bounds, so slack is harmless.
         first = max(bisect.bisect_left(self._dates, self._local_date(t)) - 1, 0)
         for day in self._dates[first:]:
             start, end = self._bounds(day)
@@ -211,6 +214,7 @@ class HolidayRule(Rule):
         """
         dt = localize_unlocalized_dt(dt)
         t = _micros(dt)
+        # One date of slack, as in next().
         last = bisect.bisect_right(self._dates, self._local_date(t)) + 1
         for day in reversed(self._dates[:last]):
             start, end = self._bounds(day)
@@ -230,6 +234,7 @@ class HolidayRule(Rule):
                 _micros(localize_unlocalized_dt(dt2)),
             ]
         )
+        # One date of slack on each side, as in next().
         low = bisect.bisect_left(
             self._dates, self._local_date(a) - _dt.timedelta(days=1)
         )
