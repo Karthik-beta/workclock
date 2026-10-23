@@ -254,6 +254,27 @@ class Schedule:
             micros = self._schedule.sub(_micros(dt), amount)
         return _datetime(micros, dt.tzinfo)
 
+    def next_period(self, dt: datetime) -> tuple[datetime, datetime]:
+        """Return the working period that contains ``dt``, or the first after it.
+
+        A period is a maximal stretch of working time, returned as
+        ``(start, end)`` in the ``tzinfo`` of ``dt``. If ``dt`` is inside one,
+        ``start`` is ``dt``. A period never runs longer than the search bound
+        of a year plus a day per holiday date.
+        """
+        with _engine_errors():
+            start, end = self._schedule.next_period(_micros(dt))
+        return _datetime(start, dt.tzinfo), _datetime(end, dt.tzinfo)
+
+    def previous_period(self, dt: datetime) -> tuple[datetime, datetime]:
+        """Return the working period that contains ``dt``, or the last before it.
+
+        Mirrors `next_period`: if ``dt`` is inside a period, ``end`` is ``dt``.
+        """
+        with _engine_errors():
+            start, end = self._schedule.previous_period(_micros(dt))
+        return _datetime(start, dt.tzinfo), _datetime(end, dt.tzinfo)
+
     @overload
     def between_many(
         self, starts: Sequence[datetime], ends: Sequence[datetime]
