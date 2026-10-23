@@ -18,4 +18,10 @@ Building the schedule and the pairs is not timed.
 
 ```sh
 cargo bench -p workclock --bench workclock
+uv run pytest benchmarks/python
 ```
+
+The Python suite also measures workclock's `compat` API, `between_many` on
+lists and on NumPy arrays, and businesstimedelta 1.0.1. One round of the
+batch case takes businesstimedelta about half an hour; add
+`-k "not (test_batch and businesstimedelta)"` to skip it.
