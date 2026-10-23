@@ -1,6 +1,7 @@
 name: Release
 
-# A `v*` tag publishes to TestPyPI, then to PyPI, npm and crates.io. Running
+# A `v*` tag publishes to TestPyPI, then to PyPI, npm and crates.io, and then
+# creates the GitHub release with the CHANGELOG section as its notes. Running
 # the workflow by hand is the dry run: it builds and checks every package and
 # publishes to TestPyPI only. Pull requests that change packaging build and
 # check the packages without publishing.
@@ -295,3 +296,25 @@ jobs:
         env:
           VERSION: ${{ needs.version.outputs.version }}
         run: .github/scripts/install-check.sh https://pypi.org/simple/ "$VERSION"
+
+  github-release:
+    if: github.ref_type == 'tag'
+    needs: [version, pypi, npm, crates-io]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: dist
+          merge-multiple: true
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          awk -v v="$VERSION" 'index($0, "## [" v "] - ") == 1 {f = 1; next} /^## \[/ || /^\[[^]]+\]: / {f = 0} f' CHANGELOG.md > notes.md
+          gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --title "workclock $VERSION" --notes-file notes.md
