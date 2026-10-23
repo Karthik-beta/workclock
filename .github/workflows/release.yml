@@ -76,6 +76,8 @@ jobs:
           args: --release --locked --out dist
       - if: matrix.check
         uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          enable-cache: false
       - if: matrix.check
         shell: bash
         run: |
@@ -102,6 +104,8 @@ jobs:
         with:
           toolchain: stable
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          enable-cache: false
       - name: Build and import from the sdist
         run: |
           uv venv --python 3.13
@@ -132,8 +136,7 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "24"
-          cache: npm
-          cache-dependency-path: js/package-lock.json
+          package-manager-cache: false
       - run: npm ci
       - run: npm run build
       - run: npm test
@@ -194,6 +197,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          enable-cache: false
       - shell: bash
         run: .github/scripts/install-check.sh https://test.pypi.org/simple/ "${{ needs.version.outputs.version }}"
 
@@ -232,6 +237,7 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "24"
+          package-manager-cache: false
           registry-url: https://registry.npmjs.org
       - run: npm publish workclock-*.tgz --provenance --access public
         env:
@@ -269,5 +275,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          enable-cache: false
       - shell: bash
         run: .github/scripts/install-check.sh https://pypi.org/simple/ "${{ needs.version.outputs.version }}"
