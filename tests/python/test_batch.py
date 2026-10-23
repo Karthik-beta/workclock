@@ -58,8 +58,30 @@ def test_numpy_arrays_are_read_and_returned_as_utc(nights: Schedule) -> None:
 
 
 def test_numpy_results_keep_the_input_shape(nights: Schedule) -> None:
-    grid = np.full((2, 3), np.datetime64("2026-01-05T22:00", "us"))
-    assert nights.add_many(grid, timedelta(hours=1)).shape == (2, 3)
+    grid = np.array(
+        [
+            ["2026-01-05T22:00", "2026-01-05T23:00", "2026-01-06T05:00"],
+            ["2026-01-06T22:00", "2026-01-07T05:30", "2026-01-09T05:00"],
+        ],
+        dtype="datetime64[us]",
+    )
+    added = nights.add_many(grid, timedelta(hours=1))
+    assert added.shape == (2, 3)
+    assert added.tolist() == [
+        [
+            datetime(2026, 1, 5, 23),
+            datetime(2026, 1, 6, 0),
+            datetime(2026, 1, 6, 6),
+        ],
+        [
+            datetime(2026, 1, 6, 23),
+            datetime(2026, 1, 7, 22, 30),
+            datetime(2026, 1, 9, 6),
+        ],
+    ]
+    worked = nights.between_many(grid, added)
+    assert worked.shape == (2, 3)
+    assert (worked == np.timedelta64(1, "h")).all()
 
 
 def test_numpy_digits_below_a_microsecond_are_rejected(nights: Schedule) -> None:
@@ -86,6 +108,15 @@ def test_numpy_nanosecond_arrays_of_whole_microseconds_work(nights: Schedule) ->
 def test_bad_batches_are_rejected(nights: Schedule) -> None:
     with pytest.raises(ValueError, match="differ in length"):
         nights.between_many([utc(5, 22)], [])
+    with pytest.raises(ValueError, match="differ in length: 2 and 1"):
+        nights.add_many([utc(5, 22)] * 2, [timedelta(hours=1)])
+    with pytest.raises(ValueError, match="differ in length: 1 and 2"):
+        nights.sub_many([utc(5, 22)], [timedelta(hours=1)] * 2)
+    with pytest.raises(ValueError, match="broadcast"):
+        nights.add_many(
+            np.array(["2026-01-05T22:00"] * 2, dtype="datetime64[us]"),
+            np.array([1, 2, 3], dtype="timedelta64[h]"),
+        )
     with pytest.raises(ValueError, match="naive"):
         nights.between_many([datetime(2026, 1, 5)], [utc(5, 22)])
     with pytest.raises(ValueError, match="NaT"):

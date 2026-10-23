@@ -79,7 +79,7 @@ def test_results_keep_the_input_tzinfo(office: Schedule) -> None:
         new_york.localize(datetime(2026, 1, 5, 4)),
     ]:
         result = office.add(start, hours=1)
-        assert result.tzinfo is start.tzinfo or result.tzinfo == start.tzinfo
+        assert result.tzinfo is start.tzinfo
         assert result == utc(5, 10)
     pytz_result = office.add(new_york.localize(datetime(2026, 1, 5, 4)), hours=1)
     assert pytz_result.tzname() == "EST"
