@@ -201,6 +201,7 @@ dependencies = [
  "defmt",
  "jiff-core",
  "jiff-static",
+ "jiff-tzdb",
  "jiff-tzdb-platform",
  "log",
  "portable-atomic",
@@ -867,8 +868,11 @@ dependencies = [
 name = "workclock-wasm"
 version = "0.1.0"
 dependencies = [
+ "jiff",
+ "js-sys",
  "wasm-bindgen",
  "wasm-bindgen-test",
+ "workclock",
 ]
 
 [[package]]
