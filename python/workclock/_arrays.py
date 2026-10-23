@@ -13,6 +13,8 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
     from typing_extensions import TypeGuard
 
+_FINER_UNITS = ("ns", "ps", "fs", "as")
+
 
 def is_array(value: object) -> TypeGuard[NDArray[Any]]:
     """Return whether ``value`` is a NumPy array."""
@@ -21,14 +23,27 @@ def is_array(value: object) -> TypeGuard[NDArray[Any]]:
 
 
 def to_micros(values: object, unit: str, shape: tuple[int, ...]) -> list[int]:
-    """Return ``values`` as integer microseconds, broadcast to ``shape``."""
+    """Return ``values`` as integer microseconds, broadcast to ``shape``.
+
+    Raises ``ValueError`` for NaT, and for values with digits below a
+    microsecond, which would otherwise be rounded.
+    """
     import numpy as np
 
-    array: NDArray[Any] = np.broadcast_to(
-        np.asarray(values, dtype=f"{unit}[us]"), shape
-    )
+    given = np.asarray(values)
+    converted: NDArray[Any] = np.asarray(values, dtype=f"{unit}[us]")
+    array = np.broadcast_to(converted, shape)
     if np.isnat(array).any():
         raise ValueError("batch inputs must not contain NaT")
+    finer = (
+        given.dtype.kind in "mM" and np.datetime_data(given.dtype)[0] in _FINER_UNITS
+    )
+    if finer:
+        lossy = np.broadcast_to(converted.astype(given.dtype) != given, shape)
+        if lossy.any():
+            i = int(np.flatnonzero(lossy)[0])
+            value = np.broadcast_to(given, shape).flat[i]
+            raise ValueError(f"item {i}: {value!r} has digits below a microsecond")
     result: list[int] = array.astype(np.int64).ravel().tolist()
     return result
 
