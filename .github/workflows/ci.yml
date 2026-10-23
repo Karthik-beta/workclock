@@ -130,6 +130,8 @@ jobs:
       - run: uv run ruff check
       - run: uv run ruff format --check
       - run: uv run mypy
+      # Checks that the extension's stub matches the compiled module.
+      - run: uv run python -m mypy.stubtest workclock._workclock
 
   python-test:
     strategy:
