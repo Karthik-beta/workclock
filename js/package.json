@@ -10,11 +10,58 @@
     "directory": "js"
   },
   "type": "module",
+  "exports": {
+    ".": {
+      "node": {
+        "types": "./node.d.ts",
+        "default": "./node.js"
+      },
+      "browser": {
+        "types": "./bundler.d.ts",
+        "default": "./bundler.js"
+      },
+      "default": {
+        "types": "./bundler.d.ts",
+        "default": "./bundler.js"
+      }
+    },
+    "./web": {
+      "types": "./web.d.ts",
+      "default": "./web.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "types": "./node.d.ts",
+  "files": [
+    "node.js",
+    "node.d.ts",
+    "bundler.js",
+    "bundler.d.ts",
+    "web.js",
+    "web.d.ts",
+    "pkg/*/package.json",
+    "pkg/*/workclock.js",
+    "pkg/*/workclock.d.ts",
+    "pkg/*/workclock_bg.js",
+    "pkg/*/workclock_bg.wasm",
+    "pkg/*/workclock_bg.wasm.d.ts",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "sideEffects": [
+    "./pkg/bundler/workclock.js"
+  ],
   "engines": {
     "node": ">=22"
   },
   "scripts": {
-    "build": "wasm-pack build ../crates/workclock-wasm --target nodejs --out-dir ../../js/pkg/node --out-name workclock",
+    "build": "npm run build:node && npm run build:bundler && npm run build:web && npm run build:unignore",
+    "build:node": "wasm-pack build ../crates/workclock-wasm --release --target nodejs --out-dir ../../js/pkg/node --out-name workclock",
+    "build:bundler": "wasm-pack build ../crates/workclock-wasm --release --target bundler --out-dir ../../js/pkg/bundler --out-name workclock",
+    "build:web": "wasm-pack build ../crates/workclock-wasm --release --target web --out-dir ../../js/pkg/web --out-name workclock",
+    "build:unignore": "node --eval \"for (const t of ['node', 'bundler', 'web']) require('node:fs').rmSync('pkg/' + t + '/.gitignore', { force: true })\"",
+    "prepack": "node --eval \"for (const f of ['LICENSE', 'NOTICE']) require('node:fs').copyFileSync('../' + f, f)\"",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
