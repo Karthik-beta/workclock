@@ -32,6 +32,7 @@ Changelog = "https://github.com/Karthik-beta/workclock/blob/main/CHANGELOG.md"
 dev = [
     "businesstimedelta==1.0.1",
     "holidays",
+    "hypothesis",
     "mypy",
     "numpy",
     "pytest",
