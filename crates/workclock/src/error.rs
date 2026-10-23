@@ -6,19 +6,34 @@ use std::fmt;
 /// # Examples
 ///
 /// ```
-/// use workclock::Error;
+/// use jiff::civil::time;
+/// use workclock::{Error, Schedule, Weekdays, WorkDay};
 ///
-/// let error = Error::UnknownZone { name: "Mars/Olympus_Mons".into() };
+/// let error = Schedule::builder()
+///     .time_zone("Mars/Olympus_Mons")
+///     .rule(WorkDay::new(time(9, 0, 0, 0), time(17, 0, 0, 0), Weekdays::MON_TO_FRI))
+///     .build()
+///     .unwrap_err();
 /// assert_eq!(error.to_string(), "unknown time zone `Mars/Olympus_Mons`");
+/// let hint = match error {
+///     Error::UnknownZone { name } => format!("{name} is not an IANA zone name"),
+///     Error::NoWorkingTime => "add working hours outside the breaks".to_owned(),
+///     _ => error.to_string(),
+/// };
+/// assert_eq!(hint, "Mars/Olympus_Mons is not an IANA zone name");
 /// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Error {
     /// The schedule has no working time.
     ///
-    /// Returned when building a schedule whose available time minus its
-    /// breaks is empty, and when adding or subtracting working time crosses
-    /// the search bound without finding any.
+    /// [`ScheduleBuilder::build`](crate::ScheduleBuilder::build) returns it
+    /// when the working hours minus the breaks are empty.
+    /// [`Schedule::add`](crate::Schedule::add),
+    /// [`Schedule::sub`](crate::Schedule::sub),
+    /// [`Schedule::next_period`](crate::Schedule::next_period) and
+    /// [`Schedule::previous_period`](crate::Schedule::previous_period) return
+    /// it when they find no working time within the search bound.
     NoWorkingTime,
     /// The result lies outside the range of `jiff::Timestamp`.
     OutOfRange,
@@ -33,7 +48,9 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Error::NoWorkingTime => f.write_str("schedule has no working time"),
-            Error::OutOfRange => f.write_str("result is outside the supported time range"),
+            Error::OutOfRange => f.write_str(
+                "result is outside the supported range -009999-01-02T01:59:59Z to 9999-12-30T22:00:00Z",
+            ),
             Error::UnknownZone { name } => write!(f, "unknown time zone `{name}`"),
         }
     }
