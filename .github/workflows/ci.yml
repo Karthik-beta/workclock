@@ -150,6 +150,43 @@ jobs:
       - run: uv sync --locked
       - run: uv run pytest
 
+  uv-install:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          python-version: "3.13"
+      - run: uv build --wheel --out-dir dist
+      - run: |
+          root="$(pwd -W 2>/dev/null || pwd)"
+          wheel="$(ls "$root"/dist/*.whl)"
+          expected="$(sed -n '/^\[workspace.package\]/,/^\[/{s/^version = "\(.*\)"/\1/p}' Cargo.toml)"
+          mkdir -p "$RUNNER_TEMP/fresh" "$RUNNER_TEMP/pip-check"
+
+          cd "$RUNNER_TEMP/fresh"
+          uv init --bare --python 3.13 fresh-project
+          cd fresh-project
+          uv add "$wheel"
+          test "$(uv run python -c 'import workclock; print(workclock.__version__)')" = "$expected"
+
+          cd "$RUNNER_TEMP/pip-check"
+          uv venv --python 3.13
+          uv pip install "$wheel"
+          source .venv/bin/activate 2>/dev/null || source .venv/Scripts/activate
+          test "$(python -c 'import workclock; print(workclock.__version__)')" = "$expected"
+
   wasm:
     strategy:
       fail-fast: false
@@ -184,7 +221,7 @@ jobs:
   # requires editing the protection rule.
   ci-ok:
     if: always()
-    needs: [fmt, clippy, test, coverage, docs, msrv, deny, audit, python-lint, python-test, wasm]
+    needs: [fmt, clippy, test, coverage, docs, msrv, deny, audit, python-lint, python-test, uv-install, wasm]
     runs-on: ubuntu-latest
     steps:
       - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
