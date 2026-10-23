@@ -30,6 +30,7 @@ and per-date overrides of working hours.
   *time off*.
 - A **schedule** combines rules. Its working time is the union of all
   available blocks minus the union of all time-off blocks.
+- A **period** is a maximal block of working time.
 
 Every operation is defined on that working-time set, so the order in which
 rules are given never matters.
@@ -38,12 +39,14 @@ rules are given never matters.
 
 ### WorkDay
 
-`start_time`, `end_time`, `working_days` and a time zone.
+`start`, `end`, `days` and a time zone (`time_zone` in Rust and Python,
+`timeZone` in JavaScript). compat's `WorkDayRule` keeps upstream's names,
+`start_time`, `end_time` and `working_days`.
 
-- For each local date whose weekday is in `working_days`, the rule produces
-  the block from `start_time` on that date to `end_time`.
-- If `end_time <= start_time`, the shift is overnight and `end_time` falls on
-  the next date. `start_time == end_time` is therefore a 24-hour shift.
+- For each local date whose weekday is in `days`, the rule produces the block
+  from `start` on that date to `end`.
+- If `end <= start`, the shift is overnight and `end` falls on the next date.
+  `start == end` is therefore a 24-hour shift.
 - A shift belongs to the weekday it starts on: a Friday 22:00–06:00 shift runs
   into Saturday, and no shift ends on Monday morning unless one starts on
   Sunday.
@@ -77,14 +80,16 @@ outside working time has no effect.
 | K4 | same | `add(Mon 12:30, 30m)` | Mon 13:30 |
 | K5 | same | `sub(Mon 13:30, 1h)` | Mon 11:30 |
 
-### Holiday
+### Holidays
 
 A set of local dates in a time zone. Each date removes the block from 00:00 on
-that date to 00:00 on the next date, so a holiday on a DST transition day lasts
-23 or 25 hours.
+that date to 00:00 on the next date, so a holiday on a DST transition day is
+shorter or longer than 24 hours by the size of the change (usually one hour).
 
 Holiday dates are converted into a set once, when the schedule is built.
-Bindings never call back into Python or JavaScript per date.
+Bindings never call back into Python or JavaScript per date. A python-holidays
+object passed to the typed Python `Holidays` therefore contributes only the
+years it already holds; create it with `years=...`.
 
 A holiday removes calendar time, not whole shifts. An overnight shift that
 crosses into a holiday loses only the part after midnight; a shift that starts
@@ -156,8 +161,8 @@ inside `[a, b)`.
 - `d < 0`: `add(t, d) = sub(t, -d)` and `sub(t, d) = add(t, -d)`.
 
 Because `add` returns the *earliest* such instant, a result that exhausts a
-block lands on the block's end, not on the start of the next block (A2). For
-`sub` the result lands on a block's start.
+period lands on the period's end, not on the start of the next period (A2).
+For `sub` the result lands on a period's start.
 
 For every `t` and `d`, `between(t, add(t, d)) = d`. The reverse,
 `sub(add(t, d), d) = t`, holds only when `t` is inside working time: from
@@ -220,22 +225,33 @@ Sunday 2026-03-08 and back on Sunday 2026-11-01.
 | Python | timezone-aware `datetime` | `timedelta` | microseconds |
 | JavaScript | `Date` or ISO 8601 string with an offset | number of milliseconds | milliseconds |
 
-Time zones are IANA names. Python accepts `zoneinfo.ZoneInfo` (via `.key`) and
-pytz zones (via `.zone`) and converts them to names.
+Time zones are IANA names. Python accepts `zoneinfo.ZoneInfo` (via `.key`),
+pytz zones (via `.zone`) and `datetime.timezone.utc`, and converts them to
+names.
 
 Results combine input instants, input durations and rule boundaries, and a
 rule boundary is a wall-clock time shifted by a whole-second UTC offset. Results
 are therefore exact at each binding's precision; nothing is rounded.
 
+Inputs finer than a binding's precision are rejected rather than truncated:
+
+- Python: NumPy `datetime64` and `timedelta64` values with digits below a
+  microsecond raise `ValueError`.
+- JavaScript: rule times and ISO 8601 strings with digits below a millisecond
+  raise `RangeError`, and so do instants in a `Float64Array` that are not
+  whole milliseconds. Durations must be whole milliseconds within
+  ±`Number.MAX_SAFE_INTEGER`, or they raise `RangeError`.
+
 **Naive datetimes.** The typed Python API raises `ValueError` for a datetime
 without `tzinfo`, and the JavaScript API rejects an ISO string without an
-offset. Only the compatibility layer treats naive datetimes as UTC, as
-businesstimedelta does.
+offset. The compatibility layer treats naive datetimes as UTC, as
+businesstimedelta does. NumPy `datetime64` values carry no zone, so the Python
+batch methods read them as UTC and return `datetime64` results in UTC.
 
 | ID | Binding | Input | Result |
 |---|---|---|---|
 | N1 | Python typed | `schedule.between(datetime(2026, 1, 5, 10), aware)` | `ValueError` |
-| N2 | JavaScript | `schedule.between("2026-01-05T10:00", "2026-01-05T12:00Z")` | error |
+| N2 | JavaScript | `schedule.between("2026-01-05T10:00", "2026-01-05T12:00Z")` | `RangeError` |
 | N3 | Python compat | `rule.difference(datetime(2026, 1, 5, 10), datetime(2026, 1, 5, 12))`, 9–17 UTC | 2h |
 
 ## Errors and termination
@@ -300,7 +316,7 @@ Upstream defects are fixed:
 - Overnight shifts are counted correctly (C7).
 - Holidays past the end of a list, or in another zone, no longer raise or
   loop forever.
-- A time-off block that starts inside a working period always shortens it.
+- A time-off block that starts inside a period always shortens it.
 - A schedule without working time raises instead of hanging (C4).
 
 `HolidayRule` accepts a list of dates or a python-holidays object. The dates
@@ -349,9 +365,9 @@ the bindings are level there.
 the week's intervals from every rule and subtracts breaks and holidays. A
 week with no DST transition and no holiday near it is the same as the week
 before, so a long span adds the previous week's total instead of rebuilding
-it. That cut the year case in Rust from 261 µs to 147 µs, and its cost now
-depends on how many weeks hold holidays or DST changes, not on its length.
-businesstimedelta walks the span one working period at a time in Python.
+it. The cost of a span therefore depends on how many of its weeks hold
+holidays or DST changes, not on its length. businesstimedelta walks the span
+one period at a time in Python.
 
 **Crossing the boundary.** The engine needs about 2 µs for the single case.
 A call from JavaScript costs about 0.4 µs more. A call from the typed Python
@@ -379,5 +395,5 @@ crossing is cheap: a loop is only 5% slower than `betweenMany` on
 | Holiday vs overnight shift | removes calendar time only | A holiday is defined as 00:00–24:00; keeps rules independent and composable. |
 | DST disambiguation | compatible | Same as jiff, RFC 5545 and Temporal, so the three bindings agree with their ecosystems. |
 | Holiday zone default | schedule's zone | Avoids the UTC/local mismatch behind upstream issue 9. |
-| python-holidays objects | eager 1970–2100 | Keeps "convert once at construction"; no per-date or per-year FFI. |
+| python-holidays objects | typed `Holidays`: only the years the object holds; compat `HolidayRule`: every year from 1970 to 2100 first | Keeps "convert once at construction"; no per-date or per-year FFI. Compat fills in years because upstream code passes objects that fill them in on demand. |
 | Duration-to-business-days (upstream issue 3) | not in 0.1.0 | A formatting feature, not a correctness fix. |
