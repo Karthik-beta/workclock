@@ -42,9 +42,9 @@ fn both(spec: &ScheduleSpec) -> Option<(Schedule, Oracle)> {
 
 /// The result of `add` or `sub`, or `None` if the search hit the bound. Sparse
 /// schedules can hit it decades away, where zones had other DST rules.
-fn found(result: Result<Timestamp, Error>) -> Option<Timestamp> {
+fn found<T>(result: Result<T, Error>) -> Option<T> {
     match result {
-        Ok(t) => Some(t),
+        Ok(value) => Some(value),
         Err(Error::NoWorkingTime) => None,
         Err(e) => panic!("unexpected error {e:?}"),
     }
@@ -133,5 +133,39 @@ proptest! {
         let Some(engine) = engine(&spec) else { return Ok(()) };
         let c = b + SignedDuration::from_mins(extra);
         prop_assert_eq!(engine.between(a, b) + engine.between(b, c), engine.between(a, c));
+    }
+}
+
+const MINUTE: SignedDuration = SignedDuration::from_mins(1);
+/// No period is longer than the search bound, which is at least this.
+const YEAR: SignedDuration = SignedDuration::from_hours(366 * 24);
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(128))]
+
+    #[test]
+    fn next_period_is_the_first_maximal_stretch(spec in schedule(), t in moment()) {
+        let Some((engine, oracle)) = both(&spec) else { return Ok(()) };
+        let Some(period) = found(engine.next_period(t)) else { return Ok(()) };
+        prop_assert!(period.start >= t);
+        prop_assert_eq!(engine.between(t, period.start), SignedDuration::ZERO);
+        prop_assert_eq!(engine.between(period.start, period.end), period.end.duration_since(period.start));
+        prop_assert!(oracle.is_working(period.start));
+        prop_assert!(period.start == t || !oracle.is_working(period.start - MINUTE));
+        prop_assert!(oracle.is_working(period.end - MINUTE));
+        prop_assert!(!oracle.is_working(period.end) || period.end.duration_since(period.start) >= YEAR);
+    }
+
+    #[test]
+    fn previous_period_is_the_last_maximal_stretch(spec in schedule(), t in moment()) {
+        let Some((engine, oracle)) = both(&spec) else { return Ok(()) };
+        let Some(period) = found(engine.previous_period(t)) else { return Ok(()) };
+        prop_assert!(period.end <= t);
+        prop_assert_eq!(engine.between(period.end, t), SignedDuration::ZERO);
+        prop_assert_eq!(engine.between(period.start, period.end), period.end.duration_since(period.start));
+        prop_assert!(oracle.is_working(period.end - MINUTE));
+        prop_assert!(period.end == t || !oracle.is_working(period.end));
+        prop_assert!(oracle.is_working(period.start));
+        prop_assert!(!oracle.is_working(period.start - MINUTE) || period.end.duration_since(period.start) >= YEAR);
     }
 }
