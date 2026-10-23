@@ -63,7 +63,7 @@ Python 3.9 and 3.15, and the JavaScript tests on Node.js 22 and 24.
 ### Rust
 
 Requires stable Rust via [rustup](https://rustup.rs), plus
-`cargo install --locked cargo-deny cargo-audit`.
+`cargo install --locked cargo-deny`.
 
 ```sh
 cargo fmt --all
@@ -71,7 +71,6 @@ cargo clippy --workspace --locked --all-targets --all-features -- -D warnings -W
 cargo test --workspace --locked --all-features
 RUSTDOCFLAGS="-D warnings" cargo doc --workspace --locked --no-deps --all-features
 cargo deny check
-cargo audit
 ```
 
 CI also checks the minimum supported Rust version and line coverage of the
@@ -153,7 +152,8 @@ npm pack
 - `cargo clippy --workspace --all-targets --all-features -- -D warnings -W clippy::pedantic`.
   Every `#[allow]` carries a comment explaining why.
 - Every public item has rustdoc with a runnable example.
-- `cargo deny` and `cargo audit` for licenses and advisories.
+- `cargo deny` for licenses, banned and duplicate crates, sources and RustSec
+  advisories.
 
 **Python**
 - PEP 8 and PEP 257, enforced by `ruff check` and `ruff format`.
