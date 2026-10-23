@@ -10,9 +10,11 @@
 
 mod engine;
 mod error;
+mod holiday;
 mod weekdays;
 mod workday;
 
 pub use error::Error;
+pub use holiday::Holidays;
 pub use weekdays::Weekdays;
 pub use workday::{Break, WorkDay};
