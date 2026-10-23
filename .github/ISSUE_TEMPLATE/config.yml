@@ -1,5 +1,8 @@
 blank_issues_enabled: false
 contact_links:
+  - name: Ask a question
+    url: https://github.com/Karthik-beta/workclock/discussions/categories/q-a
+    about: Questions about using workclock belong in Discussions.
   - name: Report a security vulnerability
     url: https://github.com/Karthik-beta/workclock/security/advisories/new
     about: Please report vulnerabilities privately.
