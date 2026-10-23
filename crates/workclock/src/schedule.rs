@@ -51,8 +51,9 @@ pub struct Schedule {
     work: Vec<Shifts>,
     breaks: Vec<Shifts>,
     holidays: Vec<HolidayDates>,
-    /// The longest stretch without working time that `add` and `sub` cross
-    /// before giving up.
+    /// The longest stretch without working time that a search crosses before
+    /// giving up, and the longest period that `next_period` and
+    /// `previous_period` return.
     search_limit: SignedDuration,
 }
 
@@ -241,14 +242,15 @@ impl Schedule {
                     None => found = Some(block),
                     // Chunks split periods at their edges; join the pieces.
                     Some(period) if block.start == period.end => period.end = block.end,
-                    Some(period) => return Ok(period.start..period.end),
+                    Some(period) => return Ok(self.cap_after_start(*period)),
                 }
             }
             match found {
-                Some(period) if period.end < hi => return Ok(period.start..period.end),
-                Some(period) if period.end.duration_since(period.start) >= self.search_limit => {
-                    let end = period.start.checked_add(self.search_limit);
-                    return Ok(period.start..end.unwrap_or(Timestamp::MAX));
+                Some(period)
+                    if period.end < hi
+                        || period.end.duration_since(period.start) >= self.search_limit =>
+                {
+                    return Ok(self.cap_after_start(period));
                 }
                 None if hi.duration_since(t) > self.search_limit => {
                     return Err(Error::NoWorkingTime);
@@ -257,7 +259,7 @@ impl Schedule {
             }
         }
         found
-            .map(|period| period.start..period.end)
+            .map(|period| self.cap_after_start(period))
             .ok_or(Error::OutOfRange)
     }
 
@@ -303,14 +305,15 @@ impl Schedule {
                     }
                     None => found = Some(block),
                     Some(period) if block.end == period.start => period.start = block.start,
-                    Some(period) => return Ok(period.start..period.end),
+                    Some(period) => return Ok(self.cap_before_end(*period)),
                 }
             }
             match found {
-                Some(period) if period.start > lo => return Ok(period.start..period.end),
-                Some(period) if period.end.duration_since(period.start) >= self.search_limit => {
-                    let start = period.end.checked_sub(self.search_limit);
-                    return Ok(start.unwrap_or(Timestamp::MIN)..period.end);
+                Some(period)
+                    if period.start > lo
+                        || period.end.duration_since(period.start) >= self.search_limit =>
+                {
+                    return Ok(self.cap_before_end(period));
                 }
                 None if t.duration_since(lo) > self.search_limit => {
                     return Err(Error::NoWorkingTime);
@@ -319,8 +322,20 @@ impl Schedule {
             }
         }
         found
-            .map(|period| period.start..period.end)
+            .map(|period| self.cap_before_end(period))
             .ok_or(Error::OutOfRange)
+    }
+
+    /// `period`, ending no later than the search bound after its start.
+    fn cap_after_start(&self, period: Block) -> Range<Timestamp> {
+        let end = period.start.checked_add(self.search_limit);
+        period.start..period.end.min(end.unwrap_or(Timestamp::MAX))
+    }
+
+    /// `period`, starting no earlier than the search bound before its end.
+    fn cap_before_end(&self, period: Block) -> Range<Timestamp> {
+        let start = period.end.checked_sub(self.search_limit);
+        period.start.max(start.unwrap_or(Timestamp::MIN))..period.end
     }
 
     /// `add` for `d >= 0`.
@@ -878,6 +893,34 @@ mod tests {
         let year = h(366 * 24);
         assert_eq!(always.next_period(t), Ok(t..t + year));
         assert_eq!(always.previous_period(t), Ok(t - year..t));
+    }
+
+    #[test]
+    fn periods_that_end_just_past_the_search_bound_stop_at_it() {
+        // One holiday makes the bound 373 days. Each period below runs one to
+        // four days past it and ends inside the chunk in which it crosses it.
+        let all_day = WorkDay::new(Time::midnight(), Time::midnight(), Weekdays::ALL);
+        let bound = h(373 * 24);
+        let start = at("2026-01-05T00:00:00Z");
+        for days in [374, 375, 377] {
+            let holiday = start + h(days * 24);
+            let schedule = Schedule::builder()
+                .rule(all_day.clone())
+                .rule(Holidays::new([holiday.to_zoned(TimeZone::UTC).date()]))
+                .build()
+                .unwrap();
+            assert_eq!(
+                schedule.next_period(start),
+                Ok(start..start + bound),
+                "{days}"
+            );
+            let end = holiday + h((days + 1) * 24);
+            assert_eq!(
+                schedule.previous_period(end),
+                Ok(end - bound..end),
+                "{days}"
+            );
+        }
     }
 
     #[test]
