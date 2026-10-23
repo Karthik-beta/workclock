@@ -8,7 +8,7 @@ use jiff::civil::{Date, Time, Weekday};
 use jiff::{SignedDuration, Timestamp};
 use js_sys::{Array, Float64Array, Reflect};
 use wasm_bindgen::prelude::*;
-use workclock::{Break, Error, Holidays, Schedule as CoreSchedule, Weekdays, WorkDay};
+use workclock::{Break, Error, Holidays, Rule, Schedule as CoreSchedule, Weekdays, WorkDay};
 
 /// The repository README's Rust example. It runs here because the README is
 /// outside the published `workclock` crate.
@@ -106,6 +106,9 @@ impl Schedule {
     pub fn new(
         #[wasm_bindgen(unchecked_param_type = "ScheduleOptions")] options: &JsValue,
     ) -> Result<Schedule, JsValue> {
+        if !options.is_object() {
+            return Err(type_error("expected an object"));
+        }
         let mut builder = CoreSchedule::builder();
         if let Some(zone) = optional_string(options, "timeZone")? {
             builder = builder.time_zone(zone);
@@ -114,39 +117,8 @@ impl Schedule {
         if !Array::is_array(&rules) {
             return Err(type_error("`rules` must be an array"));
         }
-        for rule in Array::from(&rules).iter() {
-            let zone = optional_string(&rule, "timeZone")?;
-            let kind = optional_string(&rule, "type")?;
-            builder = match kind.as_deref() {
-                Some("workday") => {
-                    let (start, end, days) = hours(&rule)?;
-                    let rule = WorkDay::new(start, end, days);
-                    builder.rule(match zone {
-                        Some(zone) => rule.time_zone(zone),
-                        None => rule,
-                    })
-                }
-                Some("break") => {
-                    let (start, end, days) = hours(&rule)?;
-                    let rule = Break::new(start, end, days);
-                    builder.rule(match zone {
-                        Some(zone) => rule.time_zone(zone),
-                        None => rule,
-                    })
-                }
-                Some("holidays") => {
-                    let rule = Holidays::new(dates(&rule)?);
-                    builder.rule(match zone {
-                        Some(zone) => rule.time_zone(zone),
-                        None => rule,
-                    })
-                }
-                _ => {
-                    return Err(type_error(
-                        "rule `type` must be \"workday\", \"break\" or \"holidays\"",
-                    ))
-                }
-            };
+        for value in Array::from(&rules).iter() {
+            builder = builder.rule(rule(&value)?);
         }
         builder.build().map(Schedule).map_err(|e| engine_error(&e))
     }
@@ -315,10 +287,38 @@ fn shift_many(
     })
 }
 
-fn property(object: &JsValue, key: &str) -> Result<JsValue, JsValue> {
-    if !object.is_object() {
+fn rule(value: &JsValue) -> Result<Rule, JsValue> {
+    if !value.is_object() {
         return Err(type_error("expected an object"));
     }
+    let zone = optional_string(value, "timeZone")?;
+    Ok(match optional_string(value, "type")?.as_deref() {
+        Some("workday") => {
+            let (start, end, days) = hours(value)?;
+            in_zone(WorkDay::new(start, end, days), zone, WorkDay::time_zone).into()
+        }
+        Some("break") => {
+            let (start, end, days) = hours(value)?;
+            in_zone(Break::new(start, end, days), zone, Break::time_zone).into()
+        }
+        Some("holidays") => in_zone(Holidays::new(dates(value)?), zone, Holidays::time_zone).into(),
+        _ => {
+            return Err(type_error(
+                "rule `type` must be \"workday\", \"break\" or \"holidays\"",
+            ))
+        }
+    })
+}
+
+/// `rule` with its own time zone, if it names one.
+fn in_zone<R>(rule: R, zone: Option<String>, time_zone: impl FnOnce(R, String) -> R) -> R {
+    match zone {
+        Some(zone) => time_zone(rule, zone),
+        None => rule,
+    }
+}
+
+fn property(object: &JsValue, key: &str) -> Result<JsValue, JsValue> {
     Reflect::get(object, &JsValue::from_str(key))
 }
 
@@ -349,6 +349,7 @@ fn hours(rule: &JsValue) -> Result<(Time, Time, Weekdays), JsValue> {
         }
         Ok(time)
     };
+    let (start, end) = (time("start")?, time("end")?);
     let days = property(rule, "days")?;
     let days = if days.is_undefined() {
         Weekdays::MON_TO_FRI
@@ -360,7 +361,7 @@ fn hours(rule: &JsValue) -> Result<(Time, Time, Weekdays), JsValue> {
     } else {
         return Err(type_error("`days` must be an array"));
     };
-    Ok((time("start")?, time("end")?, days))
+    Ok((start, end, days))
 }
 
 fn weekday(day: &JsValue) -> Result<Weekday, JsValue> {
