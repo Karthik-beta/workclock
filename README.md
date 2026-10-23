@@ -23,6 +23,87 @@ npm i workclock
 - Staff rosters, including overnight shifts.
 - Delivery ETAs that only count operating hours.
 
+## Quickstart
+
+A support desk in London works 09:00–17:00 on weekdays with a lunch hour,
+and is closed on 25 and 28 December 2026. A ticket opened at 16:30 on
+Christmas Eve with an 8-hour SLA is due at 09:30 on 30 December.
+
+### Rust
+
+```rust
+use jiff::civil::{date, time};
+use jiff::{SignedDuration, Zoned};
+use workclock::{Break, Holidays, Schedule, Weekdays, WorkDay};
+
+let support = Schedule::builder()
+    .time_zone("Europe/London")
+    .rule(WorkDay::new(time(9, 0, 0, 0), time(17, 0, 0, 0), Weekdays::MON_TO_FRI))
+    .rule(Break::new(time(12, 0, 0, 0), time(13, 0, 0, 0), Weekdays::MON_TO_FRI))
+    .rule(Holidays::new([date(2026, 12, 25), date(2026, 12, 28)]))
+    .build()?;
+
+let opened: Zoned = "2026-12-24T16:30[Europe/London]".parse()?;
+let due = support.add(&opened, SignedDuration::from_hours(8))?;
+assert_eq!(due.to_string(), "2026-12-30T09:30:00Z");
+
+let now: Zoned = "2026-12-29T11:00[Europe/London]".parse()?;
+assert_eq!(support.between(&opened, &now), SignedDuration::from_mins(150));
+```
+
+### Python
+
+```python
+from datetime import date, datetime, time
+from zoneinfo import ZoneInfo
+
+from workclock import Break, Holidays, Schedule, WorkDay
+
+london = ZoneInfo("Europe/London")
+support = Schedule(
+    [
+        WorkDay(time(9), time(17)),  # Monday to Friday by default
+        Break(time(12), time(13)),
+        Holidays([date(2026, 12, 25), date(2026, 12, 28)]),
+    ],
+    time_zone=london,
+)
+
+opened = datetime(2026, 12, 24, 16, 30, tzinfo=london)
+support.add(opened, hours=8)  # 2026-12-30 09:30, London time
+support.between(opened, datetime(2026, 12, 29, 11, tzinfo=london))  # 2:30:00
+```
+
+`between_many`, `add_many` and `sub_many` take lists or NumPy arrays and
+process them in one call. Code written for businesstimedelta runs unchanged
+with `import workclock.compat as businesstimedelta`; see
+[MIGRATING.md](MIGRATING.md).
+
+### JavaScript
+
+```js
+import { Schedule } from "workclock";
+
+const support = new Schedule({
+  timeZone: "Europe/London",
+  rules: [
+    { type: "workday", start: "09:00", end: "17:00" },
+    { type: "break", start: "12:00", end: "13:00" },
+    { type: "holidays", dates: ["2026-12-25", "2026-12-28"] },
+  ],
+});
+
+support.add("2026-12-24T16:30:00Z", 8 * 3_600_000); // Date 2026-12-30T09:30:00.000Z
+support.between("2026-12-24T16:30:00Z", new Date("2026-12-29T11:00:00Z")); // 9000000 ms
+```
+
+Instants are `Date`s or ISO 8601 strings with an offset; durations are
+milliseconds. In browsers without a bundler, import the default `init` from
+`workclock/web` and `await init()` first.
+
+More complete programs are in [`crates/workclock/examples`](crates/workclock/examples),
+[`examples/python`](examples/python) and [`js/examples`](js/examples).
+
 ## Prior art & credits
 
 workclock builds on [businesstimedelta](https://github.com/seppemans/businesstimedelta)
