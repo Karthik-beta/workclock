@@ -75,7 +75,7 @@ convention = "pep257"
 
 [tool.mypy]
 strict = true
-files = ["python", "tests/python", "benchmarks"]
+files = ["python", "tests/python", "benchmarks", "examples"]
 
 [[tool.mypy.overrides]]
 # Neither ships type information; types-pytz would be another dependency.
