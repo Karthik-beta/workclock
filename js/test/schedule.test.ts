@@ -131,6 +131,18 @@ describe("periods", () => {
   });
 });
 
+describe("freeing", () => {
+  test.each([
+    ["free", (schedule: Schedule) => schedule.free()],
+    ["Symbol.dispose", (schedule: Schedule) => schedule[Symbol.dispose]()],
+  ])("%s releases the schedule's memory", (_, release) => {
+    const schedule = new Schedule({ rules: [{ type: "workday", start: "09:00", end: "17:00" }] });
+    expect(schedule.between("2026-01-05T09:00:00Z", "2026-01-05T10:00:00Z")).toBe(HOUR);
+    release(schedule);
+    expect(() => schedule.between("2026-01-05T09:00:00Z", "2026-01-05T10:00:00Z")).toThrow();
+  });
+});
+
 describe("errors", () => {
   test("an unknown time zone throws UnknownZoneError", () => {
     const build = () =>
