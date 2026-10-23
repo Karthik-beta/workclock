@@ -326,6 +326,49 @@ Every difference is listed in `MIGRATING.md`.
 | C8 | 9–17 Mon–Fri UTC, `HolidayRule(holidays.US())` | `difference(Fri 2026-07-03 09:00, 17:00)` (Independence Day, observed) | 0h | 0h |
 | C9 | same | `difference(Mon 2101-07-04 09:00, 17:00)` (outside the window) | 8h | `TypeError` |
 
+## Performance
+
+[benchmarks/](benchmarks/) measures three cases from every language: one short
+`between`, one `between` across a year with bank holidays, and `between` for
+1,000,000 pairs of up to a week each. Medians from
+[benchmarks/RESULTS.md](benchmarks/RESULTS.md):
+
+| Case | Rust | JavaScript | Python | compat | businesstimedelta 1.0.1 |
+|---|---|---|---|---|---|
+| single | 2.14 µs | 2.5 µs | 8.2 µs | 55.6 µs | 388 µs |
+| year | 172 µs | 160 µs | 137 µs | 177 µs | 217 ms |
+| batch, 1M pairs | 3.22 s | 3.52 s | 3.34 s | 72.2 s | 24.5 min |
+
+The batch row uses the fastest form each binding offers: `betweenMany` on
+`Float64Array`s and `between_many` on NumPy arrays. compat and
+businesstimedelta loop over the pairs in Python. On this machine the year
+case varies by tens of microseconds between runs (Rust's p95 is 280 µs), so
+the bindings are level there.
+
+**Algorithm.** The engine computes working time a week at a time: it builds
+the week's intervals from every rule and subtracts breaks and holidays. A
+week with no DST transition and no holiday near it is the same as the week
+before, so a long span adds the previous week's total instead of rebuilding
+it. That cut the year case in Rust from 261 µs to 147 µs, and its cost now
+depends on how many weeks hold holidays or DST changes, not on its length.
+businesstimedelta walks the span one working period at a time in Python.
+
+**Crossing the boundary.** The engine needs about 2 µs for the single case.
+A call from JavaScript costs about 0.4 µs more. A call from the typed Python
+API costs about 6 µs more, spent converting aware datetimes to epoch
+microseconds and the result back to a `timedelta`, and in the call itself.
+compat adds about 50 µs on top, because it builds an engine schedule from its
+rule objects on every call. businesstimedelta's rules are mutable, so caching
+that schedule would have to detect changes to them.
+
+**Batches.** A batch call converts its inputs once and then runs the engine
+on every pair with the GIL released. With NumPy arrays the conversion is
+vectorized, and 1M pairs take about as long as from Rust. From lists of
+datetimes the per-item conversion stays in Python (5.9 s), and a loop of
+`between` calls pays the whole crossing every time (9.7 s). In JavaScript the
+crossing is cheap: a loop is only 5% slower than `betweenMany` on
+`Float64Array`s.
+
 ## Decisions
 
 | Decision | Choice | Why |
