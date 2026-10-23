@@ -29,5 +29,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   error classes for `instanceof` checks.
 - npm package: `betweenMany`, `addMany` and `subMany` for arrays and
   `Float64Array`s of epoch milliseconds.
+- Python wheels use the stable ABI (abi3), so one wheel per platform covers
+  CPython 3.9 and later.
+- Examples in Rust, Python and JavaScript: when a support ticket is due and
+  how much of its SLA has been used.
 
 [Unreleased]: https://github.com/Karthik-beta/workclock/commits/main
