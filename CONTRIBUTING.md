@@ -144,6 +144,19 @@ npm pack
 ../.github/scripts/npm-install-check.sh workclock-*.tgz
 ```
 
+### Workflows
+
+CI checks `.github/` with [zizmor](https://docs.zizmor.sh) for security
+problems and with [actionlint](https://github.com/rhysd/actionlint), which also
+runs shellcheck on every `run` script. Install them with
+`cargo install --locked zizmor` and
+`go install github.com/rhysd/actionlint/cmd/actionlint@latest`, then:
+
+```sh
+zizmor .github/
+actionlint
+```
+
 ## Standards
 
 **Rust**
