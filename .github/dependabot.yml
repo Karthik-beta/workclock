@@ -1,9 +1,13 @@
 version: 2
+# New releases wait a week before Dependabot proposes them, so a compromised
+# release is usually caught and yanked first. Security updates skip the wait.
 updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     groups:
       actions:
         patterns: ["*"]
@@ -15,6 +19,13 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
+    # Most crates here are 0.x, where a minor version can break the API, so
+    # only patch releases are grouped.
+    groups:
+      cargo:
+        update-types: [patch]
     commit-message:
       prefix: build
       include: scope
@@ -23,6 +34,11 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      uv:
+        update-types: [minor, patch]
     commit-message:
       prefix: build
       include: scope
@@ -31,6 +47,11 @@ updates:
     directory: /js
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      npm:
+        update-types: [minor, patch]
     commit-message:
       prefix: build
       include: scope
