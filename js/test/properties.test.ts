@@ -136,6 +136,18 @@ describe("engine invariants", () => {
     );
   });
 
+  test("between undoes sub", () => {
+    fc.assert(
+      fc.property(spec, instant, minutes(5 * 24 * 60), (s, t, d) => {
+        const built = build(s);
+        if (built !== undefined) {
+          const result = built.engine.sub(new Date(t), d);
+          expect(built.engine.between(result, new Date(t))).toBe(d);
+        }
+      }),
+    );
+  });
+
   test("nextPeriod is working time from t or later", () => {
     fc.assert(
       fc.property(spec, instant, (s, t) => {
@@ -145,6 +157,20 @@ describe("engine invariants", () => {
           expect(start.getTime()).toBeGreaterThanOrEqual(t);
           expect(built.engine.between(start, end)).toBe(end.getTime() - start.getTime());
           expect(built.engine.between(new Date(t), start)).toBe(0);
+        }
+      }),
+    );
+  });
+
+  test("previousPeriod is working time up to t or earlier", () => {
+    fc.assert(
+      fc.property(spec, instant, (s, t) => {
+        const built = build(s);
+        if (built !== undefined) {
+          const { start, end } = built.engine.previousPeriod(new Date(t));
+          expect(end.getTime()).toBeLessThanOrEqual(t);
+          expect(built.engine.between(start, end)).toBe(end.getTime() - start.getTime());
+          expect(built.engine.between(end, new Date(t))).toBe(0);
         }
       }),
     );
