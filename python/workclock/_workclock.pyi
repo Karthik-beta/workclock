@@ -1,3 +1,9 @@
+from typing import final
+
+from typing_extensions import Self
+
+__all__ = ["EngineError", "Schedule", "__version__", "day_bounds", "local_date"]
+
 __version__: str
 
 _Time = tuple[int, int, int, int]
@@ -9,14 +15,15 @@ class EngineError(Exception): ...
 def local_date(zone_name: str, t: int) -> tuple[int, int, int]: ...
 def day_bounds(zone_name: str, date: tuple[int, int, int]) -> tuple[int, int]: ...
 
+@final
 class Schedule:
-    def __init__(
-        self,
+    def __new__(
+        cls,
         zone: str | None,
         workdays: list[_Hours],
         breaks: list[_Hours],
         holidays: list[_Holidays],
-    ) -> None: ...
+    ) -> Self: ...
     def between(self, a: int, b: int) -> int: ...
     def add(self, t: int, d: int) -> int: ...
     def sub(self, t: int, d: int) -> int: ...
