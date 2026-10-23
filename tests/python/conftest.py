@@ -13,6 +13,9 @@ def pytest_configure(config: pytest.Config) -> None:
         "markers",
         "upstream_bug(reason, raises): known to fail on businesstimedelta 1.0.1",
     )
+    config.addinivalue_line(
+        "markers", "slow: deselected by default; run with `pytest -m slow`"
+    )
 
 
 @pytest.fixture(params=IMPLEMENTATIONS)
