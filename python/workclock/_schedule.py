@@ -28,6 +28,10 @@ _HoursSpec = tuple[_TimeTuple, _TimeTuple, list[int], Optional[str]]
 
 _EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
 _MICROSECOND = timedelta(microseconds=1)
+# The engine's instants are jiff timestamps, in microseconds since the epoch.
+_FIRST_INSTANT = -377_705_023_201_000_000
+_LAST_INSTANT = 253_402_207_200_000_000
+_INSTANT_RANGE = "-009999-01-02T01:59:59Z to 9999-12-30T22:00:00Z"
 # The engine takes amounts as signed 64-bit microseconds.
 _MIN_AMOUNT = -(2**63)
 _MAX_AMOUNT = 2**63 - 1
@@ -67,7 +71,12 @@ def _micros(value: datetime) -> int:
         raise ValueError(
             f"{value!r} is naive; workclock needs timezone-aware datetimes"
         )
-    return (value - _EPOCH) // _MICROSECOND
+    micros = (value - _EPOCH) // _MICROSECOND
+    if not _FIRST_INSTANT <= micros <= _LAST_INSTANT:
+        raise OutOfRangeError(
+            f"{value.isoformat()} is outside the supported range {_INSTANT_RANGE}"
+        )
+    return micros
 
 
 def _delta_micros(value: timedelta) -> int:
@@ -92,9 +101,19 @@ def _each(convert: Callable[..., _T], *columns: Iterable[Any]) -> list[_T]:
 
 def _datetime(micros: int, tz: tzinfo | None) -> datetime:
     try:
-        return (_EPOCH + timedelta(microseconds=micros)).astimezone(tz)
+        utc = _EPOCH + timedelta(microseconds=micros)
     except OverflowError:
-        raise OutOfRangeError("result is outside the range of datetime") from None
+        raise OutOfRangeError(
+            "result is before 0001-01-01T00:00:00+00:00, outside datetime's "
+            "range of years 1 to 9999"
+        ) from None
+    try:
+        return utc.astimezone(tz)
+    except OverflowError:
+        raise OutOfRangeError(
+            f"result {utc.isoformat()} is outside datetime's range of years "
+            f"1 to 9999 in {tz}"
+        ) from None
 
 
 @dataclass(frozen=True, init=False)
