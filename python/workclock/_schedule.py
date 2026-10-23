@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta, timezone, tzinfo
 from typing import TYPE_CHECKING, Any, Optional, TypeVar, Union, overload
 
@@ -213,6 +213,9 @@ class Holidays:
 
     dates: frozenset[date]
     time_zone: str | None
+    _sorted_dates: list[tuple[int, int, int]] = field(
+        init=False, repr=False, compare=False
+    )
 
     def __init__(
         self, dates: Iterable[date], *, time_zone: str | tzinfo | None = None
@@ -230,9 +233,12 @@ class Holidays:
                 )
         object.__setattr__(self, "dates", dates)
         object.__setattr__(self, "time_zone", _optional_zone(time_zone))
+        object.__setattr__(
+            self, "_sorted_dates", [(d.year, d.month, d.day) for d in sorted(dates)]
+        )
 
     def _spec(self) -> tuple[list[tuple[int, int, int]], str | None]:
-        return ([(d.year, d.month, d.day) for d in sorted(self.dates)], self.time_zone)
+        return (self._sorted_dates, self.time_zone)
 
 
 Rule = Union[WorkDay, Break, Holidays]
