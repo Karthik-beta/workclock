@@ -24,5 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `MIGRATING.md`.
 - Searches are bounded: a schedule without working time, or a result outside
   the supported range, returns an `Error` instead of looping or panicking.
+- npm package: `Schedule` with `between`, `add`, `sub`, `nextPeriod` and
+  `previousPeriod`, taking `Date`s or ISO 8601 strings and milliseconds, and
+  error classes for `instanceof` checks.
 
 [Unreleased]: https://github.com/Karthik-beta/workclock/commits/main
