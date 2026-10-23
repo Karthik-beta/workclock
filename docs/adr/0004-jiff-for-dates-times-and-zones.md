@@ -32,6 +32,10 @@ The WASM build enables `tzdb-bundle-always`, because the browser offers no
 zone database. Which database the native builds use is decided with the
 bindings.
 
+Update (2026-10-23): the Rust crate and the Python extension use jiff's
+default features, so native builds read the system database and bundle one
+only on Windows. The WASM build bundles it as above.
+
 ## Consequences
 
 - One disambiguation policy is shared by all three bindings, so results agree

@@ -24,8 +24,10 @@ zero-duration snapping). Users may depend on either kind.
 - Correctness is enforced by differential tests against businesstimedelta
   1.0.1 where 1.0.1 is correct, and against the brute-force oracle where
   workclock intentionally differs.
-- Every intentional difference is listed in `MIGRATING.md`. The current list
-  is in [DESIGN.md](../../DESIGN.md#compatibility-layer).
+- Every intentional difference is listed in
+  [MIGRATING.md](../../MIGRATING.md#intentional-differences), and
+  [DESIGN.md](../../DESIGN.md#compatibility-layer) specifies compat's
+  behaviour with examples.
 
 ## Consequences
 

@@ -25,4 +25,4 @@ Build the npm package from WebAssembly with wasm-bindgen and wasm-pack.
 - The module bundles its own time zone database (ADR 0004), which adds to its
   size.
 - Per-call overhead is higher than a native addon. Batch functions amortise
-  it, and the benchmarks in M7 measure it.
+  it, and [benchmarks/RESULTS.md](../../benchmarks/RESULTS.md) measures it.
