@@ -29,3 +29,16 @@ batch case takes businesstimedelta about half an hour; add
 
 The JavaScript suite runs the batch case three ways: `between` in a loop, and
 `betweenMany` on arrays of `Date`s and on `Float64Array`s.
+
+## Results
+
+[RESULTS.md](RESULTS.md) has the latest numbers and the machine they ran on.
+To regenerate it, run the three suites with their JSON output and combine
+them:
+
+```sh
+cargo bench -p workclock --bench workclock
+uv run pytest benchmarks/python --benchmark-json=python.json
+cd js && npm run build:node && node bench/bench.js ../js.json && cd ..
+uv run python benchmarks/report.py python.json js.json > benchmarks/RESULTS.md
+```
