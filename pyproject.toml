@@ -69,6 +69,7 @@ convention = "pep257"
 "tests/**" = ["D"]
 # businesstimedelta is untyped, so its objects can only be annotated as Any.
 "tests/python/upstream*/**" = ["ANN401"]
+"tests/python/test_differential.py" = ["ANN401"]
 
 [tool.mypy]
 strict = true
