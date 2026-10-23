@@ -14,6 +14,7 @@ on:
       - .github/workflows/release.yml
       - .github/scripts/**
       - Cargo.toml
+      - Cargo.lock
       - crates/*/Cargo.toml
       - pyproject.toml
       - js/package.json
@@ -99,10 +100,14 @@ jobs:
           uv venv --python 3.9
           uv pip install --no-index --find-links dist workclock
           uv run --no-project python -c 'import workclock; print(workclock.__version__)'
+      # The image ships tzdata; deleting it checks that the wheel resolves zones
+      # from the database it bundles.
       - if: matrix.manylinux == 'musllinux_1_2'
         run: >-
           docker run --rm --volume "$PWD/dist:/dist:ro" python:3.14-alpine sh -c
-          'pip install --no-index --find-links /dist workclock && python -c "import workclock; print(workclock.__version__)"'
+          'pip install --no-index --find-links /dist workclock && python -c "import workclock; print(workclock.__version__)"
+          && rm -rf /usr/share/zoneinfo
+          && python -c "from datetime import time; from workclock import Schedule, WorkDay; Schedule([WorkDay(time(9), time(17))], time_zone=\"Europe/London\")"'
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: python-${{ matrix.os }}-${{ matrix.target }}-${{ matrix.manylinux || 'native' }}
