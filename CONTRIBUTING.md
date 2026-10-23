@@ -56,6 +56,9 @@ uv run mypy
 uv run pytest
 ```
 
+Tests marked `slow` are deselected by default; `uv run pytest -m slow` runs
+them.
+
 ### JavaScript
 
 Requires Node.js 22 or later, [wasm-pack](https://github.com/drager/wasm-pack)
