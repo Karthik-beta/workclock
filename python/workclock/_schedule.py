@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone, tzinfo
-from typing import TYPE_CHECKING, Optional, Union, overload
+from typing import TYPE_CHECKING, Any, Optional, TypeVar, Union, overload
 
 from workclock import _arrays, _workclock
 from workclock._errors import (
@@ -21,11 +22,16 @@ if TYPE_CHECKING:
     import numpy as np
     from numpy.typing import NDArray
 
+_T = TypeVar("_T")
 _TimeTuple = tuple[int, int, int, int]
 _HoursSpec = tuple[_TimeTuple, _TimeTuple, list[int], Optional[str]]
 
 _EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
 _MICROSECOND = timedelta(microseconds=1)
+# The engine takes amounts as signed 64-bit microseconds.
+_MIN_AMOUNT = -(2**63)
+_MAX_AMOUNT = 2**63 - 1
+_AMOUNT_RANGE = f"{_MIN_AMOUNT} to {_MAX_AMOUNT} microseconds"
 _ERRORS: dict[str, type[WorkclockError]] = {
     "no_working_time": NoWorkingTimeError,
     "out_of_range": OutOfRangeError,
@@ -62,6 +68,26 @@ def _micros(value: datetime) -> int:
             f"{value!r} is naive; workclock needs timezone-aware datetimes"
         )
     return (value - _EPOCH) // _MICROSECOND
+
+
+def _delta_micros(value: timedelta) -> int:
+    micros = value // _MICROSECOND
+    if not _MIN_AMOUNT <= micros <= _MAX_AMOUNT:
+        raise OutOfRangeError(
+            f"amount {value!r} is outside the supported range {_AMOUNT_RANGE}"
+        )
+    return micros
+
+
+def _each(convert: Callable[..., _T], *columns: Iterable[Any]) -> list[_T]:
+    """Apply ``convert`` to each row of ``columns``, naming the row that fails."""
+    results: list[_T] = []
+    try:
+        for row in zip(*columns):
+            results.append(convert(*row))
+    except (TypeError, ValueError, OutOfRangeError) as error:
+        raise type(error)(f"item {len(results)}: {error}") from None
+    return results
 
 
 def _datetime(micros: int, tz: tzinfo | None) -> datetime:
@@ -368,9 +394,8 @@ class Schedule:
             return _arrays.from_micros(micros, "datetime64", shape)
         dts = list(dts)
         if isinstance(deltas, timedelta):
-            amounts = [deltas // _MICROSECOND] * len(dts)
-        else:
-            amounts = [d // _MICROSECOND for d in deltas]
+            deltas = [deltas] * len(dts)
+        amounts = _each(_delta_micros, deltas)
         with _engine_errors():
             micros = shift([_micros(t) for t in dts], amounts)
         return [_datetime(m, t.tzinfo) for m, t in zip(micros, dts)]
@@ -379,7 +404,18 @@ class Schedule:
 def _amount(
     delta: timedelta | None, hours: float, minutes: float, seconds: float
 ) -> int:
-    total = timedelta(hours=hours, minutes=minutes, seconds=seconds)
-    if delta is not None:
-        total += delta
-    return total // _MICROSECOND
+    keywords = {"hours": hours, "minutes": minutes, "seconds": seconds}
+    for name, value in keywords.items():
+        if isinstance(value, float) and math.isnan(value):
+            raise ValueError(f"amount {name}={value!r} is not a number")
+    try:
+        total = timedelta(**keywords)
+        if delta is not None:
+            total += delta
+    except OverflowError:
+        given = [] if delta is None else [repr(delta)]
+        given += [f"{name}={value!r}" for name, value in keywords.items() if value]
+        raise OutOfRangeError(
+            f"amount {' + '.join(given)} is outside the supported range {_AMOUNT_RANGE}"
+        ) from None
+    return _delta_micros(total)
