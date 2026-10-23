@@ -33,6 +33,9 @@ pub struct Schedule {
     work: Vec<Shifts>,
     breaks: Vec<Shifts>,
     holidays: Vec<HolidayDates>,
+    /// The longest stretch without working time that `add` and `sub` cross
+    /// before giving up.
+    search_limit: SignedDuration,
 }
 
 impl Schedule {
@@ -90,6 +93,139 @@ impl Schedule {
             lo = hi;
         }
         total
+    }
+
+    /// Returns the earliest instant `x` such that the working time between `t`
+    /// and `x` is `d`.
+    ///
+    /// The result is `t` itself when `d` is zero, even outside working time.
+    /// A result that uses up a block of working time lands on the block's end,
+    /// not on the start of the next one. A negative `d` is the same as
+    /// [`sub`](Self::sub) with `-d`.
+    ///
+    /// # Errors
+    ///
+    /// - [`Error::NoWorkingTime`] if the search crosses 366 days, plus one
+    ///   day per holiday date, without finding working time.
+    /// - [`Error::OutOfRange`] if the result is outside the range of
+    ///   [`Timestamp`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use jiff::civil::time;
+    /// use jiff::{SignedDuration, Timestamp};
+    /// use workclock::{Schedule, Weekdays, WorkDay};
+    ///
+    /// let schedule = Schedule::builder()
+    ///     .rule(WorkDay::new(time(22, 0, 0, 0), time(6, 0, 0, 0), Weekdays::MON_TO_FRI))
+    ///     .build()?;
+    /// let monday_night: Timestamp = "2026-01-05T22:00:00Z".parse()?;
+    /// let due = schedule.add(monday_night, SignedDuration::from_hours(4))?;
+    /// assert_eq!(due.to_string(), "2026-01-06T02:00:00Z");
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    pub fn add(&self, t: impl Into<Timestamp>, d: SignedDuration) -> Result<Timestamp, Error> {
+        let t = t.into();
+        if d.is_negative() {
+            return self.backward(t, d.checked_neg().ok_or(Error::OutOfRange)?);
+        }
+        self.forward(t, d)
+    }
+
+    /// Returns the latest instant `x` such that the working time between `x`
+    /// and `t` is `d`.
+    ///
+    /// The result is `t` itself when `d` is zero, even outside working time.
+    /// A result that uses up a block of working time lands on the block's
+    /// start. A negative `d` is the same as [`add`](Self::add) with `-d`.
+    ///
+    /// # Errors
+    ///
+    /// - [`Error::NoWorkingTime`] if the search crosses 366 days, plus one
+    ///   day per holiday date, without finding working time.
+    /// - [`Error::OutOfRange`] if the result is outside the range of
+    ///   [`Timestamp`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use jiff::civil::time;
+    /// use jiff::{SignedDuration, Timestamp};
+    /// use workclock::{Schedule, Weekdays, WorkDay};
+    ///
+    /// let schedule = Schedule::builder()
+    ///     .rule(WorkDay::new(time(9, 0, 0, 0), time(17, 0, 0, 0), Weekdays::MON_TO_FRI))
+    ///     .build()?;
+    /// let tuesday: Timestamp = "2026-01-06T09:00:00Z".parse()?;
+    /// let start = schedule.sub(tuesday, SignedDuration::from_hours(1))?;
+    /// assert_eq!(start.to_string(), "2026-01-05T16:00:00Z");
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    pub fn sub(&self, t: impl Into<Timestamp>, d: SignedDuration) -> Result<Timestamp, Error> {
+        let t = t.into();
+        if d.is_negative() {
+            return self.forward(t, d.checked_neg().ok_or(Error::OutOfRange)?);
+        }
+        self.backward(t, d)
+    }
+
+    /// `add` for `d >= 0`.
+    fn forward(&self, t: Timestamp, d: SignedDuration) -> Result<Timestamp, Error> {
+        if d.is_zero() {
+            return Ok(t);
+        }
+        let mut left = d;
+        let mut last_work = t;
+        let mut lo = t;
+        while lo < Timestamp::MAX {
+            let hi = lo.checked_add(CHUNK).unwrap_or(Timestamp::MAX);
+            for block in self.working_time(lo, hi, true) {
+                if block.start.duration_since(last_work) > self.search_limit {
+                    return Err(Error::NoWorkingTime);
+                }
+                let length = block.end.duration_since(block.start);
+                if left <= length {
+                    return block.start.checked_add(left).map_err(|_| Error::OutOfRange);
+                }
+                left -= length;
+                last_work = block.end;
+            }
+            if hi.duration_since(last_work) > self.search_limit {
+                return Err(Error::NoWorkingTime);
+            }
+            lo = hi;
+        }
+        Err(Error::OutOfRange)
+    }
+
+    /// `sub` for `d >= 0`.
+    fn backward(&self, t: Timestamp, d: SignedDuration) -> Result<Timestamp, Error> {
+        if d.is_zero() {
+            return Ok(t);
+        }
+        let mut left = d;
+        let mut last_work = t;
+        let mut hi = t;
+        while hi > Timestamp::MIN {
+            let lo = hi.checked_sub(CHUNK).unwrap_or(Timestamp::MIN);
+            for block in self.working_time(lo, hi, true).into_iter().rev() {
+                if last_work.duration_since(block.end) > self.search_limit {
+                    return Err(Error::NoWorkingTime);
+                }
+                let length = block.end.duration_since(block.start);
+                if left <= length {
+                    return block.end.checked_sub(left).map_err(|_| Error::OutOfRange);
+                }
+                left -= length;
+                last_work = block.start;
+            }
+            if last_work.duration_since(lo) > self.search_limit {
+                return Err(Error::NoWorkingTime);
+            }
+            hi = lo;
+        }
+        Err(Error::OutOfRange)
     }
 
     /// Working time inside `[lo, hi)`, sorted and merged. Holidays are left
@@ -214,6 +350,7 @@ impl ScheduleBuilder {
             work: Vec::new(),
             breaks: Vec::new(),
             holidays: Vec::new(),
+            search_limit: SignedDuration::ZERO,
         };
         for rule in self.rules {
             match rule {
@@ -238,6 +375,13 @@ impl ScheduleBuilder {
         {
             return Err(Error::NoWorkingTime);
         }
+
+        // 366 days, plus one for every holiday date.
+        let holiday_dates: usize = schedule.holidays.iter().map(HolidayDates::len).sum();
+        schedule.search_limit = i64::try_from(holiday_dates)
+            .ok()
+            .and_then(|n| n.checked_add(366)?.checked_mul(24 * 60 * 60))
+            .map_or(SignedDuration::MAX, SignedDuration::from_secs);
         Ok(schedule)
     }
 }
@@ -346,6 +490,119 @@ mod tests {
         let last = Timestamp::MAX.checked_sub(month).unwrap();
         assert_eq!(schedule.between(Timestamp::MIN, first), month);
         assert_eq!(schedule.between(last, Timestamp::MAX), month);
+    }
+
+    fn at(s: &str) -> Timestamp {
+        s.parse().unwrap()
+    }
+
+    #[test]
+    fn zero_returns_the_input_even_outside_working_time() {
+        // A5, A8, A11
+        let lunch = Break::new(time(12, 0, 0, 0), time(13, 0, 0, 0), Weekdays::MON_TO_FRI);
+        let schedule = Schedule::builder()
+            .rule(office())
+            .rule(lunch)
+            .build()
+            .unwrap();
+        for t in ["2026-01-10T10:00:00Z", "2026-01-05T12:30:00Z"] {
+            assert_eq!(schedule.add(at(t), h(0)), Ok(at(t)));
+            assert_eq!(schedule.sub(at(t), h(0)), Ok(at(t)));
+        }
+    }
+
+    #[test]
+    fn add_and_sub_land_on_block_edges() {
+        // A2, A3, A7, A9, O3
+        let schedule = Schedule::builder().rule(office()).build().unwrap();
+        let nights = Schedule::builder().rule(night()).build().unwrap();
+        assert_eq!(
+            schedule.add(at("2026-01-05T16:00:00Z"), h(1)),
+            Ok(at("2026-01-05T17:00:00Z"))
+        );
+        assert_eq!(
+            schedule.add(at("2026-01-05T17:00:00Z"), h(1)),
+            Ok(at("2026-01-06T10:00:00Z"))
+        );
+        assert_eq!(
+            schedule.sub(at("2026-01-06T09:00:00Z"), h(1)),
+            Ok(at("2026-01-05T16:00:00Z"))
+        );
+        assert_eq!(
+            schedule.sub(at("2026-01-12T10:00:00Z"), h(1)),
+            Ok(at("2026-01-12T09:00:00Z"))
+        );
+        assert_eq!(
+            nights.sub(at("2026-01-06T06:00:00Z"), h(4)),
+            Ok(at("2026-01-06T02:00:00Z"))
+        );
+    }
+
+    #[test]
+    fn negative_durations_go_the_other_way() {
+        // A6
+        let schedule = Schedule::builder().rule(office()).build().unwrap();
+        let t = at("2026-01-05T10:00:00Z");
+        assert_eq!(schedule.add(t, h(-2)), Ok(at("2026-01-02T16:00:00Z")));
+        assert_eq!(schedule.sub(t, h(-2)), schedule.add(t, h(2)));
+        assert_eq!(schedule.add(t, SignedDuration::MIN), Err(Error::OutOfRange));
+        assert_eq!(schedule.sub(t, SignedDuration::MIN), Err(Error::OutOfRange));
+    }
+
+    #[test]
+    fn results_past_the_ends_of_jiff_range_are_errors() {
+        let schedule = Schedule::builder()
+            .rule(WorkDay::new(
+                Time::midnight(),
+                Time::midnight(),
+                Weekdays::ALL,
+            ))
+            .build()
+            .unwrap();
+        let near_start = Timestamp::MIN.checked_add(h(1)).unwrap();
+        let near_end = Timestamp::MAX.checked_sub(h(1)).unwrap();
+        assert_eq!(schedule.sub(near_start, h(1)), Ok(Timestamp::MIN));
+        assert_eq!(schedule.sub(near_start, h(2)), Err(Error::OutOfRange));
+        assert_eq!(schedule.add(near_end, h(2)), Err(Error::OutOfRange));
+    }
+
+    #[test]
+    fn search_gives_up_after_a_year_without_working_time() {
+        // In January 2001 Sao Paulo is on summer time (UTC-2), so the break
+        // misses the shift by an hour and the schedule builds. Brazil dropped
+        // summer time in 2019; since then the break covers the whole shift.
+        let schedule = Schedule::builder()
+            .rule(
+                WorkDay::new(time(9, 0, 0, 0), time(10, 0, 0, 0), Weekdays::ALL)
+                    .time_zone("Etc/GMT+3"),
+            )
+            .rule(
+                Break::new(time(9, 0, 0, 0), time(10, 0, 0, 0), Weekdays::ALL)
+                    .time_zone("America/Sao_Paulo"),
+            )
+            .build()
+            .unwrap();
+        let t = at("2021-01-01T00:00:00Z");
+        assert_eq!(schedule.add(t, h(1)), Err(Error::NoWorkingTime));
+        assert_eq!(schedule.sub(t, h(1)), Err(Error::NoWorkingTime));
+    }
+
+    #[test]
+    fn holidays_extend_the_search_bound() {
+        // E4: ten years of holidays push the next working hour to 2035.
+        let ten_years = Holidays::new(
+            std::iter::successors(Some(date(2026, 1, 1)), |d| d.tomorrow().ok())
+                .take_while(|d| *d <= date(2035, 12, 29)),
+        );
+        let schedule = Schedule::builder()
+            .rule(office())
+            .rule(ten_years)
+            .build()
+            .unwrap();
+        assert_eq!(
+            schedule.add(at("2026-01-01T00:00:00Z"), h(1)),
+            Ok(at("2035-12-31T10:00:00Z"))
+        );
     }
 
     #[test]

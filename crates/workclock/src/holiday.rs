@@ -72,10 +72,6 @@ pub(crate) struct HolidayDates {
 }
 
 impl HolidayDates {
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "used once add and sub are added")
-    )]
     pub(crate) fn len(&self) -> usize {
         self.dates.len()
     }
