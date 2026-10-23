@@ -133,6 +133,31 @@ def test_results_past_the_supported_range_are_errors() -> None:
         schedule.add(datetime(9999, 12, 30, 16, tzinfo=UTC), hours=2)
 
 
+def test_inputs_past_the_supported_range_are_named(office: Schedule) -> None:
+    last = datetime(9999, 12, 30, 22, tzinfo=UTC)
+    assert office.between(last, last) == timedelta(0)
+    with pytest.raises(
+        OutOfRangeError,
+        match=r"^9999-12-31T00:00:00\+00:00 is outside the supported range "
+        r"-009999-01-02T01:59:59Z to 9999-12-30T22:00:00Z$",
+    ):
+        office.between(utc(5, 9), datetime(9999, 12, 31, tzinfo=UTC))
+    with pytest.raises(OutOfRangeError, match=r"^item 1: 9999-12-30T22:00:00\.000001"):
+        office.between_many([last] * 2, [last, last + timedelta(microseconds=1)])
+
+
+def test_results_before_year_1_are_errors() -> None:
+    always = Schedule([WorkDay(time(0), time(0), range(7))])
+    with pytest.raises(OutOfRangeError, match=r"before 0001-01-01.* years 1 to 9999"):
+        always.sub(datetime(1, 1, 1, 1, tzinfo=UTC), hours=2)
+    eastern = timezone(timedelta(hours=-5))
+    with pytest.raises(
+        OutOfRangeError,
+        match=r"result 0001-01-01T04:00:00\+00:00 .* years 1 to 9999 in UTC-05:00",
+    ):
+        always.sub(datetime(1, 1, 1, tzinfo=eastern), hours=1)
+
+
 def test_amounts_past_the_engine_range_are_errors(office: Schedule) -> None:
     start = utc(5, 9)
     huge = timedelta(days=999_999_999)
