@@ -1,20 +1,45 @@
 # workclock
 
 Fast, correct business-time arithmetic (working hours, SLAs, shifts) for Rust,
-Python and JavaScript — a maintained, drop-in replacement for
-[businesstimedelta](https://github.com/seppemans/businesstimedelta).
+Python and JavaScript — a maintained replacement for
+[businesstimedelta](https://github.com/seppemans/businesstimedelta), with a
+compatibility layer for existing code.
 
 > **Status:** in development. No release has been published yet.
 
 ## Install
 
 ```sh
-cargo add workclock
+cargo add workclock jiff
 pip install workclock
 uv add workclock
-uv pip install workclock
 npm i workclock
 ```
+
+The Rust API takes and returns [jiff](https://docs.rs/jiff) 0.2 types, so
+Rust code depends on jiff too.
+
+## Requirements
+
+- **Rust:** 1.85 or later.
+- **Python:** CPython 3.9 or later. The wheels use the stable ABI (abi3), one
+  per platform: Linux x86_64 and aarch64 (manylinux and musllinux), macOS
+  x86_64 and arm64, and Windows x64. Free-threaded CPython cannot load abi3
+  wheels. Other platforms build from the sdist, which needs a Rust toolchain.
+- **JavaScript:** Node.js 22 or later. Browsers load the package through a
+  bundler, or without one from `workclock/web`.
+
+### Time zone data
+
+The npm package bundles the IANA time zone database, so its zone rules are
+as current as the workclock release. The Rust crate and the Python wheels use
+jiff's defaults: the system database (`/usr/share/zoneinfo`, or the directory
+in `TZDIR`) on Linux and macOS, and a bundled copy on Windows.
+
+On a Linux image without tzdata, as some slim and distroless images are,
+every named zone, even `"UTC"`, is an unknown-zone error. Install the
+`tzdata` package or point `TZDIR` at a zoneinfo directory. In Rust, enabling
+jiff's `tzdb-bundle-always` feature bundles the database instead.
 
 ## Use cases
 
@@ -54,6 +79,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+API documentation is on [docs.rs](https://docs.rs/workclock).
+
 ### Python
 
 ```python
@@ -78,9 +105,10 @@ support.between(opened, datetime(2026, 12, 29, 11, tzinfo=london))  # 2:30:00
 ```
 
 `between_many`, `add_many` and `sub_many` take lists or NumPy arrays and
-process them in one call. Code written for businesstimedelta runs unchanged
-with `import workclock.compat as businesstimedelta`; see
-[MIGRATING.md](MIGRATING.md).
+process them in one call. Most code written for businesstimedelta runs
+unchanged with `import workclock.compat as businesstimedelta`;
+[MIGRATING.md](https://github.com/Karthik-beta/workclock/blob/main/MIGRATING.md#intentional-differences)
+lists where it differs.
 
 ### JavaScript
 
@@ -104,8 +132,12 @@ Instants are `Date`s or ISO 8601 strings with an offset; durations are
 milliseconds. In browsers without a bundler, import the default `init` from
 `workclock/web` and `await init()` first.
 
-More complete programs are in [`crates/workclock/examples`](crates/workclock/examples),
-[`examples/python`](examples/python) and [`js/examples`](js/examples).
+More complete programs are in
+[`crates/workclock/examples`](https://github.com/Karthik-beta/workclock/tree/main/crates/workclock/examples),
+[`examples/python`](https://github.com/Karthik-beta/workclock/tree/main/examples/python) and
+[`js/examples`](https://github.com/Karthik-beta/workclock/tree/main/js/examples).
+The errors each binding raises are listed in
+[DESIGN.md](https://github.com/Karthik-beta/workclock/blob/main/DESIGN.md#errors-and-termination).
 
 ## Why workclock
 
@@ -129,8 +161,9 @@ businesstimedelta 1.0.1 has had no release since 2019. workclock fixes:
   ambiguous or skipped times resolve the way jiff, RFC 5545 and JavaScript
   Temporal do.
 
-Every rule is specified with examples in [DESIGN.md](DESIGN.md), and each
-binding is checked against a brute-force oracle with property-based tests.
+Every rule is specified with examples in
+[DESIGN.md](https://github.com/Karthik-beta/workclock/blob/main/DESIGN.md), and
+each binding is checked against a brute-force oracle with property-based tests.
 
 ### Fast
 
@@ -144,23 +177,27 @@ Medians on a 2017 laptop (Intel i5-8250U, Windows 11), from Python:
 
 The same single call takes 2.1 µs from Rust and 2.5 µs from JavaScript.
 `workclock.compat` takes 56 µs, because it rebuilds the schedule on every call
-to match businesstimedelta's mutable rules. [benchmarks/RESULTS.md](benchmarks/RESULTS.md)
-has every case with p95s, and [DESIGN.md](DESIGN.md#performance) explains where
-the time goes.
+to match businesstimedelta's mutable rules.
+[benchmarks/RESULTS.md](https://github.com/Karthik-beta/workclock/blob/main/benchmarks/RESULTS.md)
+has every case with p95s, and
+[DESIGN.md](https://github.com/Karthik-beta/workclock/blob/main/DESIGN.md#performance)
+explains where the time goes.
 
 ## Prior art & credits
 
-workclock builds on [businesstimedelta](https://github.com/seppemans/businesstimedelta)
-by Sebastiaan Boer, released under the MIT license. Its last release, 1.0.1,
+workclock ports the test suite and the API of
+[businesstimedelta](https://github.com/seppemans/businesstimedelta) by
+Sebastiaan Boer, released under the MIT license. Its last release, 1.0.1,
 was in September 2019, and issues
 [#3](https://github.com/seppemans/businesstimedelta/issues/3),
 [#8](https://github.com/seppemans/businesstimedelta/issues/8),
 [#9](https://github.com/seppemans/businesstimedelta/issues/9),
 [#10](https://github.com/seppemans/businesstimedelta/issues/10) and
 [#12](https://github.com/seppemans/businesstimedelta/issues/12) remain open.
-workclock ports its test suite and offers its API as `workclock.compat`. The
-original copyright notice is kept in [NOTICE](NOTICE).
+The ported API is `workclock.compat`, and the ported tests run against it in
+CI. The original copyright notice is kept in
+[NOTICE](https://github.com/Karthik-beta/workclock/blob/main/NOTICE).
 
 ## License
 
-[MIT](LICENSE)
+[MIT](https://github.com/Karthik-beta/workclock/blob/main/LICENSE)
