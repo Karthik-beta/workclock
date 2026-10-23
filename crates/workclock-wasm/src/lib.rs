@@ -334,11 +334,17 @@ fn hours(rule: &JsValue) -> Result<(Time, Time, Weekdays), JsValue> {
     let time = |key: &str| -> Result<Time, JsValue> {
         let text = optional_string(rule, key)?
             .ok_or_else(|| type_error(&format!("`{key}` is required")))?;
-        text.parse().map_err(|_| {
+        let time: Time = text.parse().map_err(|_| {
             range_error(&format!(
                 "`{key}` must be a time such as \"09:00\", got {text:?}"
             ))
-        })
+        })?;
+        if time.subsec_nanosecond() % 1_000_000 != 0 {
+            return Err(range_error(&format!(
+                "`{key}` has digits below a millisecond, which cannot be represented, got {text:?}"
+            )));
+        }
+        Ok(time)
     };
     let days = property(rule, "days")?;
     let days = if days.is_undefined() {

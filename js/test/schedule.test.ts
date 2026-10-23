@@ -226,4 +226,10 @@ describe("malformed input", () => {
   ])("throws RangeError: %s", (call) => {
     expect(call).toThrow(RangeError);
   });
+
+  test("a rule time below a millisecond throws RangeError", () => {
+    const build = () => new Schedule({ rules: [{ ...workday, start: "09:00:00.0005" }] });
+    expect(build).toThrow(RangeError);
+    expect(build).toThrow("`start` has digits below a millisecond");
+  });
 });
