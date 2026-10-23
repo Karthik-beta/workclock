@@ -133,14 +133,22 @@ class _Hours:
     ) -> None:
         _time_tuple(start)
         _time_tuple(end)
-        days = frozenset(days)
-        if not all(isinstance(day, int) and 0 <= day <= 6 for day in days):
+        if isinstance(days, str):
             raise ValueError(
-                f"days must be integers from 0 (Monday) to 6, got {sorted(days)}"
+                "days must be a list of integers from 0 (Monday) to 6, "
+                f"not the string {days!r}"
+            )
+        given = tuple(days)
+        unique = frozenset(given)
+        bad = [day for day in given if not (isinstance(day, int) and 0 <= day <= 6)]
+        if bad:
+            raise ValueError(
+                "days must be integers from 0 (Monday) to 6, got "
+                + ", ".join(map(repr, bad))
             )
         object.__setattr__(self, "start", start)
         object.__setattr__(self, "end", end)
-        object.__setattr__(self, "days", days)
+        object.__setattr__(self, "days", unique)
         object.__setattr__(self, "time_zone", _optional_zone(time_zone))
 
     def _spec(self) -> _HoursSpec:
@@ -187,6 +195,11 @@ class Holidays:
     def __init__(
         self, dates: Iterable[date], *, time_zone: str | tzinfo | None = None
     ) -> None:
+        if isinstance(dates, str):
+            raise TypeError(
+                "dates must be a list of datetime.date objects, "
+                f"not the string {dates!r}"
+            )
         dates = frozenset(dates)
         for value in dates:
             if isinstance(value, datetime) or not isinstance(value, date):
