@@ -18,8 +18,10 @@ Thanks for helping. By participating you agree to the
 1. Branch from `main`. Nothing is committed to `main` directly.
 2. Keep commits small, one concern each, following
    [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/).
-   Common types: `feat`, `fix`, `docs`, `test`, `refactor`, `perf`, `build`,
-   `ci`, `chore`.
+   CI checks every commit subject in a pull request and accepts the types
+   `feat`, `fix`, `docs`, `test`, `refactor`, `perf`, `build`, `ci`, `chore`,
+   `style` and `revert`. Bring a branch up to date by rebasing; a merge commit
+   fails the check.
 3. Add user-facing changes to the `Unreleased` section of
    [`CHANGELOG.md`](CHANGELOG.md) ([Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/)).
 4. Open a pull request. CI must pass. PRs are merged with *Rebase and merge* so

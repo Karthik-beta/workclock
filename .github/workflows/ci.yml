@@ -235,11 +235,35 @@ jobs:
       - run: npm pack
       - run: ../.github/scripts/npm-install-check.sh workclock-*.tgz
 
+  commits:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Commit subjects follow Conventional Commits
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          pattern='((feat|fix|docs|test|refactor|perf|build|ci|chore|style|revert)(\([^()]+\))?!?: [^ ]|Revert ")'
+          log="$(git log --format='%h %s' "$BASE..$HEAD")"
+          echo "Checking $(git rev-list --count "$BASE..$HEAD") commits in $BASE..$HEAD"
+          bad="$(grep -vE "^[0-9a-f]+ ($pattern)" <<< "$log" || true)"
+          if [ -n "$bad" ]; then
+            echo "::error::These commits do not follow Conventional Commits (see CONTRIBUTING.md):"
+            echo "$bad"
+            echo "A merge commit from updating the branch fails too; rebase instead."
+            exit 1
+          fi
+
   # Single status check for branch protection, so adding a job never
   # requires editing the protection rule.
   ci-ok:
     if: ${{ !cancelled() }}
-    needs: [fmt, clippy, test, coverage, docs, msrv, deny, audit, python-lint, python-test, wasm]
+    needs: [fmt, clippy, test, coverage, docs, msrv, deny, audit, python-lint, python-test, wasm, commits]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
