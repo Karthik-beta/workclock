@@ -68,6 +68,18 @@ describe("between", () => {
     });
     expect(weekends.between("2026-01-05T00:00:00Z", "2026-01-12T00:00:00Z")).toBe(8 * HOUR);
   });
+
+  test("accepts options declared as const", () => {
+    const options = {
+      rules: [
+        { type: "workday", start: "10:00", end: "14:00", days: ["sat", "sun"] },
+        { type: "holidays", dates: ["2026-01-10"] },
+      ],
+    } as const;
+    expect(new Schedule(options).between("2026-01-05T00:00:00Z", "2026-01-12T00:00:00Z")).toBe(
+      4 * HOUR,
+    );
+  });
 });
 
 describe("add and sub", () => {

@@ -24,15 +24,23 @@ const TYPES: &str = r#"
 /** A day of the week. */
 export type Weekday = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
 
-/** Working hours or a break on some days of the week. */
+/**
+ * Working hours (`"workday"`) or time off within them (`"break"`) on some days
+ * of the week. Times are wall-clock times in the rule's time zone, written
+ * `HH:MM`, `HH:MM:SS` or `HH:MM:SS.fff` on a 24-hour clock, such as `"09:00"`
+ * or `"17:30:00"`.
+ */
 export interface HoursRule {
   type: "workday" | "break";
   /** Wall-clock start, such as `"09:00"`. */
   start: string;
-  /** Wall-clock end; at or before `start` means the shift ends the next day. */
+  /** Wall-clock end; at or before `start` means the hours end the next day. */
   end: string;
-  /** Defaults to Monday to Friday. */
-  days?: Weekday[];
+  /**
+   * Days on which the hours start. Defaults to Monday to Friday, for breaks
+   * too, so a break on a weekend workday needs its own `days`.
+   */
+  days?: readonly Weekday[];
   /** IANA time zone; defaults to the schedule's. */
   timeZone?: string;
 }
@@ -41,17 +49,23 @@ export interface HoursRule {
 export interface HolidaysRule {
   type: "holidays";
   /** Dates such as `"2026-12-25"`. */
-  dates: string[];
+  dates: readonly string[];
   /** IANA time zone; defaults to the schedule's. */
   timeZone?: string;
 }
 
+/**
+ * One rule of a schedule. Working time is the time inside workdays and
+ * outside breaks and holidays.
+ */
 export type Rule = HoursRule | HolidaysRule;
 
+/** What `new Schedule` takes. */
 export interface ScheduleOptions {
   /** IANA time zone for rules without their own; defaults to `"UTC"`. */
   timeZone?: string;
-  rules: Rule[];
+  /** The rules, in any order. */
+  rules: readonly Rule[];
 }
 
 /** A `Date`, or an ISO 8601 string with a UTC offset. */
@@ -73,12 +87,15 @@ export interface Schedule {
   /** `between` for each pair; `a` and `b` must have the same length. */
   betweenMany(a: Float64Array, b: Float64Array): Float64Array;
   betweenMany(a: readonly Instant[], b: readonly Instant[]): number[];
+  betweenMany(a: Float64Array | readonly Instant[], b: Float64Array | readonly Instant[]): Float64Array | number[];
   /** `add` for each instant. */
   addMany(t: Float64Array, ms: number | readonly number[] | Float64Array): Float64Array;
   addMany(t: readonly Instant[], ms: number | readonly number[] | Float64Array): Date[];
+  addMany(t: Float64Array | readonly Instant[], ms: number | readonly number[] | Float64Array): Float64Array | Date[];
   /** `sub` for each instant. */
   subMany(t: Float64Array, ms: number | readonly number[] | Float64Array): Float64Array;
   subMany(t: readonly Instant[], ms: number | readonly number[] | Float64Array): Date[];
+  subMany(t: Float64Array | readonly Instant[], ms: number | readonly number[] | Float64Array): Float64Array | Date[];
 }
 "#;
 
