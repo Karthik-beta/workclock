@@ -65,7 +65,8 @@
     "build:unignore": "node --eval \"for (const t of ['node', 'bundler', 'web']) require('node:fs').rmSync('pkg/' + t + '/.gitignore', { force: true })\"",
     "prepack": "node --eval \"for (const f of ['LICENSE', 'NOTICE']) require('node:fs').copyFileSync('../' + f, f)\"",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "bench": "node bench/bench.js"
   },
   "devDependencies": {
     "@types/node": "^22.20.5",
