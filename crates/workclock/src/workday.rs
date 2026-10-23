@@ -14,7 +14,6 @@ pub(crate) struct Hours {
     pub(crate) zone: Option<String>,
 }
 
-#[cfg_attr(not(test), expect(dead_code, reason = "used once Schedule is added"))]
 impl Hours {
     pub(crate) fn resolve(&self, tz: TimeZone) -> Shifts {
         Shifts {
@@ -135,7 +134,6 @@ pub(crate) struct Shifts {
     tz: TimeZone,
 }
 
-#[cfg_attr(not(test), expect(dead_code, reason = "used once Schedule is added"))]
 impl Shifts {
     /// Appends the parts of every shift inside `[lo, hi)`.
     pub(crate) fn blocks(&self, lo: Timestamp, hi: Timestamp, out: &mut Vec<Block>) {

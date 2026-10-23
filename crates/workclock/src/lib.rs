@@ -11,10 +11,14 @@
 mod engine;
 mod error;
 mod holiday;
+mod rule;
+mod schedule;
 mod weekdays;
 mod workday;
 
 pub use error::Error;
 pub use holiday::Holidays;
+pub use rule::Rule;
+pub use schedule::{Schedule, ScheduleBuilder};
 pub use weekdays::Weekdays;
 pub use workday::{Break, WorkDay};

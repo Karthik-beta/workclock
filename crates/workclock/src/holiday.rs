@@ -55,7 +55,6 @@ impl Holidays {
     }
 }
 
-#[cfg_attr(not(test), expect(dead_code, reason = "used once Schedule is added"))]
 impl Holidays {
     pub(crate) fn resolve(self, tz: TimeZone) -> HolidayDates {
         HolidayDates {
@@ -72,8 +71,11 @@ pub(crate) struct HolidayDates {
     tz: TimeZone,
 }
 
-#[cfg_attr(not(test), expect(dead_code, reason = "used once Schedule is added"))]
 impl HolidayDates {
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "used once add and sub are added")
+    )]
     pub(crate) fn len(&self) -> usize {
         self.dates.len()
     }
