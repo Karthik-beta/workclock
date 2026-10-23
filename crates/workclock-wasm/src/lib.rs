@@ -415,14 +415,14 @@ fn instant(value: &JsValue) -> Result<Timestamp, JsValue> {
         if ms.is_nan() {
             return Err(range_error("invalid Date"));
         }
-        return epoch(ms);
+        return from_millis(ms).ok_or_else(|| out_of_range(&String::from(date.to_iso_string())));
     }
     let Some(text) = value.as_string() else {
         return Err(type_error("expected a Date or an ISO 8601 string"));
     };
     let t: Timestamp = text.parse().map_err(|_| {
         range_error(&format!(
-            "{text:?} is not an ISO 8601 instant with a UTC offset, such as \"2026-01-05T09:00:00Z\""
+            "{text:?} is not an ISO 8601 instant with a UTC offset in the supported range {RANGE}, such as \"2026-01-05T09:00:00Z\""
         ))
     })?;
     if t.subsec_nanosecond() % 1_000_000 != 0 {
@@ -432,26 +432,23 @@ fn instant(value: &JsValue) -> Result<Timestamp, JsValue> {
     }
     // jiff parses instants up to a fraction of a second beyond either end of
     // the range it accepts as milliseconds, which is the range for Dates.
-    Timestamp::from_millisecond(t.as_millisecond()).map_err(|_| {
-        workclock_error(
-            "OutOfRangeError",
-            "out_of_range",
-            &format!("{text} is outside the supported range {RANGE}"),
-        )
-    })
+    Timestamp::from_millisecond(t.as_millisecond()).map_err(|_| out_of_range(&text))
 }
 
 /// An instant `ms` milliseconds after the Unix epoch.
 fn epoch(ms: f64) -> Result<Timestamp, JsValue> {
     // Also true for NaN and the infinities.
     if ms.fract() != 0.0 {
-        return Err(range_error(
-            "instants must be whole milliseconds since the epoch",
-        ));
+        return Err(range_error(&format!(
+            "instants must be whole milliseconds since the epoch, got {}",
+            number_text(ms)
+        )));
     }
-    integer(ms)
-        .and_then(|ms| Timestamp::from_millisecond(ms).ok())
-        .ok_or_else(|| engine_error(&Error::OutOfRange))
+    from_millis(ms).ok_or_else(|| out_of_range(&number_text(ms)))
+}
+
+fn from_millis(ms: f64) -> Option<Timestamp> {
+    integer(ms).and_then(|ms| Timestamp::from_millisecond(ms).ok())
 }
 
 /// Instants from an array of `Instant`s, or from a `Float64Array` of epoch
@@ -560,7 +557,12 @@ fn number_text(number: f64) -> String {
 fn duration(ms: f64) -> Result<SignedDuration, JsValue> {
     integer(ms)
         .map(SignedDuration::from_millis)
-        .ok_or_else(|| range_error("durations must be whole numbers of milliseconds"))
+        .ok_or_else(|| {
+            range_error(&format!(
+                "durations must be whole numbers of milliseconds within ±Number.MAX_SAFE_INTEGER, got {}",
+                number_text(ms)
+            ))
+        })
 }
 
 /// `value` as an `i64` if it is a whole number that a double holds exactly.
@@ -608,6 +610,15 @@ fn engine_error(error: &Error) -> JsValue {
         _ => ("WorkclockError", "unknown"),
     };
     workclock_error(name, kind, &error.to_string())
+}
+
+/// An `OutOfRangeError` for an input instant, shown as `value`.
+fn out_of_range(value: &str) -> JsValue {
+    workclock_error(
+        "OutOfRangeError",
+        "out_of_range",
+        &format!("{value} is outside the supported range {RANGE}"),
+    )
 }
 
 fn workclock_error(name: &str, kind: &str, message: &str) -> JsValue {
