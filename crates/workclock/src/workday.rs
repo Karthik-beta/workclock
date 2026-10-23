@@ -135,6 +135,14 @@ pub(crate) struct Shifts {
 }
 
 impl Shifts {
+    /// Whether the time zone keeps one offset from `lo` to `hi`.
+    pub(crate) fn steady(&self, lo: Timestamp, hi: Timestamp) -> bool {
+        self.tz
+            .following(lo)
+            .next()
+            .is_none_or(|transition| transition.timestamp() > hi)
+    }
+
     /// Appends the parts of every shift inside `[lo, hi)`.
     pub(crate) fn blocks(&self, lo: Timestamp, hi: Timestamp, out: &mut Vec<Block>) {
         let overnight = self.end <= self.start;

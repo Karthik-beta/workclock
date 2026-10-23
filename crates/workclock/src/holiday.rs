@@ -76,6 +76,14 @@ impl HolidayDates {
         self.dates.len()
     }
 
+    /// Whether no holiday falls near `[lo, hi)`.
+    pub(crate) fn none_near(&self, lo: Timestamp, hi: Timestamp) -> bool {
+        self.dates
+            .range(local_dates(lo, hi, &self.tz))
+            .next()
+            .is_none()
+    }
+
     /// Appends the parts of every holiday inside `[lo, hi)`.
     pub(crate) fn blocks(&self, lo: Timestamp, hi: Timestamp, out: &mut Vec<Block>) {
         for &date in self.dates.range(local_dates(lo, hi, &self.tz)) {

@@ -11,6 +11,19 @@ use crate::{Break, Error, Rule, WorkDay};
 /// How much time is evaluated at once when walking along a schedule.
 const CHUNK: SignedDuration = SignedDuration::from_hours(7 * 24);
 
+/// How far blocks resolved for a chunk can reach beyond it: two local dates
+/// before it, two after it, and up to a day of UTC offset.
+const REACH: SignedDuration = SignedDuration::from_hours(4 * 24);
+
+/// A whole chunk's working time, kept to skip the next chunk if it repeats.
+#[derive(Clone, Copy)]
+struct Week {
+    time: SignedDuration,
+    /// From the chunk's end back to the end of its last block, or from its
+    /// start to the start of its first block, depending on the direction.
+    edge: SignedDuration,
+}
+
 /// Working time defined by rules, evaluated in IANA time zones.
 ///
 /// Working time is the union of every [`WorkDay`] minus every [`Break`] and
@@ -86,12 +99,21 @@ impl Schedule {
             return -self.between(b, a);
         }
         let mut total = SignedDuration::ZERO;
+        let mut previous: Option<SignedDuration> = None;
         let mut lo = a;
         while lo < b {
             let hi = lo.checked_add(CHUNK).unwrap_or(Timestamp::MAX).min(b);
-            for block in self.working_time(lo, hi, true) {
-                total += block.end.duration_since(block.start);
-            }
+            let whole = hi.duration_since(lo) == CHUNK;
+            let time = match previous {
+                Some(time) if whole && self.repeats(lo) => time,
+                _ => self
+                    .working_time(lo, hi, true)
+                    .iter()
+                    .map(|block| block.end.duration_since(block.start))
+                    .sum(),
+            };
+            total += time;
+            previous = whole.then_some(time);
             lo = hi;
         }
         total
@@ -304,9 +326,20 @@ impl Schedule {
         }
         let mut left = d;
         let mut last_work = t;
+        let mut previous: Option<Week> = None;
         let mut lo = t;
         while lo < Timestamp::MAX {
             let hi = lo.checked_add(CHUNK).unwrap_or(Timestamp::MAX);
+            let whole = hi.duration_since(lo) == CHUNK;
+            if let Some(week) = previous {
+                if left > week.time && whole && self.repeats(lo) {
+                    left -= week.time;
+                    last_work = hi - week.edge;
+                    lo = hi;
+                    continue;
+                }
+            }
+            let mut time = SignedDuration::ZERO;
             for block in self.working_time(lo, hi, true) {
                 if block.start.duration_since(last_work) > self.search_limit {
                     return Err(Error::NoWorkingTime);
@@ -316,11 +349,16 @@ impl Schedule {
                     return block.start.checked_add(left).map_err(|_| Error::OutOfRange);
                 }
                 left -= length;
+                time += length;
                 last_work = block.end;
             }
             if hi.duration_since(last_work) > self.search_limit {
                 return Err(Error::NoWorkingTime);
             }
+            previous = (whole && time.is_positive()).then(|| Week {
+                time,
+                edge: hi.duration_since(last_work),
+            });
             lo = hi;
         }
         Err(Error::OutOfRange)
@@ -333,9 +371,20 @@ impl Schedule {
         }
         let mut left = d;
         let mut last_work = t;
+        let mut previous: Option<Week> = None;
         let mut hi = t;
         while hi > Timestamp::MIN {
             let lo = hi.checked_sub(CHUNK).unwrap_or(Timestamp::MIN);
+            let whole = hi.duration_since(lo) == CHUNK;
+            if let Some(week) = previous {
+                if left > week.time && whole && self.repeats(hi) {
+                    left -= week.time;
+                    last_work = lo + week.edge;
+                    hi = lo;
+                    continue;
+                }
+            }
+            let mut time = SignedDuration::ZERO;
             for block in self.working_time(lo, hi, true).into_iter().rev() {
                 if last_work.duration_since(block.end) > self.search_limit {
                     return Err(Error::NoWorkingTime);
@@ -345,14 +394,34 @@ impl Schedule {
                     return block.end.checked_sub(left).map_err(|_| Error::OutOfRange);
                 }
                 left -= length;
+                time += length;
                 last_work = block.start;
             }
             if last_work.duration_since(lo) > self.search_limit {
                 return Err(Error::NoWorkingTime);
             }
+            previous = (whole && time.is_positive()).then(|| Week {
+                time,
+                edge: last_work.duration_since(lo),
+            });
             hi = lo;
         }
         Err(Error::OutOfRange)
+    }
+
+    /// Whether the chunks either side of `at` hold the same working time, a
+    /// week apart: no rule's time zone changes offset, and no holiday falls,
+    /// anywhere the blocks of either chunk can reach.
+    fn repeats(&self, at: Timestamp) -> bool {
+        let (Ok(start), Ok(end)) = (at.checked_sub(CHUNK + REACH), at.checked_add(CHUNK + REACH))
+        else {
+            return false;
+        };
+        self.work
+            .iter()
+            .chain(&self.breaks)
+            .all(|rule| rule.steady(start, end))
+            && self.holidays.iter().all(|rule| rule.none_near(start, end))
     }
 
     /// Working time inside `[lo, hi)`, sorted and merged. Holidays are left
