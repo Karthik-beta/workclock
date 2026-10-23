@@ -177,6 +177,34 @@ describe("errors", () => {
       });
     expect(build).toThrow(NoWorkingTimeError);
     expect(build).toThrow(WorkclockError);
+    expect(build).toThrow(
+      /^schedule has no working time: its working hours minus its breaks are empty$/,
+    );
+  });
+
+  test("a search without working time names its bound and start", () => {
+    // In January 2001 Sao Paulo is on summer time, so the break misses the
+    // shift and the schedule builds; since 2019 the break covers it.
+    const days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
+    const schedule = new Schedule({
+      rules: [
+        { type: "workday", start: "09:00", end: "10:00", days, timeZone: "Etc/GMT+3" },
+        { type: "break", start: "09:00", end: "10:00", days, timeZone: "America/Sao_Paulo" },
+      ],
+    });
+    const message =
+      "no working time within 366 days, plus seven days per holiday date, of 2021-01-01T00:00:00Z";
+    const t = "2021-01-01T00:00:00Z";
+    for (const call of [
+      () => schedule.add(t, HOUR),
+      () => schedule.sub(t, HOUR),
+      () => schedule.nextPeriod(t),
+      () => schedule.previousPeriod(t),
+    ]) {
+      expect(call).toThrow(NoWorkingTimeError);
+      expect(call).toThrow(new RegExp(`^${message}$`));
+    }
+    expect(() => schedule.addMany([t], HOUR)).toThrow(new RegExp(`^item 0: ${message}$`));
   });
 
   test("a result past the supported range throws OutOfRangeError", () => {
