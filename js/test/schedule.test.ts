@@ -213,40 +213,78 @@ describe("errors", () => {
 describe("malformed input", () => {
   const workday = { type: "workday", start: "09:00", end: "17:00" } as const;
 
-  test.each([
+  test.each<[() => unknown, string]>([
     // @ts-expect-error options are required
-    () => new Schedule(),
+    [() => new Schedule(), "expected an options object, got undefined"],
+    // @ts-expect-error options must be an object
+    [() => new Schedule(null), "expected an options object, got null"],
     // @ts-expect-error rules are required
-    () => new Schedule({}),
-    // @ts-expect-error unknown rule type
-    () => new Schedule({ rules: [{ type: "shift", start: "09:00", end: "17:00" }] }),
+    [() => new Schedule({}), "`rules` must be an array"],
+    [
+      // @ts-expect-error unknown rule type
+      () => new Schedule({ rules: [{ type: "shift", start: "09:00", end: "17:00" }] }),
+      'rules[0]: rule `type` must be "workday", "break" or "holidays"',
+    ],
+    // @ts-expect-error rules must be objects
+    [() => new Schedule({ rules: [workday, null] }), "rules[1]: expected a rule object, got null"],
     // @ts-expect-error start must be a string
-    () => new Schedule({ rules: [{ ...workday, start: 9 }] }),
-    // @ts-expect-error dates must be an array
-    () => new Schedule({ rules: [{ type: "holidays", dates: "2026-12-25" }] }),
+    [() => new Schedule({ rules: [{ ...workday, start: 9 }] }), "rules[0]: `start` must be a string"],
+    [
+      // @ts-expect-error start is required
+      () => new Schedule({ rules: [workday, { type: "break", end: "13:00" }] }),
+      "rules[1]: `start` is required",
+    ],
+    [
+      // @ts-expect-error dates must be an array
+      () => new Schedule({ rules: [{ type: "holidays", dates: "2026-12-25" }] }),
+      "rules[0]: `dates` must be an array",
+    ],
+    [
+      // @ts-expect-error dates must be strings
+      () => new Schedule({ rules: [{ type: "holidays", dates: [20261225] }] }),
+      "rules[0]: holiday dates must be strings, got 20261225",
+    ],
     // @ts-expect-error instants are Dates or strings
-    () => office.between(0, "2026-01-05T09:00:00Z"),
-  ])("throws TypeError: %s", (call) => {
+    [() => office.between(0, "2026-01-05T09:00:00Z"), "expected a Date or an ISO 8601 string"],
+  ])("throws TypeError: %s", (call, message) => {
     expect(call).toThrow(TypeError);
+    expect(call).toThrow(message);
   });
 
-  test.each([
-    () => new Schedule({ rules: [{ ...workday, start: "9am" }] }),
-    // @ts-expect-error unknown day name
-    () => new Schedule({ rules: [{ ...workday, days: ["monday"] }] }),
-    () => new Schedule({ rules: [{ type: "holidays", dates: ["25/12/2026"] }] }),
-    () => office.between("2026-01-05T09:00:00", "2026-01-06T09:00:00Z"),
-    () => office.between("2026-01-05T09:00:00.0001Z", "2026-01-06T09:00:00Z"),
-    () => office.between(new Date(Number.NaN), "2026-01-06T09:00:00Z"),
-    () => office.add("2026-01-05T09:00:00Z", 1.5),
-    () => office.add("2026-01-05T09:00:00Z", Number.NaN),
-  ])("throws RangeError: %s", (call) => {
+  test.each<[() => unknown, string]>([
+    [
+      () => new Schedule({ rules: [{ ...workday, start: "9am" }] }),
+      'rules[0]: `start` must be a time such as "09:00", got "9am"',
+    ],
+    [
+      // @ts-expect-error unknown day name
+      () => new Schedule({ rules: [{ ...workday, days: ["monday"] }] }),
+      'rules[0]: days must be "mon", "tue", ... or "sun", got "monday"',
+    ],
+    [
+      () => new Schedule({ rules: [{ type: "holidays", dates: ["25/12/2026"] }] }),
+      'rules[0]: holiday dates must look like "2026-12-25", got "25/12/2026"',
+    ],
+    // N2
+    [
+      () => office.between("2026-01-05T09:00:00", "2026-01-06T09:00:00Z"),
+      '"2026-01-05T09:00:00" is not an ISO 8601 instant with a UTC offset',
+    ],
+    [
+      () => office.between("2026-01-05T09:00:00.0001Z", "2026-01-06T09:00:00Z"),
+      '"2026-01-05T09:00:00.0001Z" has digits below a millisecond',
+    ],
+    [() => office.between(new Date(Number.NaN), "2026-01-06T09:00:00Z"), "invalid Date"],
+    [() => office.add("2026-01-05T09:00:00Z", 1.5), "durations must be whole numbers of milliseconds"],
+    [() => office.add("2026-01-05T09:00:00Z", Number.NaN), "durations must be whole numbers of milliseconds"],
+  ])("throws RangeError: %s", (call, message) => {
     expect(call).toThrow(RangeError);
+    expect(call).toThrow(message);
   });
 
   test("a rule time below a millisecond throws RangeError", () => {
     const build = () => new Schedule({ rules: [{ ...workday, start: "09:00:00.0005" }] });
     expect(build).toThrow(RangeError);
-    expect(build).toThrow("`start` has digits below a millisecond");
+    expect(build).toThrow("rules[0]: `start` has digits below a millisecond");
   });
 });

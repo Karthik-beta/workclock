@@ -107,7 +107,10 @@ impl Schedule {
         #[wasm_bindgen(unchecked_param_type = "ScheduleOptions")] options: &JsValue,
     ) -> Result<Schedule, JsValue> {
         if !options.is_object() {
-            return Err(type_error("expected an object"));
+            return Err(type_error(&format!(
+                "expected an options object, got {}",
+                show(options)
+            )));
         }
         let mut builder = CoreSchedule::builder();
         if let Some(zone) = optional_string(options, "timeZone")? {
@@ -117,8 +120,8 @@ impl Schedule {
         if !Array::is_array(&rules) {
             return Err(type_error("`rules` must be an array"));
         }
-        for value in Array::from(&rules).iter() {
-            builder = builder.rule(rule(&value)?);
+        for (i, value) in Array::from(&rules).iter().enumerate() {
+            builder = builder.rule(rule(&value).map_err(|e| prefixed(&format!("rules[{i}]"), e))?);
         }
         builder.build().map(Schedule).map_err(|e| engine_error(&e))
     }
@@ -289,7 +292,10 @@ fn shift_many(
 
 fn rule(value: &JsValue) -> Result<Rule, JsValue> {
     if !value.is_object() {
-        return Err(type_error("expected an object"));
+        return Err(type_error(&format!(
+            "expected a rule object, got {}",
+            show(value)
+        )));
     }
     let zone = optional_string(value, "timeZone")?;
     Ok(match optional_string(value, "type")?.as_deref() {
@@ -373,7 +379,10 @@ fn weekday(day: &JsValue) -> Result<Weekday, JsValue> {
         Some("fri") => Ok(Weekday::Friday),
         Some("sat") => Ok(Weekday::Saturday),
         Some("sun") => Ok(Weekday::Sunday),
-        _ => Err(range_error("days must be \"mon\", \"tue\", ... or \"sun\"")),
+        _ => Err(range_error(&format!(
+            "days must be \"mon\", \"tue\", ... or \"sun\", got {}",
+            show(day)
+        ))),
     }
 }
 
@@ -385,9 +394,12 @@ fn dates(rule: &JsValue) -> Result<Vec<Date>, JsValue> {
     Array::from(&dates)
         .iter()
         .map(|value| {
-            let text = value
-                .as_string()
-                .ok_or_else(|| type_error("holiday dates must be strings"))?;
+            let text = value.as_string().ok_or_else(|| {
+                type_error(&format!(
+                    "holiday dates must be strings, got {}",
+                    show(&value)
+                ))
+            })?;
             text.parse().map_err(|_| {
                 range_error(&format!(
                     "holiday dates must look like \"2026-12-25\", got {text:?}"
@@ -508,11 +520,41 @@ fn same_length(a: usize, b: usize) -> Result<(), JsValue> {
 
 /// Prefixes an error's message with the index of the batch item that caused it.
 fn at(index: usize, error: JsValue) -> JsValue {
+    prefixed(&format!("item {index}"), error)
+}
+
+fn prefixed(prefix: &str, error: JsValue) -> JsValue {
     if let Some(error) = error.dyn_ref::<js_sys::Error>() {
         let message = String::from(error.message());
-        error.set_message(&format!("item {index}: {message}"));
+        error.set_message(&format!("{prefix}: {message}"));
     }
     error
+}
+
+/// `value` for an error message: strings quoted, numbers as they are, other
+/// values as JSON or, failing that, by their type.
+fn show(value: &JsValue) -> String {
+    if let Some(text) = value.as_string() {
+        return format!("{text:?}");
+    }
+    if let Some(number) = value.as_f64() {
+        return number_text(number);
+    }
+    js_sys::JSON::stringify(value)
+        .ok()
+        .and_then(|json| json.as_string())
+        .or_else(|| value.js_typeof().as_string())
+        .unwrap_or_default()
+}
+
+fn number_text(number: f64) -> String {
+    if number.is_infinite() {
+        let sign = if number < 0.0 { "-" } else { "" };
+        format!("{sign}Infinity")
+    } else {
+        // As JavaScript prints them, except that Rust never uses an exponent.
+        number.to_string()
+    }
 }
 
 fn duration(ms: f64) -> Result<SignedDuration, JsValue> {
