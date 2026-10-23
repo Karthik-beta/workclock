@@ -195,6 +195,15 @@ def test_invalid_rules_are_rejected() -> None:
         Schedule([object()])  # type: ignore[list-item]
 
 
+def test_rule_errors_name_the_bad_values() -> None:
+    with pytest.raises(ValueError, match=r"to 6, got 'mon', 7$"):
+        WorkDay(time(9), time(17), [1, "mon", 7])  # type: ignore[list-item]
+    with pytest.raises(ValueError, match="days must be a list"):
+        WorkDay(time(9), time(17), "01")  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="dates must be a list"):
+        Holidays("2026-01-01")  # type: ignore[arg-type]
+
+
 def test_rules_are_comparable_values() -> None:
     assert WorkDay(time(9), time(17)) == WorkDay(time(9), time(17), [4, 3, 2, 1, 0])
     same_hours: list[object] = [WorkDay(time(9), time(17)), Break(time(9), time(17))]
