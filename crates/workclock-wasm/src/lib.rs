@@ -171,7 +171,7 @@ impl Schedule {
         for (i, value) in Array::from(&rules).iter().enumerate() {
             builder = builder.rule(rule(&value).map_err(|e| prefixed(&format!("rules[{i}]"), e))?);
         }
-        builder.build().map(Schedule).map_err(|e| engine_error(&e))
+        builder.build().map(Schedule).map_err(|e| build_error(&e))
     }
 
     /// Measures the working time between two instants.
@@ -221,8 +221,9 @@ impl Schedule {
         #[wasm_bindgen(unchecked_param_type = "Instant")] t: &JsValue,
         #[wasm_bindgen(unchecked_param_type = "number")] ms: &JsValue,
     ) -> Result<js_sys::Date, JsValue> {
-        let result = self.0.add(instant(t)?, duration(number(ms)?)?);
-        result.map(date).map_err(|e| engine_error(&e))
+        let t = instant(t)?;
+        let result = self.0.add(t, duration(number(ms)?)?);
+        result.map(date).map_err(|e| search_error(&e, t))
     }
 
     /// Finds the instant a given amount of working time before another.
@@ -245,8 +246,9 @@ impl Schedule {
         #[wasm_bindgen(unchecked_param_type = "Instant")] t: &JsValue,
         #[wasm_bindgen(unchecked_param_type = "number")] ms: &JsValue,
     ) -> Result<js_sys::Date, JsValue> {
-        let result = self.0.sub(instant(t)?, duration(number(ms)?)?);
-        result.map(date).map_err(|e| engine_error(&e))
+        let t = instant(t)?;
+        let result = self.0.sub(t, duration(number(ms)?)?);
+        result.map(date).map_err(|e| search_error(&e, t))
     }
 
     /// Finds the period of working time at or after an instant.
@@ -265,10 +267,8 @@ impl Schedule {
         &self,
         #[wasm_bindgen(unchecked_param_type = "Instant")] t: &JsValue,
     ) -> Result<JsValue, JsValue> {
-        let period = self
-            .0
-            .next_period(instant(t)?)
-            .map_err(|e| engine_error(&e))?;
+        let t = instant(t)?;
+        let period = self.0.next_period(t).map_err(|e| search_error(&e, t))?;
         period_object(period.start, period.end)
     }
 
@@ -288,10 +288,8 @@ impl Schedule {
         &self,
         #[wasm_bindgen(unchecked_param_type = "Instant")] t: &JsValue,
     ) -> Result<JsValue, JsValue> {
-        let period = self
-            .0
-            .previous_period(instant(t)?)
-            .map_err(|e| engine_error(&e))?;
+        let t = instant(t)?;
+        let period = self.0.previous_period(t).map_err(|e| search_error(&e, t))?;
         period_object(period.start, period.end)
     }
 
@@ -357,7 +355,7 @@ fn shift_many(
         .into_iter()
         .zip(ms)
         .enumerate()
-        .map(|(i, (t, d))| op(t, d).map_err(|e| at(i, engine_error(&e))))
+        .map(|(i, (t, d))| op(t, d).map_err(|e| at(i, search_error(&e, t))))
         .collect::<Result<Vec<Timestamp>, JsValue>>()?;
     Ok(if typed {
         let ms: Vec<f64> = results.iter().map(|t| millis(t.as_millisecond())).collect();
@@ -731,6 +729,31 @@ fn engine_error(error: &Error) -> JsValue {
         _ => ("WorkclockError", "unknown"),
     };
     workclock_error(name, kind, &error.to_string())
+}
+
+/// A build error, saying why a schedule has no working time.
+fn build_error(error: &Error) -> JsValue {
+    match error {
+        Error::NoWorkingTime => workclock_error(
+            "NoWorkingTimeError",
+            "no_working_time",
+            "schedule has no working time: its working hours minus its breaks are empty",
+        ),
+        _ => engine_error(error),
+    }
+}
+
+/// An error from a search that started at `t`, naming the search bound when
+/// no working time was found.
+fn search_error(error: &Error, t: Timestamp) -> JsValue {
+    match error {
+        Error::NoWorkingTime => workclock_error(
+            "NoWorkingTimeError",
+            "no_working_time",
+            &format!("no working time within 366 days, plus seven days per holiday date, of {t}"),
+        ),
+        _ => engine_error(error),
+    }
 }
 
 /// An `OutOfRangeError` for an input instant, shown as `value`.
