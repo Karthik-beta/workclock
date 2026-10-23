@@ -69,7 +69,7 @@ jobs:
         with:
           target: ${{ matrix.target }}
           manylinux: ${{ matrix.manylinux }}
-          args: --release --out dist
+          args: --release --locked --out dist
       - if: matrix.check
         uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
       - if: matrix.check
@@ -146,7 +146,7 @@ jobs:
           toolchain: stable
       - name: The crate's license matches the repository's
         run: cmp LICENSE crates/workclock/LICENSE
-      - run: cargo publish -p workclock --dry-run
+      - run: cargo publish -p workclock --locked --dry-run
 
   testpypi:
     if: github.event_name != 'pull_request'
@@ -237,7 +237,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
           toolchain: stable
-      - run: cargo publish -p workclock
+      - run: cargo publish -p workclock --locked
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
