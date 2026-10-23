@@ -168,6 +168,17 @@ class WorkDay(_Hours):
     is not after ``start``, the shift is overnight and ends on the next date,
     so ``start == end`` is a 24-hour shift. A shift belongs to the day it
     starts on. ``time_zone`` defaults to the schedule's.
+
+    Raises `TypeError` if ``start`` or ``end`` is not a ``datetime.time`` or
+    ``time_zone`` has no IANA name, and `ValueError` if a time has a tzinfo
+    or ``days`` is a string or holds anything but integers from 0 to 6.
+
+    >>> from datetime import datetime, time, timezone
+    >>> from workclock import Schedule, WorkDay
+    >>> nights = Schedule([WorkDay(time(22), time(6), days=[0, 1, 2, 3, 4])])
+    >>> monday = datetime(2026, 1, 5, 22, tzinfo=timezone.utc)
+    >>> print(nights.add(monday, hours=4))
+    2026-01-06 02:00:00+00:00
     """
 
 
@@ -175,7 +186,8 @@ class Break(_Hours):
     """Time off on some days of the week, such as a lunch break.
 
     Takes the same arguments as `WorkDay`, including overnight breaks, and
-    removes its time from the working time.
+    removes its time from the working time. Raises the same errors as
+    `WorkDay`.
     """
 
 
@@ -187,6 +199,16 @@ class Holidays:
     which defaults to the schedule's. ``dates`` is read once; a
     python-holidays object contributes only the years it already holds, so
     create it with ``years=...``.
+
+    Raises `TypeError` if ``dates`` is a string or holds anything but
+    ``datetime.date`` objects, or if ``time_zone`` has no IANA name.
+
+    >>> from datetime import date, datetime, time, timezone
+    >>> from workclock import Holidays, Schedule, WorkDay
+    >>> office = Schedule([WorkDay(time(9), time(17)), Holidays([date(2026, 1, 1)])])
+    >>> start, end = office.next_period(datetime(2026, 1, 1, 9, tzinfo=timezone.utc))
+    >>> print(start, end)
+    2026-01-02 09:00:00+00:00 2026-01-02 17:00:00+00:00
     """
 
     dates: frozenset[date]
@@ -223,8 +245,24 @@ class Schedule:
     `Holidays` date, so the order of rules never matters. ``time_zone`` is
     the default for rules that do not set their own, and is UTC if omitted.
 
-    Raises `UnknownZoneError` for a zone that is not in the IANA database,
-    and `NoWorkingTimeError` if the working hours minus the breaks are empty.
+    Raises `TypeError` for a rule that is not a `WorkDay`, `Break` or
+    `Holidays`, or a ``time_zone`` with no IANA name, `UnknownZoneError` for
+    a zone that is not in the IANA database, and `NoWorkingTimeError` if the
+    working hours minus the breaks are empty.
+
+    Every method that takes datetimes raises `TypeError` for a value that is
+    not a ``datetime``, `ValueError` for a naive one, and `OutOfRangeError`
+    for one outside the supported range, -009999-01-02T01:59:59Z to
+    9999-12-30T22:00:00Z.
+
+    >>> from datetime import datetime, time, timezone
+    >>> from workclock import Break, Schedule, WorkDay
+    >>> office = Schedule([WorkDay(time(9), time(17)), Break(time(12), time(13))])
+    >>> monday = datetime(2026, 1, 5, 9, tzinfo=timezone.utc)
+    >>> print(office.add(monday, hours=4))
+    2026-01-05 14:00:00+00:00
+    >>> print(office.between(monday, datetime(2026, 1, 6, 9, tzinfo=timezone.utc)))
+    7:00:00
     """
 
     def __init__(
@@ -264,7 +302,9 @@ class Schedule:
     def between(self, a: datetime, b: datetime) -> timedelta:
         """Return the working time between ``a`` and ``b``.
 
-        The result is negative when ``b`` is before ``a``.
+        The result is negative when ``b`` is before ``a``. Raises `TypeError`,
+        `ValueError` or `OutOfRangeError` for ``a`` or ``b`` as described on
+        `Schedule`.
         """
         with _engine_errors():
             micros = self._schedule.between(_micros(a), _micros(b))
@@ -285,6 +325,13 @@ class Schedule:
         The amount is ``delta`` plus ``hours``, ``minutes`` and ``seconds``.
         Zero returns ``dt`` unchanged, and a negative amount subtracts. The
         result has the same ``tzinfo`` as ``dt``.
+
+        Raises the errors described on `Schedule` for ``dt``, `TypeError` if
+        ``delta`` is not a timedelta, `ValueError` if an amount is NaN,
+        `NoWorkingTimeError` if the search crosses 366 days plus one per
+        holiday date without finding working time, and `OutOfRangeError` if
+        the amount does not fit in 64-bit microseconds or the result is
+        outside the supported range or the years 1 to 9999 of ``datetime``.
         """
         amount = _amount(delta, hours, minutes, seconds)
         with _engine_errors():
@@ -305,7 +352,7 @@ class Schedule:
 
         The amount is ``delta`` plus ``hours``, ``minutes`` and ``seconds``.
         Zero returns ``dt`` unchanged, and a negative amount adds. The result
-        has the same ``tzinfo`` as ``dt``.
+        has the same ``tzinfo`` as ``dt``. Raises the same errors as `add`.
         """
         amount = _amount(delta, hours, minutes, seconds)
         with _engine_errors():
@@ -318,7 +365,12 @@ class Schedule:
         A period is a maximal stretch of working time, returned as
         ``(start, end)`` in the ``tzinfo`` of ``dt``. If ``dt`` is inside one,
         ``start`` is ``dt``. A period never runs longer than the search bound
-        of a year plus a day per holiday date.
+        of 366 days plus one per holiday date.
+
+        Raises the errors described on `Schedule` for ``dt``,
+        `NoWorkingTimeError` if no working time starts within the search
+        bound, and `OutOfRangeError` if the period reaches past the supported
+        range or the years 1 to 9999 of ``datetime``.
         """
         with _engine_errors():
             start, end = self._schedule.next_period(_micros(dt))
@@ -328,6 +380,7 @@ class Schedule:
         """Return the working period that contains ``dt``, or the last before it.
 
         Mirrors `next_period`: if ``dt`` is inside a period, ``end`` is ``dt``.
+        Raises the same errors as `next_period`.
         """
         with _engine_errors():
             start, end = self._schedule.previous_period(_micros(dt))
@@ -348,8 +401,18 @@ class Schedule:
     ) -> list[timedelta] | NDArray[np.timedelta64]:
         """Return `between` for each pair of ``starts`` and ``ends`` in one call.
 
-        Accepts sequences of aware datetimes, or NumPy ``datetime64`` arrays
-        read as UTC, which give a ``timedelta64[us]`` array of the same shape.
+        Takes two sequences of aware datetimes of the same length and returns
+        a list. If ``starts`` is a NumPy array, both arguments are read as
+        ``datetime64`` values in UTC, ``ends`` is broadcast to the shape of
+        ``starts`` (so it may be a single value), and the result is a
+        ``timedelta64[us]`` array of that shape.
+
+        Raises the errors of `between`, with ``item {i}:`` before the message,
+        where ``{i}`` is the position of the failing item in the flattened
+        input. Also raises `ValueError` if the sequences differ in length, if
+        ``ends`` does not broadcast to the shape of ``starts``, or if an array
+        holds NaT or a value with digits below a microsecond, which would
+        otherwise be rounded.
         """
         if _arrays.is_array(starts):
             shape = starts.shape
@@ -381,8 +444,15 @@ class Schedule:
     ) -> list[datetime] | NDArray[np.datetime64]:
         """Return `add` for each datetime and amount in one call.
 
-        ``deltas`` is one amount per datetime, or a single amount for all.
-        Accepts the same inputs as `between_many`.
+        ``deltas`` is a sequence of timedeltas, one per datetime, or a single
+        timedelta for all, and the results keep the ``tzinfo`` of each
+        datetime. If ``dts`` is a NumPy array, it is read as ``datetime64``
+        values in UTC, ``deltas`` is read as ``timedelta64`` and broadcast to
+        the shape of ``dts``, and the result is a ``datetime64[us]`` array of
+        that shape.
+
+        Raises the errors of `add` and `between_many`, with ``item {i}:``
+        before the message.
         """
         return self._shift_many(self._schedule.add_many, dts, deltas)
 
@@ -403,8 +473,7 @@ class Schedule:
     ) -> list[datetime] | NDArray[np.datetime64]:
         """Return `sub` for each datetime and amount in one call.
 
-        ``deltas`` is one amount per datetime, or a single amount for all.
-        Accepts the same inputs as `between_many`.
+        Takes the same arguments and raises the same errors as `add_many`.
         """
         return self._shift_many(self._schedule.sub_many, dts, deltas)
 
