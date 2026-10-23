@@ -9,7 +9,16 @@ use proptest::prelude::*;
 
 use super::spec::{HolidaySpec, RuleSpec, ScheduleSpec};
 
-pub const ZONES: [&str; 4] = ["UTC", "Asia/Kolkata", "America/New_York", "Europe/London"];
+/// Santiago changes clocks at midnight, and Lord Howe by 30 minutes; both are
+/// in the southern hemisphere.
+const ZONES: [&str; 6] = [
+    "UTC",
+    "Asia/Kolkata",
+    "America/New_York",
+    "Europe/London",
+    "America/Santiago",
+    "Australia/Lord_Howe",
+];
 const DAYS: [&str; 7] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 const YEAR_START: i64 = 1_767_225_600; // 2026-01-01T00:00:00Z
 const MINUTES_IN_YEAR: i64 = 365 * 24 * 60;
