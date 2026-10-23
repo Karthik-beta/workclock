@@ -78,7 +78,6 @@ Requires Node.js 22 or later, [wasm-pack](https://github.com/drager/wasm-pack)
 and the `wasm32-unknown-unknown` target (`rustup target add wasm32-unknown-unknown`).
 
 ```sh
-wasm-pack test --node crates/workclock-wasm
 cd js
 npm ci
 npm run build
