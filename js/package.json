@@ -39,6 +39,8 @@
     "bundler.d.ts",
     "web.js",
     "web.d.ts",
+    "errors.js",
+    "errors.d.ts",
     "pkg/*/package.json",
     "pkg/*/workclock.js",
     "pkg/*/workclock.d.ts",
