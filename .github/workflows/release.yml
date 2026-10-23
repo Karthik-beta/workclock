@@ -200,7 +200,9 @@ jobs:
         with:
           enable-cache: false
       - shell: bash
-        run: .github/scripts/install-check.sh https://test.pypi.org/simple/ "${{ needs.version.outputs.version }}"
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: .github/scripts/install-check.sh https://test.pypi.org/simple/ "$VERSION"
 
   pypi:
     if: github.ref_type == 'tag'
@@ -278,4 +280,6 @@ jobs:
         with:
           enable-cache: false
       - shell: bash
-        run: .github/scripts/install-check.sh https://pypi.org/simple/ "${{ needs.version.outputs.version }}"
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: .github/scripts/install-check.sh https://pypi.org/simple/ "$VERSION"
