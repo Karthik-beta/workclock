@@ -20,8 +20,5 @@ workclock = { path = "../workclock" }
 [target.'cfg(target_family = "wasm")'.dependencies]
 jiff = { version = "0.2.38", features = ["tzdb-bundle-always"] }
 
-[dev-dependencies]
-wasm-bindgen-test = "0.3.79"
-
 [lints]
 workspace = true
