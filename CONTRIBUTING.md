@@ -57,7 +57,8 @@ uv run pytest
 ```
 
 Tests marked `slow` are deselected by default; `uv run pytest -m slow` runs
-them.
+them. Property tests run 40 examples each; `uv run pytest
+--hypothesis-profile=deep` runs 500.
 
 ### JavaScript
 
