@@ -153,3 +153,13 @@ def test_rules_are_comparable_values() -> None:
         "WorkDay(start=datetime.time(9, 0), end=datetime.time(17, 0), "
         "days=frozenset({0}), time_zone='UTC')"
     )
+
+
+def test_periods(office: Schedule) -> None:
+    saturday = datetime(2026, 1, 10, 10, tzinfo=UTC)
+    assert office.next_period(saturday) == (utc(12, 9), utc(12, 12))
+    assert office.previous_period(saturday) == (utc(9, 13), utc(9, 17))
+    assert office.next_period(utc(5, 10)) == (utc(5, 10), utc(5, 12))
+    assert office.previous_period(utc(5, 9)) == (utc(2, 13), utc(2, 17))
+    london = datetime(2026, 1, 10, 10, tzinfo=ZoneInfo("Europe/London"))
+    assert all(t.tzinfo is london.tzinfo for t in office.next_period(london))

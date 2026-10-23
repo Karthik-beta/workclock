@@ -123,6 +123,22 @@ impl Schedule {
         Ok(result.map_err(|e| engine_error(&e))?.as_microsecond())
     }
 
+    fn next_period(&self, t: i64) -> PyResult<(i64, i64)> {
+        let period = self
+            .0
+            .next_period(instant(t)?)
+            .map_err(|e| engine_error(&e))?;
+        Ok((period.start.as_microsecond(), period.end.as_microsecond()))
+    }
+
+    fn previous_period(&self, t: i64) -> PyResult<(i64, i64)> {
+        let period = self
+            .0
+            .previous_period(instant(t)?)
+            .map_err(|e| engine_error(&e))?;
+        Ok((period.start.as_microsecond(), period.end.as_microsecond()))
+    }
+
     fn between_many(&self, py: Python<'_>, a: Vec<i64>, b: Vec<i64>) -> PyResult<Vec<i64>> {
         let schedule = &self.0;
         batch(py, a, b, |a, b| {

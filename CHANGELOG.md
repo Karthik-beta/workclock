@@ -14,9 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   overnight and 24-hour shifts, per-rule IANA time zones and DST, as specified
   in `DESIGN.md`.
 - Python: typed `Schedule` API with `WorkDay`, `Break` and `Holidays` rules,
-  `between`, `add` and `sub` on timezone-aware datetimes. Accepts zone names,
-  `zoneinfo.ZoneInfo` and pytz zones. Errors subclass `WorkclockError` and the
-  matching built-in exception.
+  `between`, `add`, `sub`, `next_period` and `previous_period` on
+  timezone-aware datetimes. Accepts zone names, `zoneinfo.ZoneInfo` and pytz
+  zones. Errors subclass `WorkclockError` and the matching built-in exception.
 - Python: `between_many`, `add_many` and `sub_many` process a batch in one
   call, from lists or NumPy `datetime64`/`timedelta64` arrays.
 - Searches are bounded: a schedule without working time, or a result outside
