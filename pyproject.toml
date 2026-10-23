@@ -36,6 +36,7 @@ dev = [
     "pytest",
     "pytz",
     "ruff",
+    "tzdata",
 ]
 
 [tool.maturin]
