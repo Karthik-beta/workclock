@@ -435,4 +435,11 @@ def _amount(
         raise OutOfRangeError(
             f"amount {' + '.join(given)} is outside the supported range {_AMOUNT_RANGE}"
         ) from None
+    except TypeError:
+        if delta is None or isinstance(delta, timedelta):
+            raise
+        raise TypeError(
+            f"delta must be a timedelta, got {delta!r}; pass a number of hours, "
+            "minutes or seconds as hours=, minutes= or seconds="
+        ) from None
     return _delta_micros(total)
