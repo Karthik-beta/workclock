@@ -1,7 +1,6 @@
 {
   "name": "workclock",
   "version": "0.1.0",
-  "private": true,
   "description": "Fast, correct business-time arithmetic: working hours, SLAs and shifts",
   "license": "MIT",
   "repository": {
