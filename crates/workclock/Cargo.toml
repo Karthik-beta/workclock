@@ -8,7 +8,7 @@ license.workspace = true
 repository.workspace = true
 readme = "README.md"
 # The tests read fixtures from the workspace, so they stay out of the package.
-include = ["/src", "/README.md", "/LICENSE"]
+include = ["/src", "/examples", "/benches", "/README.md", "/LICENSE"]
 keywords = ["business-hours", "working-hours", "sla", "timezone", "shift"]
 categories = ["date-and-time"]
 
