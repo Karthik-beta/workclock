@@ -58,6 +58,22 @@ fn engine(spec: &ScheduleSpec) -> Option<Schedule> {
     }
 }
 
+#[test]
+fn engine_and_oracle_agree_at_the_end_of_the_range() {
+    let spec: ScheduleSpec = serde_json::from_str(
+        r#"{"zone": "UTC", "workdays": [{"start": "00:00", "end": "00:00",
+            "days": ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]}]}"#,
+    )
+    .unwrap();
+    let (engine, oracle) = both(&spec).unwrap();
+    let t: Timestamp = "9999-12-30T20:00:00Z".parse().unwrap();
+    let hour = SignedDuration::from_hours(1);
+    assert_eq!(engine.add(t, hour), Ok(t + hour));
+    assert_eq!(oracle.add(t, hour), Ok(t + hour));
+    assert_eq!(engine.add(t, 3 * hour), Err(Error::OutOfRange));
+    assert_eq!(oracle.add(t, 3 * hour), Err(OracleError::OutOfRange));
+}
+
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(64))]
 

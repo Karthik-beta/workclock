@@ -171,14 +171,12 @@ impl Rule {
             .flatten()
             .filter(|d| self.days.contains(&d.weekday()))
             .any(|d| {
-                let end_date = if self.end <= self.start {
-                    d.tomorrow().ok()
-                } else {
-                    Some(d)
+                let end = match (self.end <= self.start, d.tomorrow()) {
+                    (false, _) => resolve(d, self.end, &self.tz),
+                    (true, Ok(next)) => resolve(next, self.end, &self.tz),
+                    (true, Err(_)) => Timestamp::MAX,
                 };
-                let start = resolve(d, self.start, &self.tz);
-                let end = end_date.and_then(|e| resolve(e, self.end, &self.tz));
-                matches!((start, end), (Some(s), Some(e)) if s <= t && t < e)
+                resolve(d, self.start, &self.tz) <= t && t < end
             })
     }
 }
@@ -199,20 +197,23 @@ impl Holidays {
             .flatten()
             .filter(|d| self.dates.contains(d))
             .any(|d| {
-                let start = resolve(d, Time::midnight(), &self.tz);
-                let end = d
-                    .tomorrow()
-                    .ok()
-                    .and_then(|e| resolve(e, Time::midnight(), &self.tz));
-                matches!((start, end), (Some(s), Some(e)) if s <= t && t < e)
+                let end = d.tomorrow().map_or(Timestamp::MAX, |next| {
+                    resolve(next, Time::midnight(), &self.tz)
+                });
+                resolve(d, Time::midnight(), &self.tz) <= t && t < end
             })
     }
 }
 
 /// Wall-clock time to instant with the "compatible" policy from DESIGN.md.
-fn resolve(date: Date, time: Time, tz: &TimeZone) -> Option<Timestamp> {
+/// Times past either end of jiff's range saturate to that end.
+fn resolve(date: Date, time: Time, tz: &TimeZone) -> Timestamp {
+    let beyond = if date.year() < 0 {
+        Timestamp::MIN
+    } else {
+        Timestamp::MAX
+    };
     tz.to_ambiguous_zoned(date.to_datetime(time))
         .compatible()
-        .ok()
-        .map(|z| z.timestamp())
+        .map_or(beyond, |z| z.timestamp())
 }
