@@ -196,12 +196,46 @@ fn batch(
     })
 }
 
+fn zone(name: &str) -> PyResult<jiff::tz::TimeZone> {
+    jiff::tz::TimeZone::get(name).map_err(|_| {
+        engine_error(&Error::UnknownZone {
+            name: name.to_owned(),
+        })
+    })
+}
+
+/// The local date of an instant in a zone, as `(year, month, day)`.
+#[pyfunction]
+fn local_date(zone_name: &str, t: i64) -> PyResult<(i16, i8, i8)> {
+    let date = instant(t)?.to_zoned(zone(zone_name)?).date();
+    Ok((date.year(), date.month(), date.day()))
+}
+
+/// `[00:00, next 00:00)` of a local date, resolved as the engine resolves
+/// holidays.
+#[pyfunction]
+fn day_bounds(zone_name: &str, date: (i16, i8, i8)) -> PyResult<(i64, i64)> {
+    let (y, m, d) = date;
+    let tz = zone(zone_name)?;
+    let date = Date::new(y, m, d).map_err(|e| PyValueError::new_err(e.to_string()))?;
+    let midnight = |date: Date| {
+        tz.to_ambiguous_zoned(date.to_datetime(Time::midnight()))
+            .compatible()
+            .map(|zoned| zoned.timestamp().as_microsecond())
+            .map_err(|_| engine_error(&Error::OutOfRange))
+    };
+    let next = date
+        .tomorrow()
+        .map_err(|_| engine_error(&Error::OutOfRange))?;
+    Ok((midnight(date)?, midnight(next)?))
+}
+
 #[pymodule]
 mod _workclock {
     use pyo3::prelude::*;
 
     #[pymodule_export]
-    use super::{EngineError, Schedule};
+    use super::{day_bounds, local_date, EngineError, Schedule};
 
     #[pymodule_init]
     fn init(m: &Bound<'_, PyModule>) -> PyResult<()> {
