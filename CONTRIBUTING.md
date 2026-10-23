@@ -148,9 +148,9 @@ npm pack
 
 CI checks `.github/` with [zizmor](https://docs.zizmor.sh) for security
 problems and with [actionlint](https://github.com/rhysd/actionlint), which also
-runs shellcheck on every `run` script. Install them with
-`cargo install --locked zizmor` and
-`go install github.com/rhysd/actionlint/cmd/actionlint@latest`, then:
+runs shellcheck on every `run` script. Install the versions CI pins with
+`cargo install --locked zizmor@1.31.1` and
+`go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12`, then:
 
 ```sh
 zizmor .github/
