@@ -2,12 +2,23 @@
   "name": "workclock",
   "version": "0.1.0",
   "description": "Fast, correct business-time arithmetic: working hours, SLAs and shifts",
+  "keywords": [
+    "business-hours",
+    "working-hours",
+    "sla",
+    "timezone",
+    "shift",
+    "business-time"
+  ],
   "license": "MIT",
+  "author": "Karthik P",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Karthik-beta/workclock.git",
     "directory": "js"
   },
+  "homepage": "https://github.com/Karthik-beta/workclock#readme",
+  "bugs": "https://github.com/Karthik-beta/workclock/issues",
   "type": "module",
   "exports": {
     ".": {

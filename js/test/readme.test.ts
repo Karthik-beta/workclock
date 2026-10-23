@@ -25,3 +25,7 @@ function check(value, expected) {
 test("the repository README's JavaScript example runs", () => {
   run(new URL("../../README.md", import.meta.url));
 });
+
+test("the npm README's example runs", () => {
+  run(new URL("../README.md", import.meta.url));
+});

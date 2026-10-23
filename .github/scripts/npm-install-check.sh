@@ -32,12 +32,13 @@ EOF
 test "$(node check.mjs)" = "$version"
 
 # Files the checks below would miss: the bundler build cannot run under
-# Node, and TypeScript falls back to bundler.d.ts when node.d.ts is missing.
+# Node, TypeScript falls back to bundler.d.ts when node.d.ts is missing, and
+# nothing loads the README that npm shows.
 node --input-type=module --eval '
 import { existsSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 const root = new URL("node_modules/workclock/", pathToFileURL(process.cwd() + "/"));
-for (const file of ["node.d.ts", "bundler.js", "pkg/bundler/package.json", "pkg/bundler/workclock.js", "pkg/bundler/workclock_bg.js", "pkg/bundler/workclock_bg.wasm"]) {
+for (const file of ["README.md", "node.d.ts", "bundler.js", "pkg/bundler/package.json", "pkg/bundler/workclock.js", "pkg/bundler/workclock_bg.js", "pkg/bundler/workclock_bg.wasm"]) {
   if (!existsSync(new URL(file, root))) throw new Error(`missing ${file}`);
 }'
 
