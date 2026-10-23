@@ -38,7 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   bundler or, without one, from the `workclock/web` entry point.
 - Python wheels use the stable ABI (abi3), so one wheel per platform covers
   CPython 3.9 and later.
-- The npm package bundles the IANA time zone database.
+- The Python wheels and the npm package bundle the IANA time zone database.
 - Examples in Rust, Python and JavaScript: when a support ticket is due and
   how much of its SLA has been used.
 

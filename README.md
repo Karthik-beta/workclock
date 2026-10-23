@@ -31,15 +31,17 @@ Rust code depends on jiff too.
 
 ### Time zone data
 
-The npm package bundles the IANA time zone database, so its zone rules are
-as current as the workclock release. The Rust crate and the Python wheels use
-jiff's defaults: the system database (`/usr/share/zoneinfo`, or the directory
-in `TZDIR`) on Linux and macOS, and a bundled copy on Windows.
+The Python wheels and the npm package bundle the IANA time zone database, so
+they need no system tzdata. The npm package always uses its bundled copy,
+whose zone rules are as current as the workclock release. The Python wheels
+use the system database when there is one, and the bundled copy otherwise.
 
-On a Linux image without tzdata, as some slim and distroless images are,
-every named zone, even `"UTC"`, is an unknown-zone error. Install the
-`tzdata` package or point `TZDIR` at a zoneinfo directory. In Rust, enabling
-jiff's `tzdb-bundle-always` feature bundles the database instead.
+The Rust crate uses jiff's defaults: the system database
+(`/usr/share/zoneinfo`, or the directory in `TZDIR`) on Linux and macOS, and
+a bundled copy on Windows. On a Linux image without tzdata, as some slim and
+distroless images are, every named zone, even `"UTC"`, is an unknown-zone
+error. Install the `tzdata` package, point `TZDIR` at a zoneinfo directory,
+or enable jiff's `tzdb-bundle-always` feature to bundle the database.
 
 ## Use cases
 
