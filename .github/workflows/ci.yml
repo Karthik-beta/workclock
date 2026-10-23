@@ -137,18 +137,6 @@ jobs:
           tool: cargo-deny
       - run: cargo deny check
 
-  audit:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: taiki-e/install-action@a4d3f3f761dcd95cce1b72cb61cb6d1963438177 # v2.87.30
-        with:
-          tool: cargo-audit
-      - run: cargo audit
-
   python-lint:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -286,7 +274,7 @@ jobs:
   # requires editing the protection rule.
   ci-ok:
     if: ${{ !cancelled() }}
-    needs: [fmt, clippy, test, coverage, docs, msrv, deny, audit, python-lint, python-test, wasm, commits]
+    needs: [fmt, clippy, test, coverage, docs, msrv, deny, python-lint, python-test, wasm, commits]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
