@@ -39,6 +39,14 @@ def test_difference_is_absolute(btd: ModuleType) -> None:
     assert diff.timedelta == datetime.timedelta(hours=2)
 
 
+def test_naive_datetimes_are_utc(btd: ModuleType) -> None:
+    # N3
+    diff = btd.WorkDayRule(datetime.time(9), datetime.time(17)).difference(
+        datetime.datetime(2026, 1, 5, 10), datetime.datetime(2026, 1, 5, 12)
+    )
+    assert diff.timedelta == datetime.timedelta(hours=2)
+
+
 def test_adding_and_subtracting_zero_snaps(btd: ModuleType) -> None:
     # C2, C3
     zero = btd.BusinessTimeDelta(
