@@ -103,6 +103,36 @@ proptest! {
     }
 }
 
+// Several weeks at a time, so the engine skips weeks that repeat the one
+// before.
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(32))]
+
+    #[test]
+    fn between_matches_oracle_over_weeks(spec in schedule(), (a, b) in span(42)) {
+        let Some((engine, oracle)) = both(&spec) else { return Ok(()) };
+        prop_assert_eq!(engine.between(a, b), oracle.between(a, b));
+    }
+
+    #[test]
+    fn add_matches_oracle_over_weeks(spec in schedule(), t in moment(), d in duration(300)) {
+        let Some((engine, oracle)) = both(&spec) else { return Ok(()) };
+        prop_assert_eq!(
+            engine.add(t, d).map_err(|e| error_name(&e)),
+            oracle.add(t, d).map_err(oracle_error_name)
+        );
+    }
+
+    #[test]
+    fn sub_matches_oracle_over_weeks(spec in schedule(), t in moment(), d in duration(300)) {
+        let Some((engine, oracle)) = both(&spec) else { return Ok(()) };
+        prop_assert_eq!(
+            engine.sub(t, d).map_err(|e| error_name(&e)),
+            oracle.sub(t, d).map_err(oracle_error_name)
+        );
+    }
+}
+
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(256))]
 
