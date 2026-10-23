@@ -198,15 +198,9 @@ impl Shifts {
 mod tests {
     use jiff::civil::{time, Time};
     use jiff::tz::TimeZone;
-    use jiff::Timestamp;
 
     use super::Hours;
-    use crate::engine::Block;
     use crate::Weekdays;
-
-    fn ts(s: &str) -> Timestamp {
-        s.parse().unwrap()
-    }
 
     fn blocks(
         start: Time,
@@ -215,7 +209,7 @@ mod tests {
         zone: &str,
         lo: &str,
         hi: &str,
-    ) -> Vec<(String, String)> {
+    ) -> Vec<String> {
         let hours = Hours {
             start,
             end,
@@ -223,18 +217,13 @@ mod tests {
             zone: None,
         };
         let mut out = Vec::new();
-        hours
-            .resolve(TimeZone::get(zone).unwrap())
-            .blocks(ts(lo), ts(hi), &mut out);
+        hours.resolve(TimeZone::get(zone).unwrap()).blocks(
+            lo.parse().unwrap(),
+            hi.parse().unwrap(),
+            &mut out,
+        );
         out.into_iter()
-            .map(|Block { start, end }| (start.to_string(), end.to_string()))
-            .collect()
-    }
-
-    fn pairs(expected: &[(&str, &str)]) -> Vec<(String, String)> {
-        expected
-            .iter()
-            .map(|(s, e)| ((*s).to_owned(), (*e).to_owned()))
+            .map(|b| format!("{}/{}", b.start, b.end))
             .collect()
     }
 
@@ -250,10 +239,10 @@ mod tests {
         );
         assert_eq!(
             got,
-            pairs(&[
-                ("2026-01-09T09:00:00Z", "2026-01-09T17:00:00Z"),
-                ("2026-01-12T09:00:00Z", "2026-01-12T17:00:00Z"),
-            ])
+            [
+                "2026-01-09T09:00:00Z/2026-01-09T17:00:00Z",
+                "2026-01-12T09:00:00Z/2026-01-12T17:00:00Z",
+            ]
         );
     }
 
@@ -270,10 +259,10 @@ mod tests {
         );
         assert_eq!(
             got,
-            pairs(&[
-                ("2026-01-09T00:00:00Z", "2026-01-09T06:00:00Z"),
-                ("2026-01-09T22:00:00Z", "2026-01-10T06:00:00Z"),
-            ])
+            [
+                "2026-01-09T00:00:00Z/2026-01-09T06:00:00Z",
+                "2026-01-09T22:00:00Z/2026-01-10T06:00:00Z",
+            ]
         );
     }
 
@@ -287,10 +276,7 @@ mod tests {
             "2026-01-06T02:00:00Z",
             "2026-01-06T04:00:00Z",
         );
-        assert_eq!(
-            got,
-            pairs(&[("2026-01-06T02:00:00Z", "2026-01-06T04:00:00Z")])
-        );
+        assert_eq!(got, ["2026-01-06T02:00:00Z/2026-01-06T04:00:00Z"]);
     }
 
     #[test]
@@ -305,50 +291,37 @@ mod tests {
         );
         assert_eq!(
             got,
-            pairs(&[
-                ("2026-01-05T09:00:00Z", "2026-01-06T09:00:00Z"),
-                ("2026-01-06T09:00:00Z", "2026-01-07T00:00:00Z"),
-            ])
+            [
+                "2026-01-05T09:00:00Z/2026-01-06T09:00:00Z",
+                "2026-01-06T09:00:00Z/2026-01-07T00:00:00Z",
+            ]
         );
     }
 
     #[test]
     fn gap_moves_times_forward() {
-        // D4, D8, D9: New York skips 02:00-03:00 on 2026-03-08.
-        let sunday = Weekdays::ALL;
-        let window = ("2026-03-08T00:00:00Z", "2026-03-09T00:00:00Z");
-        let d4 = blocks(
-            time(2, 30, 0, 0),
-            time(4, 0, 0, 0),
-            sunday,
-            "America/New_York",
-            window.0,
-            window.1,
-        );
-        let d8 = blocks(
-            time(2, 30, 0, 0),
-            time(3, 0, 0, 0),
-            sunday,
-            "America/New_York",
-            window.0,
-            window.1,
-        );
-        let d9 = blocks(
-            time(2, 0, 0, 0),
-            time(2, 30, 0, 0),
-            sunday,
-            "America/New_York",
-            window.0,
-            window.1,
+        // D4, D8, D9: New York skips 02:00-03:00 on Sunday 2026-03-08.
+        let sunday = |start: Time, end: Time| {
+            blocks(
+                start,
+                end,
+                Weekdays::ALL,
+                "America/New_York",
+                "2026-03-08T00:00:00Z",
+                "2026-03-09T00:00:00Z",
+            )
+        };
+        assert_eq!(
+            sunday(time(2, 30, 0, 0), time(4, 0, 0, 0)),
+            ["2026-03-08T07:30:00Z/2026-03-08T08:00:00Z"]
         );
         assert_eq!(
-            d4,
-            pairs(&[("2026-03-08T07:30:00Z", "2026-03-08T08:00:00Z")])
+            sunday(time(2, 30, 0, 0), time(3, 0, 0, 0)),
+            Vec::<String>::new()
         );
-        assert_eq!(d8, pairs(&[]));
         assert_eq!(
-            d9,
-            pairs(&[("2026-03-08T07:00:00Z", "2026-03-08T07:30:00Z")])
+            sunday(time(2, 0, 0, 0), time(2, 30, 0, 0)),
+            ["2026-03-08T07:00:00Z/2026-03-08T07:30:00Z"]
         );
     }
 
@@ -363,44 +336,34 @@ mod tests {
             "2026-11-01T00:00:00Z",
             "2026-11-02T00:00:00Z",
         );
-        assert_eq!(
-            got,
-            pairs(&[("2026-11-01T05:30:00Z", "2026-11-01T08:00:00Z")])
-        );
+        assert_eq!(got, ["2026-11-01T05:30:00Z/2026-11-01T08:00:00Z"]);
     }
 
     #[test]
     fn shifts_past_the_edges_of_jiff_range_are_clipped_to_it() {
-        let all_day = (Time::midnight(), Time::midnight(), Weekdays::ALL);
-        let first = blocks(
-            all_day.0,
-            all_day.1,
-            all_day.2,
-            "UTC",
-            "-009999-01-02T01:59:59Z",
-            "-009999-01-04T00:00:00Z",
-        );
-        let last = blocks(
-            all_day.0,
-            all_day.1,
-            all_day.2,
-            "UTC",
-            "9999-12-29T00:00:00Z",
-            "9999-12-30T22:00:00Z",
+        let all_day = |lo: &str, hi: &str| {
+            blocks(
+                Time::midnight(),
+                Time::midnight(),
+                Weekdays::ALL,
+                "UTC",
+                lo,
+                hi,
+            )
+        };
+        assert_eq!(
+            all_day("-009999-01-02T01:59:59Z", "-009999-01-04T00:00:00Z"),
+            [
+                "-009999-01-02T01:59:59Z/-009999-01-03T00:00:00Z",
+                "-009999-01-03T00:00:00Z/-009999-01-04T00:00:00Z",
+            ]
         );
         assert_eq!(
-            first,
-            pairs(&[
-                ("-009999-01-02T01:59:59Z", "-009999-01-03T00:00:00Z"),
-                ("-009999-01-03T00:00:00Z", "-009999-01-04T00:00:00Z"),
-            ])
-        );
-        assert_eq!(
-            last,
-            pairs(&[
-                ("9999-12-29T00:00:00Z", "9999-12-30T00:00:00Z"),
-                ("9999-12-30T00:00:00Z", "9999-12-30T22:00:00Z"),
-            ])
+            all_day("9999-12-29T00:00:00Z", "9999-12-30T22:00:00Z"),
+            [
+                "9999-12-29T00:00:00Z/9999-12-30T00:00:00Z",
+                "9999-12-30T00:00:00Z/9999-12-30T22:00:00Z",
+            ]
         );
     }
 }
