@@ -71,7 +71,8 @@ export class Oracle {
 
   between(a: number, b: number): number {
     if (b < a) {
-      return -this.between(b, a);
+      // Not `-x`, which would give -0 where the engine gives 0.
+      return 0 - this.between(b, a);
     }
     let total = 0;
     for (let m = a; m < b; m += MINUTE) {
