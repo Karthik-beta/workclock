@@ -6,6 +6,9 @@ _Holidays = tuple[list[tuple[int, int, int]], str | None]
 
 class EngineError(Exception): ...
 
+def local_date(zone_name: str, t: int) -> tuple[int, int, int]: ...
+def day_bounds(zone_name: str, date: tuple[int, int, int]) -> tuple[int, int]: ...
+
 class Schedule:
     def __init__(
         self,
