@@ -30,6 +30,7 @@ env:
 jobs:
   version:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
@@ -61,6 +62,7 @@ jobs:
           - { os: macos-latest, target: aarch64, check: true }
           - { os: windows-latest, target: x64, check: true }
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
@@ -83,6 +85,7 @@ jobs:
 
   sdist:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
@@ -105,6 +108,7 @@ jobs:
 
   npm-package:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: js
@@ -134,6 +138,7 @@ jobs:
 
   crate:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
@@ -147,6 +152,7 @@ jobs:
     if: github.event_name != 'pull_request'
     needs: [version, wheels, sdist, npm-package, crate]
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     environment:
       name: testpypi
       url: https://test.pypi.org/project/workclock/${{ needs.version.outputs.version }}/
@@ -171,6 +177,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
@@ -181,6 +188,7 @@ jobs:
     if: github.ref_type == 'tag'
     needs: [version, testpypi-install]
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     environment:
       name: pypi
       url: https://pypi.org/project/workclock/${{ needs.version.outputs.version }}/
@@ -198,6 +206,7 @@ jobs:
     if: github.ref_type == 'tag'
     needs: [version, testpypi-install]
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     environment:
       name: npm
       url: https://www.npmjs.com/package/workclock/v/${{ needs.version.outputs.version }}
@@ -219,6 +228,7 @@ jobs:
     if: github.ref_type == 'tag'
     needs: [version, testpypi-install]
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     environment:
       name: crates-io
       url: https://crates.io/crates/workclock/${{ needs.version.outputs.version }}
@@ -238,6 +248,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
