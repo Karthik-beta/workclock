@@ -62,6 +62,27 @@ def test_numpy_results_keep_the_input_shape(nights: Schedule) -> None:
     assert nights.add_many(grid, timedelta(hours=1)).shape == (2, 3)
 
 
+def test_numpy_digits_below_a_microsecond_are_rejected(nights: Schedule) -> None:
+    starts = np.array(
+        ["2026-01-05T22:00", "2026-01-05T22:00:00.000000001"], dtype="datetime64[ns]"
+    )
+    ends = np.array(["2026-01-06T06:00"] * 2, dtype="datetime64[ns]")
+    with pytest.raises(ValueError, match="item 1: .* has digits below a microsecond"):
+        nights.between_many(starts, ends)
+    with pytest.raises(ValueError, match="item 0: .* has digits below a microsecond"):
+        nights.add_many(starts[:1], np.array([1500], dtype="timedelta64[ns]"))
+
+
+def test_numpy_nanosecond_arrays_of_whole_microseconds_work(nights: Schedule) -> None:
+    starts = np.array(["2026-01-05T22:00:00.000001"], dtype="datetime64[ns]")
+    ends = np.array(["2026-01-06T06:00"], dtype="datetime64[ns]")
+    assert nights.between_many(starts, ends).tolist() == [
+        timedelta(hours=8, microseconds=-1)
+    ]
+    added = nights.add_many(starts, np.array([2000], dtype="timedelta64[ns]"))
+    assert added.tolist() == [datetime(2026, 1, 5, 22, 0, 0, 3)]
+
+
 def test_bad_batches_are_rejected(nights: Schedule) -> None:
     with pytest.raises(ValueError, match="differ in length"):
         nights.between_many([utc(5, 22)], [])
