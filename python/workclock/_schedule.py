@@ -327,11 +327,9 @@ class Schedule:
                     _arrays.to_micros(ends, "datetime64", shape),
                 )
             return _arrays.from_micros(micros, "timedelta64", shape)
-        starts, ends = list(starts), list(ends)
+        a, b = _each(_micros, starts), _each(_micros, ends)
         with _engine_errors():
-            micros = self._schedule.between_many(
-                [_micros(t) for t in starts], [_micros(t) for t in ends]
-            )
+            micros = self._schedule.between_many(a, b)
         return [timedelta(microseconds=m) for m in micros]
 
     @overload
@@ -397,8 +395,8 @@ class Schedule:
             deltas = [deltas] * len(dts)
         amounts = _each(_delta_micros, deltas)
         with _engine_errors():
-            micros = shift([_micros(t) for t in dts], amounts)
-        return [_datetime(m, t.tzinfo) for m, t in zip(micros, dts)]
+            micros = shift(_each(_micros, dts), amounts)
+        return _each(_datetime, micros, [t.tzinfo for t in dts])
 
 
 def _amount(

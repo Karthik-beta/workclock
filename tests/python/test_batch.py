@@ -67,9 +67,9 @@ def test_numpy_digits_below_a_microsecond_are_rejected(nights: Schedule) -> None
         ["2026-01-05T22:00", "2026-01-05T22:00:00.000000001"], dtype="datetime64[ns]"
     )
     ends = np.array(["2026-01-06T06:00"] * 2, dtype="datetime64[ns]")
-    with pytest.raises(ValueError, match="item 1: .* has digits below a microsecond"):
+    with pytest.raises(ValueError, match=r"item 1: .* has digits below a microsecond"):
         nights.between_many(starts, ends)
-    with pytest.raises(ValueError, match="item 0: .* has digits below a microsecond"):
+    with pytest.raises(ValueError, match=r"item 0: .* has digits below a microsecond"):
         nights.add_many(starts[:1], np.array([1500], dtype="timedelta64[ns]"))
 
 
@@ -93,6 +93,23 @@ def test_bad_batches_are_rejected(nights: Schedule) -> None:
             np.array(["NaT"], dtype="datetime64[us]"),
             np.array(["2026-01-05"], dtype="datetime64[us]"),
         )
+
+
+def test_conversion_errors_name_the_failing_item(nights: Schedule) -> None:
+    with pytest.raises(ValueError, match=r"item 1: .* is naive"):
+        nights.between_many([utc(5, 22), datetime(2026, 1, 5)], [utc(5, 22)] * 2)
+    with pytest.raises(TypeError, match="item 1: expected a datetime"):
+        nights.add_many([utc(5, 22), 3], timedelta(hours=1))  # type: ignore[list-item]
+    with pytest.raises(TypeError, match="item 1: "):
+        nights.sub_many([utc(5, 22)] * 2, [timedelta(hours=1), 3])  # type: ignore[list-item]
+    early = datetime(1, 1, 1, 1, tzinfo=UTC)
+    with pytest.raises(OutOfRangeError, match="item 1: "):
+        nights.sub_many([utc(5, 22), early], timedelta(hours=8))
+    starts = np.array(
+        ["2026-01-05", "2026-01-06", "NaT", "NaT"], dtype="datetime64[us]"
+    )
+    with pytest.raises(ValueError, match="item 2: batch inputs must not contain NaT"):
+        nights.between_many(starts, np.array(["2026-01-05"], dtype="datetime64[us]"))
 
 
 def test_errors_name_the_failing_item(nights: Schedule) -> None:

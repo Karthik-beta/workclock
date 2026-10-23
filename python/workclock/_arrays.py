@@ -33,8 +33,9 @@ def to_micros(values: object, unit: str, shape: tuple[int, ...]) -> list[int]:
     given = np.asarray(values)
     converted: NDArray[Any] = np.asarray(values, dtype=f"{unit}[us]")
     array = np.broadcast_to(converted, shape)
-    if np.isnat(array).any():
-        raise ValueError("batch inputs must not contain NaT")
+    nat = np.flatnonzero(np.isnat(array))
+    if nat.size:
+        raise ValueError(f"item {nat[0]}: batch inputs must not contain NaT")
     finer = (
         given.dtype.kind in "mM" and np.datetime_data(given.dtype)[0] in _FINER_UNITS
     )
