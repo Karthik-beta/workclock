@@ -12,7 +12,9 @@ name = "_workclock"
 crate-type = ["cdylib"]
 
 [dependencies]
+jiff = "0.2.38"
 pyo3 = { version = "0.30", features = ["abi3-py39"] }
+workclock = { path = "../workclock" }
 
 [lints]
 workspace = true

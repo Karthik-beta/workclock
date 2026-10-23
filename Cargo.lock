@@ -858,7 +858,9 @@ dependencies = [
 name = "workclock-py"
 version = "0.1.0"
 dependencies = [
+ "jiff",
  "pyo3",
+ "workclock",
 ]
 
 [[package]]
