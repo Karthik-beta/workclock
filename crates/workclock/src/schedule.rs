@@ -735,6 +735,21 @@ mod tests {
     }
 
     #[test]
+    fn a_week_that_holds_exactly_the_rest_is_walked_not_skipped() {
+        // Chunks start at t, so each holds exactly 40 hours. The third one
+        // holds what is left and must end on its last block, not past it.
+        let schedule = Schedule::builder().rule(office()).build().unwrap();
+        assert_eq!(
+            schedule.add(at("2026-01-05T09:00:00Z"), h(120)),
+            Ok(at("2026-01-23T17:00:00Z"))
+        );
+        assert_eq!(
+            schedule.sub(at("2026-01-23T17:00:00Z"), h(120)),
+            Ok(at("2026-01-05T09:00:00Z"))
+        );
+    }
+
+    #[test]
     fn negative_durations_go_the_other_way() {
         // A6
         let schedule = Schedule::builder().rule(office()).build().unwrap();
