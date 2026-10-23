@@ -172,7 +172,7 @@ jobs:
       - run: |
           root="$(pwd -W 2>/dev/null || pwd)"
           wheel="$(ls "$root"/dist/*.whl)"
-          expected="$(sed -n '/^\[workspace.package\]/,/^\[/{s/^version = "\(.*\)"/\1/p}' Cargo.toml)"
+          expected="$(awk -F'"' '/^\[workspace.package\]/ {f = 1; next} /^\[/ {f = 0} f && /^version/ {print $2; exit}' Cargo.toml)"
           mkdir -p "$RUNNER_TEMP/fresh" "$RUNNER_TEMP/pip-check"
 
           cd "$RUNNER_TEMP/fresh"
