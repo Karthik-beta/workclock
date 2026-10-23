@@ -27,5 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - npm package: `Schedule` with `between`, `add`, `sub`, `nextPeriod` and
   `previousPeriod`, taking `Date`s or ISO 8601 strings and milliseconds, and
   error classes for `instanceof` checks.
+- npm package: `betweenMany`, `addMany` and `subMany` for arrays and
+  `Float64Array`s of epoch milliseconds.
 
 [Unreleased]: https://github.com/Karthik-beta/workclock/commits/main
