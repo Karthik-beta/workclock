@@ -164,6 +164,23 @@ describe("errors", () => {
     expect(() => always.add(new Date(8.64e15), 0)).toThrow(OutOfRangeError);
   });
 
+  test.each(["-009999-01-02T01:59:59Z", "9999-12-30T22:00:00Z"])(
+    "%s is in range as a string and as a Date",
+    (iso) => {
+      expect(always.add(iso, 0).getTime()).toBe(Date.parse(iso));
+      expect(always.add(new Date(iso), 0).getTime()).toBe(Date.parse(iso));
+    },
+  );
+
+  test.each(["-009999-01-02T01:59:58.999Z", "9999-12-30T22:00:00.001Z"])(
+    "%s is out of range as a string and as a Date",
+    (iso) => {
+      expect(() => always.add(iso, 0)).toThrow(OutOfRangeError);
+      expect(() => always.add(iso, 0)).toThrow(`${iso} is outside the supported range`);
+      expect(() => always.add(new Date(iso), 0)).toThrow(OutOfRangeError);
+    },
+  );
+
   test.each([
     ["WorkclockError", WorkclockError, "unknown"],
     ["NoWorkingTimeError", NoWorkingTimeError, "no_working_time"],
