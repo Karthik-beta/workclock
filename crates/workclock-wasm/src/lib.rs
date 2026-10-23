@@ -3,6 +3,13 @@
 //!
 //! Instants come in as `Date` objects or ISO 8601 strings with an offset and go
 //! out as `Date` objects; durations are numbers of milliseconds.
+//!
+//! The doc comments on exported items become the `JSDoc` of the generated
+//! TypeScript declarations, so they are written for JavaScript users.
+
+// The crate is not published and its docs are JSDoc: errors are documented
+// with `@throws` tags, and the type names in their braces take no backticks.
+#![allow(clippy::missing_errors_doc, clippy::doc_markdown)]
 
 use jiff::civil::{Date, Time, Weekday};
 use jiff::{SignedDuration, Timestamp};
@@ -71,7 +78,7 @@ export interface ScheduleOptions {
 /** A `Date`, or an ISO 8601 string with a UTC offset. */
 export type Instant = Date | string;
 
-/** A stretch of working time. */
+/** A period: a maximal stretch of working time. */
 export interface Period {
   start: Date;
   end: Date;
@@ -84,7 +91,10 @@ export interface Period {
  * A failing item throws, naming its index.
  */
 export interface Schedule {
-  /** `between` for each pair; `a` and `b` must have the same length. */
+  /**
+   * `between` for each pair.
+   * @throws {RangeError} If `a` and `b` differ in length.
+   */
   betweenMany(a: Float64Array, b: Float64Array): Float64Array;
   betweenMany(a: readonly Instant[], b: readonly Instant[]): number[];
   betweenMany(a: Float64Array | readonly Instant[], b: Float64Array | readonly Instant[]): Float64Array | number[];
@@ -99,7 +109,8 @@ export interface Schedule {
 }
 "#;
 
-/// Returns the workclock version this module was built from.
+/// Returns the version of workclock this module was built from, such as
+/// `"0.1.0"`.
 #[wasm_bindgen]
 #[must_use]
 pub fn version() -> String {
@@ -107,18 +118,34 @@ pub fn version() -> String {
 }
 
 /// Working time defined by rules, evaluated in IANA time zones.
+///
+/// Instants are `Date`s or ISO 8601 strings with a UTC offset, and durations
+/// are numbers of milliseconds. Results are exact to the millisecond.
 #[wasm_bindgen]
 pub struct Schedule(CoreSchedule);
 
 #[wasm_bindgen]
 impl Schedule {
-    /// Builds a schedule.
+    /// Builds a schedule from its rules.
     ///
-    /// # Errors
-    ///
-    /// Throws `UnknownZoneError` for an unknown time zone, `NoWorkingTimeError`
-    /// if the working hours minus the breaks are empty, and `TypeError` or
-    /// `RangeError` for malformed options.
+    /// @param options The default time zone and the rules.
+    /// @throws {UnknownZoneError} If a time zone is not in the IANA database.
+    /// @throws {NoWorkingTimeError} If the working hours minus the breaks are
+    /// empty.
+    /// @throws {TypeError} If `options` or a rule has the wrong shape; the
+    /// message names the rule, such as `rules[1]`.
+    /// @throws {RangeError} If a time, day or date cannot be read.
+    /// @example
+    /// ```js
+    /// const support = new Schedule({
+    ///   timeZone: "Europe/London",
+    ///   rules: [
+    ///     { type: "workday", start: "09:00", end: "17:00" },
+    ///     { type: "break", start: "12:00", end: "13:00" },
+    ///     { type: "holidays", dates: ["2026-12-25", "2026-12-28"] },
+    ///   ],
+    /// });
+    /// ```
     #[wasm_bindgen(constructor)]
     pub fn new(
         #[wasm_bindgen(unchecked_param_type = "ScheduleOptions")] options: &JsValue,
@@ -143,12 +170,20 @@ impl Schedule {
         builder.build().map(Schedule).map_err(|e| engine_error(&e))
     }
 
-    /// Returns the working time between `a` and `b` in milliseconds; negative
-    /// when `b` is before `a`.
+    /// Measures the working time between two instants.
     ///
-    /// # Errors
-    ///
-    /// Throws `TypeError` or `RangeError` for a malformed instant.
+    /// @param a The start.
+    /// @param b The end.
+    /// @returns The working time in milliseconds; negative when `b` is before
+    /// `a`.
+    /// @throws {OutOfRangeError} If an instant is outside the supported range.
+    /// @throws {TypeError} If an instant is neither a `Date` nor a string.
+    /// @throws {RangeError} If an instant is an invalid `Date` or a string
+    /// without a UTC offset.
+    /// @example
+    /// ```js
+    /// support.between("2026-01-05T09:00:00Z", "2026-01-06T09:00:00Z"); // 25200000, 7 hours
+    /// ```
     pub fn between(
         &self,
         #[wasm_bindgen(unchecked_param_type = "Instant")] a: &JsValue,
@@ -158,14 +193,24 @@ impl Schedule {
         Ok(millis(duration_millis(duration)?))
     }
 
-    /// Returns the earliest instant with `ms` milliseconds of working time
-    /// after `t`. Zero returns `t`; a negative amount subtracts.
+    /// Finds the instant a given amount of working time after another.
     ///
-    /// # Errors
-    ///
-    /// Throws `NoWorkingTimeError` if a year passes without working time,
-    /// `OutOfRangeError` if the result is past the supported range, and
-    /// `TypeError` or `RangeError` for malformed arguments.
+    /// @param t The instant to count from.
+    /// @param ms Working time in milliseconds; a negative amount counts back.
+    /// @returns The earliest instant with `ms` of working time after `t`, or
+    /// `t` itself when `ms` is zero.
+    /// @throws {NoWorkingTimeError} If no working time is found within 366
+    /// days, plus one day per holiday date.
+    /// @throws {OutOfRangeError} If `t` or the result is outside the supported
+    /// range.
+    /// @throws {TypeError} If `t` is neither a `Date` nor a string.
+    /// @throws {RangeError} If `t` is malformed, or `ms` is not a whole number
+    /// within ±`Number.MAX_SAFE_INTEGER`.
+    /// @example
+    /// ```js
+    /// const due = support.add("2026-12-24T16:30:00Z", 8 * 3_600_000);
+    /// due.toISOString(); // "2026-12-30T09:30:00.000Z"
+    /// ```
     pub fn add(
         &self,
         #[wasm_bindgen(unchecked_param_type = "Instant")] t: &JsValue,
@@ -175,14 +220,20 @@ impl Schedule {
         result.map(date).map_err(|e| engine_error(&e))
     }
 
-    /// Returns the latest instant with `ms` milliseconds of working time
-    /// before `t`. Zero returns `t`; a negative amount adds.
+    /// Finds the instant a given amount of working time before another.
     ///
-    /// # Errors
-    ///
-    /// Throws `NoWorkingTimeError` if a year passes without working time,
-    /// `OutOfRangeError` if the result is past the supported range, and
-    /// `TypeError` or `RangeError` for malformed arguments.
+    /// @param t The instant to count back from.
+    /// @param ms Working time in milliseconds; a negative amount counts
+    /// forward.
+    /// @returns The latest instant with `ms` of working time before `t`, or
+    /// `t` itself when `ms` is zero.
+    /// @throws {NoWorkingTimeError} If no working time is found within 366
+    /// days, plus one day per holiday date.
+    /// @throws {OutOfRangeError} If `t` or the result is outside the supported
+    /// range.
+    /// @throws {TypeError} If `t` is neither a `Date` nor a string.
+    /// @throws {RangeError} If `t` is malformed, or `ms` is not a whole number
+    /// within ±`Number.MAX_SAFE_INTEGER`.
     pub fn sub(
         &self,
         #[wasm_bindgen(unchecked_param_type = "Instant")] t: &JsValue,
@@ -192,14 +243,17 @@ impl Schedule {
         result.map(date).map_err(|e| engine_error(&e))
     }
 
-    /// Returns the stretch of working time that contains `t`, or the first
-    /// one after it. If `t` is inside one, `start` is `t`.
+    /// Finds the period of working time at or after an instant.
     ///
-    /// # Errors
-    ///
-    /// Throws `NoWorkingTimeError` if a year passes without working time,
-    /// `OutOfRangeError` at the end of the supported range, and `TypeError`
-    /// or `RangeError` for a malformed instant.
+    /// @param t The instant to search from.
+    /// @returns The period that contains `t`, starting at `t`, or else the
+    /// first one after it.
+    /// @throws {NoWorkingTimeError} If no working time is found within 366
+    /// days, plus one day per holiday date.
+    /// @throws {OutOfRangeError} If `t` is outside the supported range, or the
+    /// search reaches its end.
+    /// @throws {TypeError} If `t` is neither a `Date` nor a string.
+    /// @throws {RangeError} If `t` is malformed.
     #[wasm_bindgen(js_name = nextPeriod, unchecked_return_type = "Period")]
     pub fn next_period(
         &self,
@@ -212,14 +266,17 @@ impl Schedule {
         period_object(period.start, period.end)
     }
 
-    /// Returns the stretch of working time that contains `t`, or the last one
-    /// before it. If `t` is inside one, `end` is `t`.
+    /// Finds the period of working time at or before an instant.
     ///
-    /// # Errors
-    ///
-    /// Throws `NoWorkingTimeError` if a year passes without working time,
-    /// `OutOfRangeError` at the start of the supported range, and `TypeError`
-    /// or `RangeError` for a malformed instant.
+    /// @param t The instant to search back from.
+    /// @returns The period that contains `t`, ending at `t`, or else the last
+    /// one before it.
+    /// @throws {NoWorkingTimeError} If no working time is found within 366
+    /// days, plus one day per holiday date.
+    /// @throws {OutOfRangeError} If `t` is outside the supported range, or the
+    /// search reaches its start.
+    /// @throws {TypeError} If `t` is neither a `Date` nor a string.
+    /// @throws {RangeError} If `t` is malformed.
     #[wasm_bindgen(js_name = previousPeriod, unchecked_return_type = "Period")]
     pub fn previous_period(
         &self,
@@ -234,10 +291,9 @@ impl Schedule {
 
     /// Returns `between` for each pair of `a` and `b`.
     ///
-    /// # Errors
-    ///
-    /// Throws `RangeError` if `a` and `b` differ in length, and otherwise what
-    /// `between` throws, with the item's index in the message.
+    /// @throws {RangeError} If `a` and `b` differ in length.
+    /// @throws What `between` throws, with the failing item's index in the
+    /// message.
     #[wasm_bindgen(js_name = betweenMany, skip_typescript)]
     pub fn between_many(&self, a: &JsValue, b: &JsValue) -> Result<JsValue, JsValue> {
         let (a, typed) = instants(a)?;
@@ -265,10 +321,9 @@ impl Schedule {
 
     /// Returns `add` for each instant in `t`.
     ///
-    /// # Errors
-    ///
-    /// Throws `RangeError` if `t` and `ms` differ in length, and otherwise what
-    /// `add` throws, with the item's index in the message.
+    /// @throws {RangeError} If `t` and `ms` differ in length.
+    /// @throws What `add` throws, with the failing item's index in the
+    /// message.
     #[wasm_bindgen(js_name = addMany, skip_typescript)]
     pub fn add_many(&self, t: &JsValue, ms: &JsValue) -> Result<JsValue, JsValue> {
         shift_many(t, ms, |t, d| self.0.add(t, d))
@@ -276,10 +331,9 @@ impl Schedule {
 
     /// Returns `sub` for each instant in `t`.
     ///
-    /// # Errors
-    ///
-    /// Throws `RangeError` if `t` and `ms` differ in length, and otherwise what
-    /// `sub` throws, with the item's index in the message.
+    /// @throws {RangeError} If `t` and `ms` differ in length.
+    /// @throws What `sub` throws, with the failing item's index in the
+    /// message.
     #[wasm_bindgen(js_name = subMany, skip_typescript)]
     pub fn sub_many(&self, t: &JsValue, ms: &JsValue) -> Result<JsValue, JsValue> {
         shift_many(t, ms, |t, d| self.0.sub(t, d))

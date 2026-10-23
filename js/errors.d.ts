@@ -1,14 +1,28 @@
-/** Base class of the errors a schedule throws; check with `instanceof`. */
+/**
+ * Base class of the errors a schedule throws; check with `instanceof`.
+ *
+ * Malformed input, such as a rule without `start` or an instant string
+ * without a UTC offset, throws a built-in `TypeError` or `RangeError`
+ * instead, which is not a `WorkclockError`.
+ */
 export declare class WorkclockError extends Error {
+  /**
+   * `"no_working_time"`, `"out_of_range"` or `"unknown_zone"` for the
+   * subclasses below, or `"unknown"` for an error this version does not
+   * classify further.
+   */
   readonly kind: string;
 }
 
-/** No working time was found within the search bound, or a rule set has none. */
+/**
+ * The rules have no working time, or a search found none within 366 days,
+ * plus one day per holiday date.
+ */
 export declare class NoWorkingTimeError extends WorkclockError {
   readonly kind: "no_working_time";
 }
 
-/** A result falls outside the supported range of years -9999 to 9999. */
+/** An instant falls outside the supported range of years -9999 to 9999. */
 export declare class OutOfRangeError extends WorkclockError {
   readonly kind: "out_of_range";
 }
