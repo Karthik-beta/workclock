@@ -70,14 +70,13 @@ pub(crate) fn each_date(dates: RangeInclusive<Date>) -> impl Iterator<Item = Dat
 /// Sorts `blocks` and merges the ones that overlap or touch.
 pub(crate) fn union(blocks: &mut Vec<Block>) {
     blocks.sort_unstable_by_key(|b| b.start);
-    let mut merged: Vec<Block> = Vec::with_capacity(blocks.len());
-    for &block in blocks.iter() {
-        match merged.last_mut() {
-            Some(last) if block.start <= last.end => last.end = last.end.max(block.end),
-            _ => merged.push(block),
+    blocks.dedup_by(|block, last| {
+        let joins = block.start <= last.end;
+        if joins {
+            last.end = last.end.max(block.end);
         }
-    }
-    *blocks = merged;
+        joins
+    });
 }
 
 /// Removes `off` from `on`. Both must be sorted and merged, as [`union`]
