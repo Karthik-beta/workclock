@@ -16,6 +16,9 @@ use workclock::{Break, Error, Holidays, Schedule as CoreSchedule, Weekdays, Work
 #[cfg(doctest)]
 pub struct RepositoryReadmeDoctests;
 
+/// The instants a `Date` can hold that the engine supports.
+const RANGE: &str = "-009999-01-02T01:59:59Z to 9999-12-30T22:00:00Z";
+
 #[wasm_bindgen(typescript_custom_section)]
 const TYPES: &str = r#"
 /** A day of the week. */
@@ -414,7 +417,15 @@ fn instant(value: &JsValue) -> Result<Timestamp, JsValue> {
             "{text:?} has digits below a millisecond, which a Date cannot hold"
         )));
     }
-    Ok(t)
+    // jiff parses instants up to a fraction of a second beyond either end of
+    // the range it accepts as milliseconds, which is the range for Dates.
+    Timestamp::from_millisecond(t.as_millisecond()).map_err(|_| {
+        workclock_error(
+            "OutOfRangeError",
+            "out_of_range",
+            &format!("{text} is outside the supported range {RANGE}"),
+        )
+    })
 }
 
 /// An instant `ms` milliseconds after the Unix epoch.
@@ -553,7 +564,11 @@ fn engine_error(error: &Error) -> JsValue {
         Error::UnknownZone { .. } => ("UnknownZoneError", "unknown_zone"),
         _ => ("WorkclockError", "unknown"),
     };
-    let js_error = js_sys::Error::new(&error.to_string());
+    workclock_error(name, kind, &error.to_string())
+}
+
+fn workclock_error(name: &str, kind: &str, message: &str) -> JsValue {
+    let js_error = js_sys::Error::new(message);
     js_error.set_name(name);
     // Setting a property on a fresh Error object cannot fail.
     let _ = Reflect::set(&js_error, &"kind".into(), &kind.into());
