@@ -2,7 +2,7 @@
 //
 //   npm run build:node && node examples/sla.mjs
 
-import { Schedule } from "../node.js";
+import { Schedule } from "workclock";
 
 const HOUR = 3_600_000;
 
