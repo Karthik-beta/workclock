@@ -14,7 +14,10 @@ take the same arguments and defaults, support the same operators and
 businesstimedelta test suite runs against `workclock.compat` in CI.
 
 For new code, the typed API (`workclock.Schedule`) is smaller and stricter: it
-rejects naive datetimes and returns a signed `between`.
+rejects naive datetimes, returns a signed `between`
+([#12](https://github.com/seppemans/businesstimedelta/issues/12)), and has
+batch methods for lists and NumPy arrays. `Rules.difference` keeps
+businesstimedelta's absolute value, so existing code sees no change there.
 
 ## Fixed
 
