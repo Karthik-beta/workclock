@@ -36,19 +36,22 @@ use jiff::civil::{date, time};
 use jiff::{SignedDuration, Zoned};
 use workclock::{Break, Holidays, Schedule, Weekdays, WorkDay};
 
-let support = Schedule::builder()
-    .time_zone("Europe/London")
-    .rule(WorkDay::new(time(9, 0, 0, 0), time(17, 0, 0, 0), Weekdays::MON_TO_FRI))
-    .rule(Break::new(time(12, 0, 0, 0), time(13, 0, 0, 0), Weekdays::MON_TO_FRI))
-    .rule(Holidays::new([date(2026, 12, 25), date(2026, 12, 28)]))
-    .build()?;
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let support = Schedule::builder()
+        .time_zone("Europe/London")
+        .rule(WorkDay::new(time(9, 0, 0, 0), time(17, 0, 0, 0), Weekdays::MON_TO_FRI))
+        .rule(Break::new(time(12, 0, 0, 0), time(13, 0, 0, 0), Weekdays::MON_TO_FRI))
+        .rule(Holidays::new([date(2026, 12, 25), date(2026, 12, 28)]))
+        .build()?;
 
-let opened: Zoned = "2026-12-24T16:30[Europe/London]".parse()?;
-let due = support.add(&opened, SignedDuration::from_hours(8))?;
-assert_eq!(due.to_string(), "2026-12-30T09:30:00Z");
+    let opened: Zoned = "2026-12-24T16:30[Europe/London]".parse()?;
+    let due = support.add(&opened, SignedDuration::from_hours(8))?;
+    assert_eq!(due.to_string(), "2026-12-30T09:30:00Z");
 
-let now: Zoned = "2026-12-29T11:00[Europe/London]".parse()?;
-assert_eq!(support.between(&opened, &now), SignedDuration::from_mins(150));
+    let now: Zoned = "2026-12-29T11:00[Europe/London]".parse()?;
+    assert_eq!(support.between(&opened, &now), SignedDuration::from_mins(150));
+    Ok(())
+}
 ```
 
 ### Python

@@ -10,6 +10,12 @@ use js_sys::{Array, Float64Array, Reflect};
 use wasm_bindgen::prelude::*;
 use workclock::{Break, Error, Holidays, Schedule as CoreSchedule, Weekdays, WorkDay};
 
+/// The repository README's Rust example. It runs here because the README is
+/// outside the published `workclock` crate.
+#[doc = include_str!("../../../README.md")]
+#[cfg(doctest)]
+pub struct RepositoryReadmeDoctests;
+
 #[wasm_bindgen(typescript_custom_section)]
 const TYPES: &str = r#"
 /** A day of the week. */
