@@ -232,6 +232,8 @@ jobs:
       - run: npm run build
       - run: npm run typecheck
       - run: npm test
+      - run: npm pack
+      - run: ../.github/scripts/npm-install-check.sh workclock-*.tgz
 
   # Single status check for branch protection, so adding a job never
   # requires editing the protection rule.

@@ -11,7 +11,7 @@ on:
   pull_request:
     paths:
       - .github/workflows/release.yml
-      - .github/scripts/install-check.sh
+      - .github/scripts/**
       - Cargo.toml
       - crates/*/Cargo.toml
       - pyproject.toml
@@ -131,6 +131,7 @@ jobs:
       - run: npm test
       - run: npm publish --dry-run
       - run: npm pack
+      - run: ../.github/scripts/npm-install-check.sh workclock-*.tgz
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-package
