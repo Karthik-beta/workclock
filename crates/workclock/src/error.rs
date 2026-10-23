@@ -22,7 +22,7 @@ use std::fmt;
 /// };
 /// assert_eq!(hint, "Mars/Olympus_Mons is not an IANA zone name");
 /// ```
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum Error {
     /// The schedule has no working time.
@@ -66,6 +66,17 @@ mod tests {
     fn is_a_thread_safe_std_error() {
         fn check<E: std::error::Error + Send + Sync + 'static>() {}
         check::<Error>();
+    }
+
+    #[test]
+    fn is_hashable() {
+        let errors: std::collections::HashSet<Error> = [
+            Error::NoWorkingTime,
+            Error::NoWorkingTime,
+            Error::OutOfRange,
+        ]
+        .into();
+        assert_eq!(errors.len(), 2);
     }
 
     #[test]
