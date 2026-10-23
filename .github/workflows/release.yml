@@ -37,6 +37,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # Fetches main too, to check that a tag is on it.
+          fetch-depth: 0
       - id: version
         run: |
           version="$(awk -F'"' '/^\[workspace.package\]/ {f = 1; next} /^\[/ {f = 0} f && /^version/ {print $2; exit}' Cargo.toml)"
@@ -45,9 +47,19 @@ jobs:
             echo "::error::js/package.json has $npm_version, Cargo.toml has $version"
             exit 1
           fi
-          if [ "$GITHUB_REF_TYPE" = tag ] && [ "$GITHUB_REF_NAME" != "v$version" ]; then
-            echo "::error::tag $GITHUB_REF_NAME does not match version $version"
-            exit 1
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            if [ "$GITHUB_REF_NAME" != "v$version" ]; then
+              echo "::error::tag $GITHUB_REF_NAME does not match version $version"
+              exit 1
+            fi
+            if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+              echo "::error::tag $GITHUB_REF_NAME is not on main, so CI never gated it"
+              exit 1
+            fi
+            if ! grep -q "^## \[$version\] - " CHANGELOG.md; then
+              echo "::error::CHANGELOG.md has no '## [$version] - <date>' section"
+              exit 1
+            fi
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
