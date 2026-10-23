@@ -1,5 +1,7 @@
 //! Interval arithmetic over blocks of working time.
 
+use std::ops::RangeInclusive;
+
 use jiff::civil::{Date, Time};
 use jiff::tz::TimeZone;
 use jiff::Timestamp;
@@ -49,14 +51,17 @@ pub(crate) fn resolve(date: Date, time: Time, tz: &TimeZone) -> Timestamp {
 /// A block that starts on a date ends before 00:00 two dates later, and DST
 /// resolution can move either end by a few hours, so one extra date on each
 /// side is enough.
-pub(crate) fn local_dates(
-    lo: Timestamp,
-    hi: Timestamp,
-    tz: &TimeZone,
-) -> impl Iterator<Item = Date> {
+pub(crate) fn local_dates(lo: Timestamp, hi: Timestamp, tz: &TimeZone) -> RangeInclusive<Date> {
     let first = tz.to_datetime(lo).date();
     let first = first.yesterday().and_then(Date::yesterday).unwrap_or(first);
     let last = tz.to_datetime(hi).date();
     let last = last.tomorrow().unwrap_or(last);
-    std::iter::successors(Some(first), |d| d.tomorrow().ok()).take_while(move |d| *d <= last)
+    first..=last
+}
+
+/// Every date in `dates`, in order.
+pub(crate) fn each_date(dates: RangeInclusive<Date>) -> impl Iterator<Item = Date> {
+    let last = *dates.end();
+    std::iter::successors(Some(*dates.start()), |d| d.tomorrow().ok())
+        .take_while(move |d| *d <= last)
 }
