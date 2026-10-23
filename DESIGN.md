@@ -287,6 +287,26 @@ Library code does not panic.
 | E5 | 9–17 Mon–Fri | `add(Thu 9999-12-30 16:00, 2h)` | out-of-range error |
 | E6 | zone `Mars/Olympus_Mons` | build | unknown-zone error |
 
+### Error types
+
+| Error | Rust (`workclock::Error`) | Python (`workclock`) | JavaScript (`workclock`) |
+|---|---|---|---|
+| no working time | `Error::NoWorkingTime` | `NoWorkingTimeError(WorkclockError, ValueError)` | `NoWorkingTimeError`, `kind` `"no_working_time"` |
+| out of range | `Error::OutOfRange` | `OutOfRangeError(WorkclockError, OverflowError)` | `OutOfRangeError`, `kind` `"out_of_range"` |
+| unknown zone | `Error::UnknownZone { name }` | `UnknownZoneError(WorkclockError, ValueError)` | `UnknownZoneError`, `kind` `"unknown_zone"` |
+
+- Rust's `Error` is `#[non_exhaustive]`. A kind added later reaches Python as
+  a plain `WorkclockError`, and JavaScript as a `WorkclockError` with `kind`
+  `"unknown"`.
+- JavaScript's error classes extend `WorkclockError`. The values thrown are
+  `Error` objects whose `name` is the class name; `instanceof` checks their
+  `kind`, so it works across the node, bundler and web builds.
+- Malformed input is not a `WorkclockError`. Python raises `TypeError` for a
+  wrong type and `ValueError` for a bad value, such as a naive datetime;
+  JavaScript raises `TypeError` and `RangeError` in the same way.
+- In batch methods, the message of an error caused by one item starts with
+  `item {i}: `, where `i` is the item's zero-based index.
+
 ## Compatibility layer
 
 `workclock.compat` mirrors businesstimedelta 1.0.1: `WorkDayRule`,
