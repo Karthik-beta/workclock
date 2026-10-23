@@ -44,7 +44,7 @@ class Oracle:
         self.breaks = breaks
         self.holidays = holidays
         holiday_dates = sum(len(h.dates) for h in holidays)
-        self.search_limit = timedelta(hours=24 * (366 + holiday_dates))
+        self.search_limit = timedelta(days=366 + 7 * holiday_dates)
 
     @classmethod
     def build(cls, spec: ScheduleSpec) -> "Oracle":

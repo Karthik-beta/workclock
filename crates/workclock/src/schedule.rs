@@ -133,8 +133,8 @@ impl Schedule {
     ///
     /// # Errors
     ///
-    /// - [`Error::NoWorkingTime`] if the search crosses 366 days, plus one
-    ///   day per holiday date, without finding working time.
+    /// - [`Error::NoWorkingTime`] if the search crosses 366 days, plus seven
+    ///   days per holiday date, without finding working time.
     /// - [`Error::OutOfRange`] if the result is outside the range of
     ///   [`Timestamp`].
     ///
@@ -170,8 +170,8 @@ impl Schedule {
     ///
     /// # Errors
     ///
-    /// - [`Error::NoWorkingTime`] if the search crosses 366 days, plus one
-    ///   day per holiday date, without finding working time.
+    /// - [`Error::NoWorkingTime`] if the search crosses 366 days, plus seven
+    ///   days per holiday date, without finding working time.
     /// - [`Error::OutOfRange`] if the result is outside the range of
     ///   [`Timestamp`].
     ///
@@ -575,11 +575,18 @@ impl ScheduleBuilder {
         }
         schedule.holidays = holidays;
 
-        // 366 days, plus one for every holiday date.
+        // Without holidays, a schedule in one zone repeats every week, apart
+        // from the odd week whose working time a DST change skips. A holiday
+        // removes one day of calendar time, which can hide one week's working
+        // time, so each date can lengthen a gap by a week.
         let holiday_dates: usize = schedule.holidays.iter().map(HolidayDates::len).sum();
         schedule.search_limit = i64::try_from(holiday_dates)
             .ok()
-            .and_then(|n| n.checked_add(366)?.checked_mul(24 * 60 * 60))
+            .and_then(|n| {
+                n.checked_mul(7)?
+                    .checked_add(366)?
+                    .checked_mul(24 * 60 * 60)
+            })
             .map_or(SignedDuration::MAX, SignedDuration::from_secs);
         Ok(schedule)
     }

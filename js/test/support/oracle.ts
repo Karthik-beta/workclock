@@ -33,7 +33,7 @@ export class Oracle {
     private readonly holidays: Blocks[],
     holidayDates: number,
   ) {
-    this.searchLimit = (366 + holidayDates) * DAY;
+    this.searchLimit = (366 + 7 * holidayDates) * DAY;
   }
 
   static build(spec: ScheduleSpec): Oracle {

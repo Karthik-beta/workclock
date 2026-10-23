@@ -334,7 +334,7 @@ class Schedule:
 
         Raises the errors described on `Schedule` for ``dt``, `TypeError` if
         ``delta`` is not a timedelta, `ValueError` if an amount is NaN,
-        `NoWorkingTimeError` if the search crosses 366 days plus one per
+        `NoWorkingTimeError` if the search crosses 366 days plus seven per
         holiday date without finding working time, and `OutOfRangeError` if
         the amount does not fit in 64-bit microseconds or the result is
         outside the supported range or the years 1 to 9999 of ``datetime``.
@@ -371,7 +371,7 @@ class Schedule:
         A period is a maximal stretch of working time, returned as
         ``(start, end)`` in the ``tzinfo`` of ``dt``. If ``dt`` is inside one,
         ``start`` is ``dt``. A period never runs longer than the search bound
-        of 366 days plus one per holiday date.
+        of 366 days plus seven per holiday date.
 
         Raises the errors described on `Schedule` for ``dt``,
         `NoWorkingTimeError` if no working time starts within the search

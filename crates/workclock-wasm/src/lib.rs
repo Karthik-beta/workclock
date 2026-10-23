@@ -204,7 +204,7 @@ impl Schedule {
     /// @returns The earliest instant with `ms` of working time after `t`, or
     /// `t` itself when `ms` is zero.
     /// @throws {NoWorkingTimeError} If no working time is found within 366
-    /// days, plus one day per holiday date.
+    /// days, plus seven days per holiday date.
     /// @throws {OutOfRangeError} If `t` or the result is outside the supported
     /// range.
     /// @throws {TypeError} If `t` is neither a `Date` nor a string, or `ms` is
@@ -233,7 +233,7 @@ impl Schedule {
     /// @returns The latest instant with `ms` of working time before `t`, or
     /// `t` itself when `ms` is zero.
     /// @throws {NoWorkingTimeError} If no working time is found within 366
-    /// days, plus one day per holiday date.
+    /// days, plus seven days per holiday date.
     /// @throws {OutOfRangeError} If `t` or the result is outside the supported
     /// range.
     /// @throws {TypeError} If `t` is neither a `Date` nor a string, or `ms` is
@@ -255,7 +255,7 @@ impl Schedule {
     /// @returns The period that contains `t`, starting at `t`, or else the
     /// first one after it.
     /// @throws {NoWorkingTimeError} If no working time is found within 366
-    /// days, plus one day per holiday date.
+    /// days, plus seven days per holiday date.
     /// @throws {OutOfRangeError} If `t` is outside the supported range, or the
     /// search reaches its end.
     /// @throws {TypeError} If `t` is neither a `Date` nor a string.
@@ -278,7 +278,7 @@ impl Schedule {
     /// @returns The period that contains `t`, ending at `t`, or else the last
     /// one before it.
     /// @throws {NoWorkingTimeError} If no working time is found within 366
-    /// days, plus one day per holiday date.
+    /// days, plus seven days per holiday date.
     /// @throws {OutOfRangeError} If `t` is outside the supported range, or the
     /// search reaches its start.
     /// @throws {TypeError} If `t` is neither a `Date` nor a string.

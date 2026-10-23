@@ -8,7 +8,7 @@ class WorkclockError(Exception):
 class NoWorkingTimeError(WorkclockError, ValueError):
     """The schedule has no working time, or a search found none within its bound.
 
-    The bound is 366 days, plus one day per holiday date.
+    The bound is 366 days, plus seven days per holiday date.
     """
 
 
