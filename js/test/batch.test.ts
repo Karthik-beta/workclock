@@ -109,7 +109,7 @@ describe("errors name the failing item", () => {
   test("an engine error keeps its class", () => {
     const call = () => always.addMany(["2026-01-05T09:00:00Z", "9999-12-30T00:00:00Z"], 48 * HOUR);
     expect(call).toThrow(OutOfRangeError);
-    expect(call).toThrow(/^item 1: result is outside the supported time range$/);
+    expect(call).toThrow(/^item 1: result is outside the supported range -009999-01-02T01:59:59Z to 9999-12-30T22:00:00Z$/);
   });
 
   test("an input that is not an array", () => {
