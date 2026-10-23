@@ -28,7 +28,7 @@ businesstimedelta's absolute value, so existing code sees no change there.
 | Holidays in a different zone from the working hours can loop forever ([#9](https://github.com/seppemans/businesstimedelta/issues/9)) | Terminates with the correct result |
 | A time-off block that starts inside a working period does not always shorten it | Working time is always the union of working hours minus the union of time off |
 | A rule without working time (such as `start_time == end_time`) hangs on addition | Raises `workclock.NoWorkingTimeError`; `difference` returns zero |
-| Any search can run forever | Searches give up after a year, plus one day per holiday date, without working time |
+| Any search can run forever | Searches give up after 366 days, plus one day per holiday date, without working time |
 
 ## Intentional differences
 
@@ -48,9 +48,15 @@ businesstimedelta's absolute value, so existing code sees no change there.
   created, after filling in every year from 1970 to 2100. Dates outside that
   window are not holidays, and holidays added to the object later are not
   seen. Lists of `datetime` objects raise `TypeError`; pass `date` objects.
-- **`next()` and `previous()`** on `Rules` return the whole stretch of working
-  time, so overlapping working-hour rules form one block. businesstimedelta
+- **`next()` and `previous()`** on `Rules` return the whole period of working
+  time, so overlapping working-hour rules form one period. businesstimedelta
   returned the block of one rule.
+- **Empty `WorkDayRule`.** With `start_time == end_time`, `next()` and
+  `previous()` raise `workclock.NoWorkingTimeError`. businesstimedelta
+  returned a zero-length block.
+- **`HolidayRule.previous(dt)` at the start of a holiday** returns the holiday
+  before it, which ends at or before `dt`. businesstimedelta returned the
+  holiday that starts at `dt`.
 - **Supported rules.** `Rules` accepts `WorkDayRule` and `LunchTimeRule` as
   working time, and `WorkDayRule`, `LunchTimeRule` and `HolidayRule` as time
   off. Subclasses of `Rule` that compute their own blocks, a `HolidayRule`
