@@ -6,6 +6,12 @@ with Python and JavaScript bindings.
 - How much working time lies between two datetimes?
 - What datetime do you reach after adding or subtracting N working hours?
 
+```sh
+cargo add workclock jiff
+```
+
+The API takes and returns [jiff](https://docs.rs/jiff) 0.2 types.
+
 ```rust
 use jiff::civil::time;
 use jiff::{SignedDuration, Timestamp};
@@ -25,5 +31,6 @@ assert_eq!(
 # Ok::<(), Box<dyn std::error::Error>>(())
 ```
 
-See the [repository](https://github.com/Karthik-beta/workclock) for
-documentation. Licensed under [MIT](https://github.com/Karthik-beta/workclock/blob/main/LICENSE).
+API documentation is on [docs.rs](https://docs.rs/workclock), and the
+[repository](https://github.com/Karthik-beta/workclock) has the
+specification and the Python and JavaScript bindings. Licensed under [MIT](https://github.com/Karthik-beta/workclock/blob/main/LICENSE).
