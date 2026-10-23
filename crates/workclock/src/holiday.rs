@@ -10,9 +10,9 @@ use crate::engine::{local_dates, resolve, Block};
 ///
 /// Each date removes the time from 00:00 on that date to 00:00 on the next
 /// date in the rule's time zone, which defaults to the schedule's. On a DST
-/// transition day that is 23 or 25 hours. A holiday removes calendar time,
-/// not whole shifts: an overnight shift that crosses into a holiday loses only
-/// the part after midnight.
+/// transition day that is shorter or longer than 24 hours by the size of the
+/// change. A holiday removes calendar time, not whole shifts: an overnight
+/// shift that crosses into a holiday loses only the part after midnight.
 ///
 /// # Examples
 ///
@@ -30,6 +30,16 @@ pub struct Holidays {
 
 impl Holidays {
     /// Creates a rule from a list of dates. Duplicates are ignored.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use jiff::civil::date;
+    /// use workclock::Holidays;
+    ///
+    /// let new_year = date(2026, 1, 1);
+    /// assert_eq!(Holidays::new([new_year, new_year]), Holidays::new([new_year]));
+    /// ```
     #[must_use]
     pub fn new(dates: impl IntoIterator<Item = Date>) -> Self {
         Self {
@@ -53,9 +63,7 @@ impl Holidays {
         self.zone = Some(name.into());
         self
     }
-}
 
-impl Holidays {
     pub(crate) fn resolve(self, tz: TimeZone) -> HolidayDates {
         HolidayDates {
             dates: self.dates,
