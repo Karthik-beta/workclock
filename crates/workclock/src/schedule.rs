@@ -15,6 +15,9 @@ const CHUNK: SignedDuration = SignedDuration::from_hours(7 * 24);
 /// before it, two after it, and up to a day of UTC offset.
 const REACH: SignedDuration = SignedDuration::from_hours(4 * 24);
 
+/// Monday 2001-01-01T00:00:00Z, where `build` starts looking for working time.
+const BUILD_CHECK_START: Timestamp = Timestamp::constant(978_307_200, 0);
+
 /// A whole chunk's working time, kept to skip the next chunk if it repeats.
 #[derive(Clone, Copy)]
 struct Week {
@@ -107,7 +110,7 @@ impl Schedule {
             let time = match previous {
                 Some(time) if whole && self.repeats(lo) => time,
                 _ => self
-                    .working_time(lo, hi, true)
+                    .working_time(lo, hi)
                     .iter()
                     .map(|block| block.end.duration_since(block.start))
                     .sum(),
@@ -229,7 +232,7 @@ impl Schedule {
         let mut lo = t;
         while lo < Timestamp::MAX {
             let hi = lo.checked_add(CHUNK).unwrap_or(Timestamp::MAX);
-            for block in self.working_time(lo, hi, true) {
+            for block in self.working_time(lo, hi) {
                 match &mut found {
                     None if block.start.duration_since(t) > self.search_limit => {
                         return Err(Error::NoWorkingTime);
@@ -292,7 +295,7 @@ impl Schedule {
         let mut hi = t;
         while hi > Timestamp::MIN {
             let lo = hi.checked_sub(CHUNK).unwrap_or(Timestamp::MIN);
-            for block in self.working_time(lo, hi, true).into_iter().rev() {
+            for block in self.working_time(lo, hi).into_iter().rev() {
                 match &mut found {
                     None if t.duration_since(block.end) > self.search_limit => {
                         return Err(Error::NoWorkingTime);
@@ -340,7 +343,7 @@ impl Schedule {
                 }
             }
             let mut time = SignedDuration::ZERO;
-            for block in self.working_time(lo, hi, true) {
+            for block in self.working_time(lo, hi) {
                 if block.start.duration_since(last_work) > self.search_limit {
                     return Err(Error::NoWorkingTime);
                 }
@@ -385,7 +388,7 @@ impl Schedule {
                 }
             }
             let mut time = SignedDuration::ZERO;
-            for block in self.working_time(lo, hi, true).into_iter().rev() {
+            for block in self.working_time(lo, hi).into_iter().rev() {
                 if last_work.duration_since(block.end) > self.search_limit {
                     return Err(Error::NoWorkingTime);
                 }
@@ -424,9 +427,8 @@ impl Schedule {
             && self.holidays.iter().all(|rule| rule.none_near(start, end))
     }
 
-    /// Working time inside `[lo, hi)`, sorted and merged. Holidays are left
-    /// out when `holidays` is false.
-    fn working_time(&self, lo: Timestamp, hi: Timestamp, holidays: bool) -> Vec<Block> {
+    /// Working time inside `[lo, hi)`, sorted and merged.
+    fn working_time(&self, lo: Timestamp, hi: Timestamp) -> Vec<Block> {
         let mut on = Vec::new();
         for rule in &self.work {
             rule.blocks(lo, hi, &mut on);
@@ -439,10 +441,8 @@ impl Schedule {
         for rule in &self.breaks {
             rule.blocks(lo, hi, &mut off);
         }
-        if holidays {
-            for rule in &self.holidays {
-                rule.blocks(lo, hi, &mut off);
-            }
+        for rule in &self.holidays {
+            rule.blocks(lo, hi, &mut off);
         }
         union(&mut off);
         subtract(&on, &off)
@@ -548,6 +548,7 @@ impl ScheduleBuilder {
             holidays: Vec::new(),
             search_limit: SignedDuration::ZERO,
         };
+        let mut holidays = Vec::new();
         for rule in self.rules {
             match rule {
                 Rule::WorkDay(WorkDay(hours)) => {
@@ -556,21 +557,22 @@ impl ScheduleBuilder {
                 Rule::Break(Break(hours)) => {
                     schedule.breaks.push(hours.resolve(zone(&hours.zone)?));
                 }
-                Rule::Holidays(holidays) => {
-                    let tz = zone(&holidays.zone)?;
-                    schedule.holidays.push(holidays.resolve(tz));
+                Rule::Holidays(rule) => {
+                    let tz = zone(&rule.zone)?;
+                    holidays.push(rule.resolve(tz));
                 }
             }
         }
 
-        let check_start = Timestamp::constant(978_307_200, 0);
-        let check_end = check_start + SignedDuration::from_hours(14 * 24);
+        // Holidays are added after the check so that they do not count.
+        let check_end = BUILD_CHECK_START + SignedDuration::from_hours(14 * 24);
         if schedule
-            .working_time(check_start, check_end, false)
+            .working_time(BUILD_CHECK_START, check_end)
             .is_empty()
         {
             return Err(Error::NoWorkingTime);
         }
+        schedule.holidays = holidays;
 
         // 366 days, plus one for every holiday date.
         let holiday_dates: usize = schedule.holidays.iter().map(HolidayDates::len).sum();
@@ -590,10 +592,11 @@ fn lookup(name: &str) -> Result<TimeZone, Error> {
 
 #[cfg(test)]
 mod tests {
-    use jiff::civil::{date, time, Time};
+    use jiff::civil::{date, time, Time, Weekday};
+    use jiff::tz::TimeZone;
     use jiff::{SignedDuration, Timestamp, Zoned};
 
-    use super::Schedule;
+    use super::{Schedule, BUILD_CHECK_START};
     use crate::{Break, Error, Holidays, Weekdays, WorkDay};
 
     fn office() -> WorkDay {
@@ -607,7 +610,7 @@ mod tests {
     fn working(schedule: &Schedule, lo: &str, hi: &str) -> Vec<String> {
         let (lo, hi): (Timestamp, Timestamp) = (lo.parse().unwrap(), hi.parse().unwrap());
         schedule
-            .working_time(lo, hi, true)
+            .working_time(lo, hi)
             .into_iter()
             .map(|b| format!("{}/{}", b.start, b.end))
             .collect()
@@ -901,8 +904,11 @@ mod tests {
 
     #[test]
     fn check_window_starts_on_monday_2001_01_01() {
-        let start = Timestamp::constant(978_307_200, 0);
-        assert_eq!(start.to_string(), "2001-01-01T00:00:00Z");
+        assert_eq!(BUILD_CHECK_START.to_string(), "2001-01-01T00:00:00Z");
+        assert_eq!(
+            BUILD_CHECK_START.to_zoned(TimeZone::UTC).weekday(),
+            Weekday::Monday
+        );
     }
 
     #[test]
