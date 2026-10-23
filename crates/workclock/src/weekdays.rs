@@ -30,10 +30,39 @@ pub struct Weekdays(u8);
 
 impl Weekdays {
     /// No days.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use workclock::Weekdays;
+    ///
+    /// assert!(Weekdays::EMPTY.is_empty());
+    /// assert_eq!(Weekdays::EMPTY, Weekdays::default());
+    /// ```
     pub const EMPTY: Self = Self(0);
     /// Monday to Friday.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use jiff::civil::Weekday;
+    /// use workclock::Weekdays;
+    ///
+    /// assert!(Weekdays::MON_TO_FRI.contains(Weekday::Friday));
+    /// assert!(!Weekdays::MON_TO_FRI.contains(Weekday::Saturday));
+    /// ```
     pub const MON_TO_FRI: Self = Self(0b001_1111);
     /// Every day of the week.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use jiff::civil::Weekday;
+    /// use workclock::Weekdays;
+    ///
+    /// assert!(Weekdays::ALL.contains(Weekday::Saturday));
+    /// assert!(Weekdays::ALL.contains(Weekday::Sunday));
+    /// ```
     pub const ALL: Self = Self(0b111_1111);
 
     /// Returns whether `day` is in the set.

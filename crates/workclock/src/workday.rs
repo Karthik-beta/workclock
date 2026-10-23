@@ -50,6 +50,21 @@ pub struct WorkDay(pub(crate) Hours);
 
 impl WorkDay {
     /// Creates a rule for `start` to `end` on `days`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use jiff::civil::time;
+    /// use jiff::{SignedDuration, Timestamp};
+    /// use workclock::{Schedule, Weekdays, WorkDay};
+    ///
+    /// let night = WorkDay::new(time(22, 0, 0, 0), time(6, 0, 0, 0), Weekdays::MON_TO_FRI);
+    /// let schedule = Schedule::builder().rule(night).build()?;
+    /// let friday: Timestamp = "2026-01-09T22:00:00Z".parse()?;
+    /// let saturday: Timestamp = "2026-01-10T06:00:00Z".parse()?;
+    /// assert_eq!(schedule.between(friday, saturday), SignedDuration::from_hours(8));
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
     #[must_use]
     pub fn new(start: Time, end: Time, days: Weekdays) -> Self {
         Self(Hours {
@@ -97,6 +112,24 @@ pub struct Break(pub(crate) Hours);
 
 impl Break {
     /// Creates a break from `start` to `end` on `days`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use jiff::civil::time;
+    /// use jiff::{SignedDuration, Timestamp};
+    /// use workclock::{Break, Schedule, Weekdays, WorkDay};
+    ///
+    /// let days = Weekdays::MON_TO_FRI;
+    /// let schedule = Schedule::builder()
+    ///     .rule(WorkDay::new(time(9, 0, 0, 0), time(17, 0, 0, 0), days))
+    ///     .rule(Break::new(time(12, 0, 0, 0), time(13, 0, 0, 0), days))
+    ///     .build()?;
+    /// let start: Timestamp = "2026-01-05T09:00:00Z".parse()?;
+    /// let end: Timestamp = "2026-01-05T17:00:00Z".parse()?;
+    /// assert_eq!(schedule.between(start, end), SignedDuration::from_hours(7));
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
     #[must_use]
     pub fn new(start: Time, end: Time, days: Weekdays) -> Self {
         Self(Hours {
