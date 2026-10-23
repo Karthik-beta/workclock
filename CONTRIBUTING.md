@@ -60,8 +60,8 @@ Tests marked `slow` are deselected by default; `uv run pytest -m slow` runs
 them. Property tests run 40 examples each; `uv run pytest
 --hypothesis-profile=deep` runs 500.
 
-The `uv-install` CI job builds a wheel and installs it into fresh projects
-outside the checkout. To reproduce it locally:
+After the tests, the `python-test` CI job builds a wheel and installs it into
+fresh projects outside the checkout. To reproduce it locally:
 
 ```sh
 uv build --wheel --out-dir dist
