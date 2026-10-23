@@ -6,7 +6,7 @@
 
 use jiff::civil::{Date, Time, Weekday};
 use jiff::{SignedDuration, Timestamp};
-use js_sys::{Array, Reflect};
+use js_sys::{Array, Float64Array, Reflect};
 use wasm_bindgen::prelude::*;
 use workclock::{Break, Error, Holidays, Schedule as CoreSchedule, Weekdays, WorkDay};
 
@@ -52,6 +52,24 @@ export type Instant = Date | string;
 export interface Period {
   start: Date;
   end: Date;
+}
+
+/**
+ * Batch methods. Instants come as an array of `Instant`s, returning numbers or
+ * `Date`s, or as a `Float64Array` of milliseconds since the epoch, returning a
+ * `Float64Array`. Durations come as one number for every item, or one per item.
+ * A failing item throws, naming its index.
+ */
+export interface Schedule {
+  /** `between` for each pair; `a` and `b` must have the same length. */
+  betweenMany(a: Float64Array, b: Float64Array): Float64Array;
+  betweenMany(a: readonly Instant[], b: readonly Instant[]): number[];
+  /** `add` for each instant. */
+  addMany(t: Float64Array, ms: number | readonly number[] | Float64Array): Float64Array;
+  addMany(t: readonly Instant[], ms: number | readonly number[] | Float64Array): Date[];
+  /** `sub` for each instant. */
+  subMany(t: Float64Array, ms: number | readonly number[] | Float64Array): Float64Array;
+  subMany(t: readonly Instant[], ms: number | readonly number[] | Float64Array): Date[];
 }
 "#;
 
@@ -212,6 +230,80 @@ impl Schedule {
             .map_err(|e| engine_error(&e))?;
         period_object(period.start, period.end)
     }
+
+    /// Returns `between` for each pair of `a` and `b`.
+    ///
+    /// # Errors
+    ///
+    /// Throws `RangeError` if `a` and `b` differ in length, and otherwise what
+    /// `between` throws, with the item's index in the message.
+    #[wasm_bindgen(js_name = betweenMany, skip_typescript)]
+    pub fn between_many(&self, a: &JsValue, b: &JsValue) -> Result<JsValue, JsValue> {
+        let (a, typed) = instants(a)?;
+        let (b, _) = instants(b)?;
+        same_length(a.len(), b.len())?;
+        let ms = a
+            .into_iter()
+            .zip(b)
+            .enumerate()
+            .map(|(i, (a, b))| {
+                duration_millis(self.0.between(a, b))
+                    .map(millis)
+                    .map_err(|e| at(i, e))
+            })
+            .collect::<Result<Vec<f64>, JsValue>>()?;
+        Ok(if typed {
+            Float64Array::from(&ms[..]).into()
+        } else {
+            ms.into_iter()
+                .map(JsValue::from_f64)
+                .collect::<Array>()
+                .into()
+        })
+    }
+
+    /// Returns `add` for each instant in `t`.
+    ///
+    /// # Errors
+    ///
+    /// Throws `RangeError` if `t` and `ms` differ in length, and otherwise what
+    /// `add` throws, with the item's index in the message.
+    #[wasm_bindgen(js_name = addMany, skip_typescript)]
+    pub fn add_many(&self, t: &JsValue, ms: &JsValue) -> Result<JsValue, JsValue> {
+        shift_many(t, ms, |t, d| self.0.add(t, d))
+    }
+
+    /// Returns `sub` for each instant in `t`.
+    ///
+    /// # Errors
+    ///
+    /// Throws `RangeError` if `t` and `ms` differ in length, and otherwise what
+    /// `sub` throws, with the item's index in the message.
+    #[wasm_bindgen(js_name = subMany, skip_typescript)]
+    pub fn sub_many(&self, t: &JsValue, ms: &JsValue) -> Result<JsValue, JsValue> {
+        shift_many(t, ms, |t, d| self.0.sub(t, d))
+    }
+}
+
+fn shift_many(
+    t: &JsValue,
+    ms: &JsValue,
+    op: impl Fn(Timestamp, SignedDuration) -> Result<Timestamp, Error>,
+) -> Result<JsValue, JsValue> {
+    let (t, typed) = instants(t)?;
+    let ms = durations(ms, t.len())?;
+    let results = t
+        .into_iter()
+        .zip(ms)
+        .enumerate()
+        .map(|(i, (t, d))| op(t, d).map_err(|e| at(i, engine_error(&e))))
+        .collect::<Result<Vec<Timestamp>, JsValue>>()?;
+    Ok(if typed {
+        let ms: Vec<f64> = results.iter().map(|t| millis(t.as_millisecond())).collect();
+        Float64Array::from(&ms[..]).into()
+    } else {
+        results.into_iter().map(date).collect::<Array>().into()
+    })
 }
 
 fn property(object: &JsValue, key: &str) -> Result<JsValue, JsValue> {
@@ -295,9 +387,7 @@ fn instant(value: &JsValue) -> Result<Timestamp, JsValue> {
         if ms.is_nan() {
             return Err(range_error("invalid Date"));
         }
-        return integer(ms)
-            .and_then(|ms| Timestamp::from_millisecond(ms).ok())
-            .ok_or_else(|| engine_error(&Error::OutOfRange));
+        return epoch(ms);
     }
     let Some(text) = value.as_string() else {
         return Err(type_error("expected a Date or an ISO 8601 string"));
@@ -313,6 +403,92 @@ fn instant(value: &JsValue) -> Result<Timestamp, JsValue> {
         )));
     }
     Ok(t)
+}
+
+/// An instant `ms` milliseconds after the Unix epoch.
+fn epoch(ms: f64) -> Result<Timestamp, JsValue> {
+    // Also true for NaN and the infinities.
+    if ms.fract() != 0.0 {
+        return Err(range_error(
+            "instants must be whole milliseconds since the epoch",
+        ));
+    }
+    integer(ms)
+        .and_then(|ms| Timestamp::from_millisecond(ms).ok())
+        .ok_or_else(|| engine_error(&Error::OutOfRange))
+}
+
+/// Instants from an array of `Instant`s, or from a `Float64Array` of epoch
+/// milliseconds; the flag is true for the latter.
+fn instants(value: &JsValue) -> Result<(Vec<Timestamp>, bool), JsValue> {
+    if let Some(array) = value.dyn_ref::<Float64Array>() {
+        let t = array
+            .to_vec()
+            .into_iter()
+            .enumerate()
+            .map(|(i, ms)| epoch(ms).map_err(|e| at(i, e)))
+            .collect::<Result<_, _>>()?;
+        return Ok((t, true));
+    }
+    if !Array::is_array(value) {
+        return Err(type_error(
+            "expected an array of instants or a Float64Array",
+        ));
+    }
+    let t = Array::from(value)
+        .iter()
+        .enumerate()
+        .map(|(i, value)| instant(&value).map_err(|e| at(i, e)))
+        .collect::<Result<_, _>>()?;
+    Ok((t, false))
+}
+
+/// `len` durations from one number of milliseconds, or from an array or
+/// `Float64Array` of them.
+fn durations(value: &JsValue, len: usize) -> Result<Vec<SignedDuration>, JsValue> {
+    if let Some(ms) = value.as_f64() {
+        return Ok(vec![duration(ms)?; len]);
+    }
+    let ms = if let Some(array) = value.dyn_ref::<Float64Array>() {
+        array.to_vec()
+    } else if Array::is_array(value) {
+        Array::from(value)
+            .iter()
+            .enumerate()
+            .map(|(i, ms)| {
+                ms.as_f64()
+                    .ok_or_else(|| at(i, type_error("durations must be numbers")))
+            })
+            .collect::<Result<_, _>>()?
+    } else {
+        return Err(type_error(
+            "expected milliseconds as a number, an array or a Float64Array",
+        ));
+    };
+    same_length(len, ms.len())?;
+    ms.into_iter()
+        .enumerate()
+        .map(|(i, ms)| duration(ms).map_err(|e| at(i, e)))
+        .collect()
+}
+
+fn same_length(a: usize, b: usize) -> Result<(), JsValue> {
+    if a == b {
+        Ok(())
+    } else {
+        Err(range_error(&format!(
+            "batch inputs differ in length: {a} and {b}"
+        )))
+    }
+}
+
+/// Prefixes an error's message with the index of the batch item that caused it.
+fn at(index: usize, error: JsValue) -> JsValue {
+    if let Some(error) = error.dyn_ref::<js_sys::Error>() {
+        let message = String::from(error.message());
+        error.set_message(&format!("item {index}: {message}"));
+    }
+    error
 }
 
 fn duration(ms: f64) -> Result<SignedDuration, JsValue> {
