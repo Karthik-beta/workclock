@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "postbuild": "node scripts/copy-markdown.mjs",
     "types:check": "next typegen && tsc --noEmit"
   },
   "engines": {

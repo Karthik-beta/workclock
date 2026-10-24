@@ -6,7 +6,7 @@ const docs = defineDocs({
   dir: 'content/docs',
   docs: {
     schema: pageSchema,
-    postprocess: { includeProcessedMarkdown: true },
+    postprocess: { includeProcessedMarkdown: { headingIds: false } },
   },
   meta: { schema: metaSchema },
 });
