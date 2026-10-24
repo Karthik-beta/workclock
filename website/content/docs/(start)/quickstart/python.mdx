@@ -1,0 +1,101 @@
+---
+title: "Quickstart: Python"
+description: Build a Python program that finds when a support ticket is due and how much of its SLA has been used.
+---
+
+By the end of this page you will have a Python program that works out when a support ticket is due, counting only working hours, and how much of its SLA has been used.
+
+## Install
+
+<Callout type="warning" title="Warning">
+In development. No release has been published yet.
+</Callout>
+
+workclock needs CPython 3.9 or later. Install it with pip, or add it to a uv project:
+
+<Tabs groupId="install" persist items={['pip', 'uv']}>
+<Tab value="pip">
+
+```sh
+pip install workclock
+```
+
+</Tab>
+<Tab value="uv">
+
+```sh
+uv add workclock
+```
+
+</Tab>
+</Tabs>
+
+On Windows, also install the `tzdata` package: the program builds its datetimes with the standard library's `zoneinfo.ZoneInfo`, which needs it there ([Install: Time zone data](/docs/install/#time-zone-data)).
+
+## Write the program
+
+A support desk in London works 09:00–17:00 on weekdays with a lunch hour, and is closed on 25 and 28 December 2026. A ticket opened at 16:30 on Christmas Eve with an 8-hour SLA is due at 09:30 on 30 December. At 11:00 on 29 December, 2 hours 30 minutes of the SLA have been used.
+
+In Python, save this as `sla.py`:
+
+```python title="sla.py"
+from datetime import date, datetime, time
+from zoneinfo import ZoneInfo
+
+from workclock import Break, Holidays, Schedule, WorkDay
+
+london = ZoneInfo("Europe/London")
+support = Schedule(
+    [
+        WorkDay(time(9), time(17)),  # Monday to Friday by default
+        Break(time(12), time(13)),
+        Holidays([date(2026, 12, 25), date(2026, 12, 28)]),
+    ],
+    time_zone=london,
+)
+
+opened = datetime(2026, 12, 24, 16, 30, tzinfo=london)
+due = support.add(opened, hours=8)  # 2026-12-30 09:30, London time
+now = datetime(2026, 12, 29, 11, tzinfo=london)
+used = support.between(opened, now)  # 2:30:00
+
+print(f"due {due}, used {used}")
+```
+
+## Run it
+
+<Tabs groupId="install" persist items={['pip', 'uv']}>
+<Tab value="pip">
+
+```sh
+python sla.py
+```
+
+</Tab>
+<Tab value="uv">
+
+```sh
+uv run sla.py
+```
+
+</Tab>
+</Tabs>
+
+It prints:
+
+```text
+due 2026-12-30 09:30:00+00:00, used 2:30:00
+```
+
+London time is UTC+00:00 in December, so the due time is 09:30 London time:
+
+<WeekStrip />
+
+## What just happened
+
+`workclock.Schedule` combined three rules, read in the `Europe/London` time zone: a `WorkDay` rule for 09:00–17:00 on Monday to Friday, a `Break` rule for 12:00–13:00, and a `Holidays` rule for 25 and 28 December. `support.add` counted 8 hours of working time from the moment the ticket was opened, skipping the evening, the weekend, the holidays and the lunch hour, and returned an aware `datetime` with the same `tzinfo` as `opened`. `support.between` returned the working time between two datetimes as a `timedelta`. [`examples/python/sla.py`](https://github.com/Karthik-beta/workclock/blob/main/examples/python/sla.py) extends this program with `next_period`, which finds when the current stretch of working time ends, and `add_many`, which computes many due times in one call.
+
+## Next steps
+
+- [Schedules](/docs/concepts/schedules/): how rules combine into working time.
+- [Migrating from businesstimedelta](/docs/guides/migrating-from-businesstimedelta/): run existing businesstimedelta code on `workclock.compat`, and where it differs.

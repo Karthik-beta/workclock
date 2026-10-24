@@ -1,0 +1,74 @@
+---
+title: Overview
+description: What workclock computes, what it is for, and where to start in Rust, Python or JavaScript.
+---
+
+workclock is business-time arithmetic for Rust, Python and JavaScript: working hours, SLAs and shifts. This page covers what it computes, what it is for and where to start in each language. It is a maintained replacement for [businesstimedelta](https://github.com/seppemans/businesstimedelta), with a compatibility layer for existing Python code.
+
+<Callout type="warning" title="Warning">
+In development. No release has been published yet.
+</Callout>
+
+## What it computes
+
+workclock answers two questions:
+
+- How much working time lies between two instants?
+- Which instant is reached after adding or subtracting an amount of working time?
+
+You describe the working time as a schedule: a set of rules with a default time zone. A `WorkDay` rule gives working hours on chosen weekdays, a `Break` rule takes recurring time off out of them, and a `Holidays` rule removes whole local dates. Working hours are wall-clock times in an IANA time zone, such as `Europe/London`, so they follow daylight saving time (DST) changes.
+
+A support desk in London works 09:00–17:00 on weekdays with a lunch hour, and is closed on 25 and 28 December 2026. A ticket opened at 16:30 on Christmas Eve with an 8-hour SLA is due at 09:30 on Wednesday 30 December 2026, London time:
+
+<WeekStrip />
+
+A `Schedule` has the same operations in every language:
+
+| Operation | Returns | Concept |
+|---|---|---|
+| `between(a, b)` | The working time between two instants, negative when `b` is before `a` | [Measuring time](/docs/concepts/measuring-time/) |
+| `add(t, d)`, `sub(t, d)` | The instant reached after adding or subtracting working time | [Adding time](/docs/concepts/adding-time/) |
+| `next_period(t)`, `previous_period(t)` | The stretch of working time at, after or before an instant | [Periods](/docs/concepts/periods/) |
+
+JavaScript names the period operations `nextPeriod` and `previousPeriod`. Python and JavaScript also have batch methods, which run an operation over many instants in one call: `between_many`, `add_many` and `sub_many` in Python, which take lists or NumPy arrays, and `betweenMany`, `addMany` and `subMany` in JavaScript, which take arrays or a `Float64Array` of epoch milliseconds.
+
+Not in 0.1.0: converting a duration into business days or weeks, and per-date overrides of working hours ([DESIGN.md: Scope](https://github.com/Karthik-beta/workclock/blob/main/DESIGN.md#scope)).
+
+## Use cases
+
+- **Support-ticket SLAs.** When is a ticket due, and how much of its SLA has elapsed? Use `add` and `between` ([Adding time](/docs/concepts/adding-time/)).
+- **Payroll and overtime.** How many hours of a shift fell inside contracted time? Use `between` ([Measuring time](/docs/concepts/measuring-time/)).
+- **Staff rosters, including overnight shifts.** When does the next shift start and end? Use `next_period` ([Periods](/docs/concepts/periods/)). A 22:00–06:00 shift is one rule ([Rules](/docs/concepts/rules/)).
+- **Delivery ETAs that only count operating hours.** When does a parcel arrive? Use `add` with the operating hours as the schedule.
+
+## Languages
+
+All three bindings share one Rust core, so they give the same answer for the same inputs.
+
+<Cards>
+  <Card title="Rust" href="/docs/quickstart/rust/">
+    Rust 1.85 or later. Takes and returns jiff types.
+  </Card>
+  <Card title="Python" href="/docs/quickstart/python/">
+    CPython 3.9 or later. Wheels for Linux, macOS and Windows.
+  </Card>
+  <Card title="JavaScript" href="/docs/quickstart/javascript/">
+    Node.js 22 or later, bundlers and browsers. Types included.
+  </Card>
+</Cards>
+
+Python code written for businesstimedelta can switch with `import workclock.compat as businesstimedelta`; most of it runs unchanged. The [migration guide](/docs/guides/migrating-from-businesstimedelta/) lists where it differs.
+
+## Why workclock
+
+businesstimedelta 1.0.1 has had no release since 2019. workclock fixes its bugs: a 22:00–06:00 shift counts 0 hours between Monday 22:00 and Tuesday 06:00 instead of 8, a query past the last date in a holiday list raises `TypeError`, and holidays in a different time zone from the working hours can loop forever. The [migration guide](/docs/guides/migrating-from-businesstimedelta/) lists each fix with its upstream issue.
+
+Every rule is specified with examples in [DESIGN.md](https://github.com/Karthik-beta/workclock/blob/main/DESIGN.md), and each binding is checked against a brute-force oracle with property-based tests.
+
+[Benchmarks](/docs/benchmarks/) compares every binding with businesstimedelta 1.0.1, with the date and machine each figure was measured on.
+
+## Next steps
+
+- [Install](/docs/install/): the package for each language, its requirements and its time zone data.
+- Quickstarts: [Rust](/docs/quickstart/rust/), [Python](/docs/quickstart/python/), [JavaScript](/docs/quickstart/javascript/).
+- [Schedules](/docs/concepts/schedules/): how rules combine into working time.

@@ -1,0 +1,78 @@
+---
+title: "Quickstart: Rust"
+description: Build a Rust program that finds when a support ticket is due and how much of its SLA has been used.
+---
+
+By the end of this page you will have a Rust program that works out when a support ticket is due, counting only working hours, and how much of its SLA has been used.
+
+## Install
+
+<Callout type="warning" title="Warning">
+In development. No release has been published yet.
+</Callout>
+
+In a Cargo project (`cargo new support-sla` creates one), add workclock and jiff. workclock needs Rust 1.85 or later.
+
+```sh
+cargo add workclock jiff
+```
+
+The Rust API takes and returns [jiff](https://docs.rs/jiff) 0.2 types, so Rust code depends on jiff too.
+
+## Write the program
+
+A support desk in London works 09:00–17:00 on weekdays with a lunch hour, and is closed on 25 and 28 December 2026. A ticket opened at 16:30 on Christmas Eve with an 8-hour SLA is due at 09:30 on 30 December. At 11:00 on 29 December, 2 hours 30 minutes of the SLA have been used.
+
+In Rust, put this in `src/main.rs`:
+
+```rust title="src/main.rs"
+use jiff::civil::{date, time};
+use jiff::{SignedDuration, Zoned};
+use workclock::{Break, Holidays, Schedule, Weekdays, WorkDay};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let days = Weekdays::MON_TO_FRI;
+    let support = Schedule::builder()
+        .time_zone("Europe/London")
+        .rule(WorkDay::new(time(9, 0, 0, 0), time(17, 0, 0, 0), days))
+        .rule(Break::new(time(12, 0, 0, 0), time(13, 0, 0, 0), days))
+        .rule(Holidays::new([date(2026, 12, 25), date(2026, 12, 28)]))
+        .build()?;
+
+    let opened: Zoned = "2026-12-24T16:30[Europe/London]".parse()?;
+    let due = support.add(&opened, SignedDuration::from_hours(8))?;
+    assert_eq!(due.to_string(), "2026-12-30T09:30:00Z");
+
+    let now: Zoned = "2026-12-29T11:00[Europe/London]".parse()?;
+    let used = support.between(&opened, &now);
+    assert_eq!(used, SignedDuration::from_mins(150));
+
+    println!("due {due}, used {used:#}");
+    Ok(())
+}
+```
+
+## Run it
+
+```sh
+cargo run
+```
+
+It prints:
+
+```text
+due 2026-12-30T09:30:00Z, used 2h 30m
+```
+
+London time is UTC in December, so 09:30 UTC is 09:30 London time:
+
+<WeekStrip />
+
+## What just happened
+
+`Schedule::builder()` built a `workclock::Schedule` whose rules are read in `Europe/London`: a `WorkDay` rule for 09:00–17:00 on `workclock::Weekdays::MON_TO_FRI`, a `Break` rule for 12:00–13:00, and a `Holidays` rule for 25 and 28 December. `support.add` counted 8 hours of working time from the moment the ticket was opened, skipping the evening, the weekend, the holidays and the lunch hour, and returned the due instant as a `jiff::Timestamp`. `support.between` returned the working time between two instants as a `jiff::SignedDuration`. [`crates/workclock/examples/sla.rs`](https://github.com/Karthik-beta/workclock/blob/main/crates/workclock/examples/sla.rs) extends this program: it prints the due time in London time and uses `next_period` to find when the current stretch of working time ends.
+
+## Next steps
+
+- [Schedules](/docs/concepts/schedules/): how rules combine into working time.
+- [Adding time](/docs/concepts/adding-time/): what `add` and `sub` return, including at the edges of working time.
