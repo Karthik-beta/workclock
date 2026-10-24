@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, time, timedelta, timezone, tzinfo
+from typing import get_args, get_type_hints
 from zoneinfo import ZoneInfo
 
 import holidays
@@ -12,6 +13,7 @@ from workclock import (
     Holidays,
     NoWorkingTimeError,
     OutOfRangeError,
+    Rule,
     Schedule,
     UnknownZoneError,
     WorkDay,
@@ -213,6 +215,15 @@ def test_rules_are_comparable_values() -> None:
         "WorkDay(start=datetime.time(9, 0), end=datetime.time(17, 0), "
         "days=frozenset({0}), time_zone='UTC')"
     )
+
+
+def test_rule_is_the_type_of_schedule_rules() -> None:
+    assert "Rule" in workclock.__all__
+    rules = vars(Schedule)["rules"]
+    assert isinstance(rules, property)
+    hints = get_type_hints(rules.fget)
+    assert hints["return"] == tuple[Rule, ...]
+    assert get_args(Rule) == (WorkDay, Break, Holidays)
 
 
 def test_periods(office: Schedule) -> None:

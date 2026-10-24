@@ -242,6 +242,7 @@ class Holidays:
 
 
 Rule = Union[WorkDay, Break, Holidays]
+"""Any rule a `Schedule` takes: a `WorkDay`, `Break` or `Holidays`."""
 
 
 class Schedule:
