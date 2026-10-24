@@ -221,7 +221,8 @@ class Holidays:
     create it with ``years=...``.
 
     Raises `TypeError` if ``dates`` is a string or holds anything but
-    ``datetime.date`` objects, or if ``time_zone`` has no IANA name.
+    ``datetime.date`` objects, or if ``time_zone`` has no IANA name, and
+    `ValueError` for a python-holidays object that holds no years.
 
     >>> from datetime import date, datetime, time, timezone
     >>> from workclock import Holidays, Schedule, WorkDay
@@ -244,6 +245,11 @@ class Holidays:
             raise TypeError(
                 "dates must be a list of datetime.date objects, "
                 f"not the string {dates!r}"
+            )
+        if isinstance(dates, dict) and not getattr(dates, "years", True):
+            raise ValueError(
+                "the python-holidays object holds no years, so it lists no "
+                "dates; create it with years=..., such as years=range(2026, 2031)"
             )
         dates = frozenset(dates)
         for value in dates:

@@ -110,6 +110,12 @@ def test_holidays_accept_a_python_holidays_object() -> None:
     assert schedule.between(
         independence_day_observed, independence_day_observed + timedelta(hours=8)
     ) == timedelta(0)
+    assert date(2026, 7, 3) in Holidays(us).dates
+
+
+def test_python_holidays_objects_need_years() -> None:
+    with pytest.raises(ValueError, match=r"create it with years="):
+        Holidays(holidays.country_holidays("US"))
 
 
 def test_naive_datetimes_are_rejected(office: Schedule) -> None:
