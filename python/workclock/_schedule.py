@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import operator
+import re
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -52,13 +53,50 @@ _ERRORS: dict[str, type[WorkclockError]] = {
 }
 
 
+_EMPTY_SCHEDULE = (
+    "schedule has no working time: its working hours minus its breaks are empty"
+)
+# The extension puts this before the error of a batch item.
+_ITEM = re.compile(r"item (\d+): ")
+
+
 @contextmanager
-def _engine_errors() -> Iterator[None]:
+def _engine_errors(start: Callable[[], object] | None = None) -> Iterator[None]:
+    """Raise engine errors as workclock exceptions.
+
+    The engine reports an empty schedule and a failed search with the same
+    error. Searches pass ``start``, which returns the input they began from.
+    """
     try:
         yield
     except _workclock.EngineError as error:
         kind, message = error.args
+        if kind == "no_working_time":
+            message = _EMPTY_SCHEDULE if start is None else _search_failed(start())
         raise _ERRORS.get(kind, WorkclockError)(message) from None
+
+
+@contextmanager
+def _batch_errors(start: Callable[[int], object]) -> Iterator[None]:
+    """Raise engine errors as `_engine_errors` does, for a batch of searches.
+
+    ``start(i)`` returns the input that item ``i`` began from.
+    """
+    try:
+        yield
+    except _workclock.EngineError as error:
+        kind, message = error.args
+        item = _ITEM.match(message)
+        if kind == "no_working_time" and item:
+            i = int(item[1])
+            message = f"item {i}: {_search_failed(start(i))}"
+        raise _ERRORS.get(kind, WorkclockError)(message) from None
+
+
+def _search_failed(start: object) -> str:
+    return (
+        f"no working time within 366 days, plus seven days per holiday date, of {start}"
+    )
 
 
 def _optional_zone(zone: str | tzinfo | None) -> str | None:
@@ -373,8 +411,9 @@ class Schedule:
         outside the supported range or the years 1 to 9999 of ``datetime``.
         """
         amount = _amount(delta, hours, minutes, seconds)
-        with _engine_errors():
-            micros = self._schedule.add(_micros(dt), amount)
+        t = _micros(dt)
+        with _engine_errors(dt.isoformat):
+            micros = self._schedule.add(t, amount)
         return _datetime(micros, dt.tzinfo)
 
     def sub(
@@ -394,8 +433,9 @@ class Schedule:
         has the same ``tzinfo`` as ``dt``. Raises the same errors as `add`.
         """
         amount = _amount(delta, hours, minutes, seconds)
-        with _engine_errors():
-            micros = self._schedule.sub(_micros(dt), amount)
+        t = _micros(dt)
+        with _engine_errors(dt.isoformat):
+            micros = self._schedule.sub(t, amount)
         return _datetime(micros, dt.tzinfo)
 
     def next_period(self, dt: datetime) -> tuple[datetime, datetime]:
@@ -411,8 +451,9 @@ class Schedule:
         bound, and `OutOfRangeError` if the period reaches past the supported
         range or the years 1 to 9999 of ``datetime``.
         """
-        with _engine_errors():
-            start, end = self._schedule.next_period(_micros(dt))
+        t = _micros(dt)
+        with _engine_errors(dt.isoformat):
+            start, end = self._schedule.next_period(t)
         return _datetime(start, dt.tzinfo), _datetime(end, dt.tzinfo)
 
     def previous_period(self, dt: datetime) -> tuple[datetime, datetime]:
@@ -421,8 +462,9 @@ class Schedule:
         Mirrors `next_period`: if ``dt`` is inside a period, ``end`` is ``dt``.
         Raises the same errors as `next_period`.
         """
-        with _engine_errors():
-            start, end = self._schedule.previous_period(_micros(dt))
+        t = _micros(dt)
+        with _engine_errors(dt.isoformat):
+            start, end = self._schedule.previous_period(t)
         return _datetime(start, dt.tzinfo), _datetime(end, dt.tzinfo)
 
     @overload
@@ -524,7 +566,7 @@ class Schedule:
     ) -> list[datetime] | NDArray[np.datetime64]:
         if _arrays.is_array(dts):
             shape = _arrays.broadcast_shape(dts, deltas)
-            with _engine_errors():
+            with _batch_errors(lambda i: _arrays.item(dts, shape, i)):
                 micros = shift(
                     _arrays.to_micros(dts, "datetime64", shape),
                     _arrays.to_micros(deltas, "timedelta64", shape),
@@ -534,7 +576,7 @@ class Schedule:
         if isinstance(deltas, timedelta):
             deltas = [deltas] * len(dts)
         amounts = _each(_delta_micros, deltas)
-        with _engine_errors():
+        with _batch_errors(lambda i: dts[i].isoformat()):
             micros = shift(_each(_micros, dts), amounts)
         return _each(_datetime, micros, [t.tzinfo for t in dts])
 

@@ -66,6 +66,13 @@ def to_micros(values: object, unit: str, shape: tuple[int, ...]) -> list[int]:
     return result
 
 
+def item(values: object, shape: tuple[int, ...], i: int) -> object:
+    """Return item ``i`` of ``values`` broadcast to ``shape`` and flattened."""
+    import numpy as np
+
+    return np.broadcast_to(np.asarray(values), shape).flat[i]
+
+
 def from_micros(micros: list[int], unit: str, shape: tuple[int, ...]) -> NDArray[Any]:
     """Return integer microseconds as an array of ``unit`` with ``shape``."""
     import numpy as np
