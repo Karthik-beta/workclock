@@ -42,12 +42,15 @@ def broadcast_shape(a: object, b: object) -> tuple[int, ...]:
 def to_micros(values: object, unit: str, shape: tuple[int, ...]) -> list[int]:
     """Return ``values`` as integer microseconds, broadcast to ``shape``.
 
-    Raises ``ValueError`` for NaT, and for values with digits below a
-    microsecond, which would otherwise be rounded.
+    Raises ``TypeError`` for numbers, which carry no unit, ``ValueError`` for
+    NaT, and for values with digits below a microsecond, which would otherwise
+    be rounded.
     """
     import numpy as np
 
     given = np.asarray(values)
+    if given.dtype.kind in "biufc":
+        raise TypeError(f"expected {unit} values, got {given.dtype} numbers")
     converted: NDArray[Any] = np.asarray(values, dtype=f"{unit}[us]")
     array = np.broadcast_to(converted, shape)
     nat = np.flatnonzero(np.isnat(array))

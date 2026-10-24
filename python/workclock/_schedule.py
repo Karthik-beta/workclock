@@ -493,7 +493,8 @@ class Schedule:
         broadcast input. Also raises `ValueError` if the sequences differ in
         length, if the arrays' shapes do not broadcast together, or if an
         array holds NaT or a value with digits below a microsecond, which
-        would otherwise be rounded.
+        would otherwise be rounded, and `TypeError` if an array holds plain
+        numbers, which carry no unit.
         """
         if _arrays.is_array(starts):
             shape = _arrays.broadcast_shape(starts, ends)
@@ -575,6 +576,11 @@ class Schedule:
         dts = list(dts)
         if isinstance(deltas, timedelta):
             deltas = [deltas] * len(dts)
+        elif not isinstance(deltas, Iterable):
+            raise TypeError(
+                "deltas must be a timedelta or a sequence of timedeltas, "
+                f"got {deltas!r}"
+            )
         amounts = _each(_delta_micros, deltas)
         with _batch_errors(lambda i: dts[i].isoformat()):
             micros = shift(_each(_micros, dts), amounts)
