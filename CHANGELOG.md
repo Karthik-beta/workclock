@@ -18,8 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rust core: minimum supported Rust version 1.85.
 - Python: typed `Schedule` API with `WorkDay`, `Break` and `Holidays` rules,
   `between`, `add`, `sub`, `next_period` and `previous_period` on
-  timezone-aware datetimes. Accepts zone names, `zoneinfo.ZoneInfo` and pytz
-  zones. Errors subclass `WorkclockError` and the matching built-in exception.
+  timezone-aware datetimes. Accepts zone names, `zoneinfo.ZoneInfo`, pytz
+  zones and `datetime.timezone.utc`. Errors subclass `WorkclockError` and the
+  matching built-in exception.
 - Python: `between_many`, `add_many` and `sub_many` process a batch in one
   call, from lists or NumPy `datetime64`/`timedelta64` arrays, which
   broadcast together under NumPy's rules.
@@ -32,7 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   workclock engine, which fixes overnight shifts and upstream issues 8, 9 and
   10. Most code runs unchanged; `MIGRATING.md` lists the differences.
 - Searches are bounded: a schedule without working time, or a result outside
-  the supported range, returns an `Error` instead of looping or panicking.
+  the supported range, is an error instead of a hang or a panic.
 - npm package: `Schedule` with `between`, `add`, `sub`, `nextPeriod` and
   `previousPeriod`, taking `Date`s or ISO 8601 strings and milliseconds, and
   error classes for `instanceof` checks.

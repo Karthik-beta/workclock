@@ -128,8 +128,8 @@ impl Schedule {
     /// and `x` is `d`.
     ///
     /// The result is `t` itself when `d` is zero, even outside working time.
-    /// A result that uses up a block of working time lands on the block's end,
-    /// not on the start of the next one. A negative `d` is the same as
+    /// A result that uses up a period of working time lands on the period's
+    /// end, not on the start of the next one. A negative `d` is the same as
     /// [`sub`](Self::sub) with `-d`.
     ///
     /// # Errors
@@ -166,7 +166,7 @@ impl Schedule {
     /// and `t` is `d`.
     ///
     /// The result is `t` itself when `d` is zero, even outside working time.
-    /// A result that uses up a block of working time lands on the block's
+    /// A result that uses up a period of working time lands on the period's
     /// start. A negative `d` is the same as [`add`](Self::add) with `-d`.
     ///
     /// # Errors
