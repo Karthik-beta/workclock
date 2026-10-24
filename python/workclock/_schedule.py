@@ -251,6 +251,8 @@ class Schedule:
     Working time is the union of every `WorkDay` minus every `Break` and
     `Holidays` date, so the order of rules never matters. ``time_zone`` is
     the default for rules that do not set their own, and is UTC if omitted.
+    A schedule pickles and deep-copies as its rules and zone, and is built
+    again from them.
 
     Raises `TypeError` for a rule that is not a `WorkDay`, `Break` or
     `Holidays`, or a ``time_zone`` with no IANA name, `UnknownZoneError` for
@@ -295,6 +297,10 @@ class Schedule:
     def __repr__(self) -> str:
         """Return the rules and zone the schedule was built from."""
         return f"Schedule({list(self._rules)!r}, time_zone={self._time_zone!r})"
+
+    def __reduce__(self) -> tuple[Callable[..., Schedule], tuple[Any, ...]]:
+        """Pickle the schedule as its rules and zone, to be built again."""
+        return _rebuild, (type(self), self._rules, self._time_zone)
 
     @property
     def rules(self) -> tuple[Rule, ...]:
@@ -505,6 +511,12 @@ class Schedule:
         with _engine_errors():
             micros = shift(_each(_micros, dts), amounts)
         return _each(_datetime, micros, [t.tzinfo for t in dts])
+
+
+def _rebuild(
+    kind: type[Schedule], rules: tuple[Rule, ...], time_zone: str | None
+) -> Schedule:
+    return kind(rules, time_zone=time_zone)
 
 
 def _amount(

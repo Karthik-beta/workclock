@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import copy
+import pickle
 from datetime import date, datetime, time, timedelta, timezone, tzinfo
 from typing import get_args, get_type_hints
 from zoneinfo import ZoneInfo
@@ -224,6 +226,22 @@ def test_rule_is_the_type_of_schedule_rules() -> None:
     hints = get_type_hints(rules.fget)
     assert hints["return"] == tuple[Rule, ...]
     assert get_args(Rule) == (WorkDay, Break, Holidays)
+
+
+def test_schedules_pickle_and_deep_copy() -> None:
+    schedule = Schedule(
+        [
+            WorkDay(time(9), time(17), time_zone="Europe/London"),
+            Break(time(12), time(13)),
+            Holidays([date(2026, 1, 7)]),
+        ],
+        time_zone="Asia/Kolkata",
+    )
+    start, end = utc(5, 0), utc(12, 0)
+    for copied in (pickle.loads(pickle.dumps(schedule)), copy.deepcopy(schedule)):
+        assert repr(copied) == repr(schedule)
+        assert copied.add(start, hours=20) == schedule.add(start, hours=20)
+        assert copied.between(start, end) == schedule.between(start, end)
 
 
 def test_periods(office: Schedule) -> None:
