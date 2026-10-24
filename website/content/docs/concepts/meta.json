@@ -1,0 +1,12 @@
+{
+  "pages": [
+    "schedules",
+    "rules",
+    "adding-time",
+    "measuring-time",
+    "periods",
+    "time-zones-and-dst",
+    "errors",
+    "inputs-and-precision"
+  ]
+}

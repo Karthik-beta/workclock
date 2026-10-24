@@ -1,0 +1,20 @@
+name: Docs problem
+description: A docs page that is wrong, unclear or broken.
+labels: ["type:docs"]
+body:
+  # The site's "Report a problem with this page" link fills this field.
+  - type: input
+    id: page
+    attributes:
+      label: Page
+      description: The address of the page.
+      placeholder: https://karthik-beta.github.io/workclock/docs/install/
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is wrong
+      description: Quote the sentence or code if you can, and say what you expected to find.
+    validations:
+      required: true

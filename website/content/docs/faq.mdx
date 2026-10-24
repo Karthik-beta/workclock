@@ -1,0 +1,61 @@
+---
+title: FAQ
+description: Short answers about workclock's relationship to businesstimedelta, installation, time zone data, naive datetimes, termination and scope.
+---
+
+Short answers to common questions about workclock in Rust, Python and JavaScript, each with a link to the page or file that covers it in full. Answers describe 0.1.0, which has not been released yet.
+
+<Accordions type="single">
+<Accordion title="Is workclock affiliated with businesstimedelta?" id="businesstimedelta">
+
+No. workclock is an independent project. It ports the test suite and the API of [businesstimedelta](https://github.com/seppemans/businesstimedelta) by Sebastiaan Boer, released under the MIT license, and keeps the original copyright notice in [NOTICE](https://github.com/Karthik-beta/workclock/blob/main/NOTICE). The ported API is the Python module `workclock.compat`, and the ported tests run against it in CI. [Migrating](/docs/guides/migrating-from-businesstimedelta/) shows how to move code across.
+
+</Accordion>
+<Accordion title="Do I need a Rust toolchain to install the Python or npm package?" id="rust-toolchain">
+
+Not on the platforms that have wheels. PyPI has wheels for Linux x86_64 and aarch64 (manylinux and musllinux), macOS x86_64 and arm64, and Windows x64. Other platforms build from the source distribution, which needs a Rust toolchain. The npm package ships WebAssembly, so it needs none. [Install](/docs/install/) lists the commands.
+
+</Accordion>
+<Accordion title="Which versions are supported?" id="supported-versions">
+
+Rust 1.85 or later, CPython 3.9 or later, and Node.js 22 or later. The Python wheels use the stable ABI (abi3), so one wheel per platform covers CPython 3.9 and later; free-threaded CPython cannot load abi3 wheels. Browsers load the npm package through a bundler, or without one from `workclock/web`, whose default export `init` is called once with `await init()` before anything else.
+
+</Accordion>
+<Accordion title="Where does the time zone data come from?" id="time-zone-data">
+
+The Python wheels and the npm package bundle the IANA time zone database. The npm package always uses its bundled copy. The Python wheels use the system database when there is one, and the bundled copy otherwise.
+
+The Rust crate uses jiff's defaults: the system database (`/usr/share/zoneinfo`, or the directory in `TZDIR`) on Linux and macOS, and a bundled copy on Windows. On a Linux image without tzdata, every named zone, even `"UTC"`, is `workclock::Error::UnknownZone`. Install the `tzdata` package, point `TZDIR` at a zoneinfo directory, or enable jiff's `tzdb-bundle-always` feature. [Time zones and DST](/docs/concepts/time-zones-and-dst/) has the details.
+
+</Accordion>
+<Accordion title="Why does the typed Python API reject naive datetimes?" id="naive-datetimes">
+
+A naive `datetime` does not say which instant it means, so `workclock.Schedule` raises `ValueError` for one rather than guess a zone (DESIGN.md N1). Pass a `tzinfo`, such as `zoneinfo.ZoneInfo("Europe/London")`. `workclock.compat` keeps businesstimedelta's behaviour and reads naive datetimes as UTC (N3). [Inputs and precision](/docs/concepts/inputs-and-precision/) covers the inputs each language takes.
+
+</Accordion>
+<Accordion title="Can a call hang?" id="termination">
+
+No. Building a schedule fails if its working hours minus its breaks are empty: `workclock::Error::NoWorkingTime` in Rust, `NoWorkingTimeError` in Python and JavaScript. After that, `add`, `sub`, `next_period` and `previous_period` stop with the same error if they cross 366 days, plus seven days per holiday date, without finding working time. [Errors](/docs/concepts/errors/) lists every error and when it is raised.
+
+</Accordion>
+<Accordion title="Can workclock count business days?" id="business-days">
+
+Not in 0.1.0. workclock measures and adds working time as a duration; converting a duration into business days or weeks is out of scope ([DESIGN.md, Scope](https://github.com/Karthik-beta/workclock/blob/main/DESIGN.md#scope); upstream [businesstimedelta#3](https://github.com/seppemans/businesstimedelta/issues/3)).
+
+</Accordion>
+<Accordion title="Can I change the working hours on one date?" id="per-date-hours">
+
+Not in 0.1.0. A `WorkDay` rule applies to weekdays, and `Holidays` removes whole dates; per-date overrides of working hours are out of scope ([DESIGN.md, Scope](https://github.com/Karthik-beta/workclock/blob/main/DESIGN.md#scope)). [Rules](/docs/concepts/rules/) describes each rule.
+
+</Accordion>
+<Accordion title="Does workclock include holiday data?" id="holiday-data">
+
+No. Pass the dates to a `Holidays` rule. In Python, a [python-holidays](https://github.com/vacanza/holidays) object works too; `workclock.Holidays` reads only the years it already holds, so create it with `years=...`, such as `years=range(2026, 2031)`.
+
+</Accordion>
+<Accordion title="How fast is it?" id="speed">
+
+[Benchmarks](/docs/benchmarks/) has the medians and p95s from Rust, Python and JavaScript, against businesstimedelta 1.0.1, with the date and machine they ran on.
+
+</Accordion>
+</Accordions>

@@ -247,6 +247,59 @@ jobs:
       - run: npm pack
       - run: ../.github/scripts/npm-install-check.sh workclock-*.tgz
 
+  # Builds the website against the package in js/ and checks it, without
+  # deploying, so a broken site fails the pull request instead of the deploy.
+  website:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - uses: taiki-e/install-action@a4d3f3f761dcd95cce1b72cb61cb6d1963438177 # v2.87.30
+        with:
+          tool: wasm-pack
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+      - run: npm run build:web
+        working-directory: js
+      - run: npm ci
+        working-directory: website
+      - run: npm run types:check
+        working-directory: website
+      - run: npm run build
+        working-directory: website
+      - run: npm run check:agents
+        working-directory: website
+      - run: npx playwright install --with-deps chromium
+        working-directory: website
+      - run: npm run test:a11y
+        working-directory: website
+      # lychee resolves /workclock/... links against this folder, and the
+      # site's own absolute URLs against the built files.
+      - run: mkdir -p .preview && cp -r out .preview/workclock
+        working-directory: website
+      - uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
+        with:
+          args: >-
+            --no-progress
+            --root-dir ${{ github.workspace }}/website/.preview
+            --index-files index.html
+            --remap 'https://karthik-beta\.github\.io/workclock/(.*) file://${{ github.workspace }}/website/.preview/workclock/$1'
+            --exclude '^https://(claude\.ai|chatgpt\.com)/'
+            'website/.preview/**/*.html' 'website/.preview/**/*.md' 'website/.preview/**/*.txt'
+          fail: true
+
   commits:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
@@ -296,7 +349,7 @@ jobs:
   # requires editing the protection rule.
   ci-ok:
     if: ${{ !cancelled() }}
-    needs: [fmt, clippy, test, coverage, docs, msrv, deny, python-lint, python-test, wasm, commits, workflows]
+    needs: [fmt, clippy, test, coverage, docs, msrv, deny, python-lint, python-test, wasm, website, commits, workflows]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
