@@ -173,14 +173,13 @@ Medians on a 2017 laptop (Intel i5-8250U, Windows 11), from Python:
 
 | Case | businesstimedelta 1.0.1 | workclock | Speed-up |
 |---|---|---|---|
-| One call, a 5½-hour span | 388 µs | 8.2 µs | 47× |
-| One call, a year with bank holidays | 217 ms | 137 µs | 1,580× |
-| 1,000,000 pairs | 24.5 min | 3.34 s (`between_many` on NumPy arrays) | 440× |
+| One call, a 5½-hour span | 385 µs | 8.5 µs | 45× |
+| One call, a year with bank holidays | 134 ms | 163 µs | 820× |
+| 1,000,000 pairs | 22.5 min | 2.92 s (`between_many` on NumPy arrays) | 460× |
 
-The same single call takes 2.1 µs from Rust and 2.5 µs from JavaScript.
-`workclock.compat` takes 56 µs. businesstimedelta's rules are mutable, so it
-compares their attributes on every call and rebuilds the schedule only when they
-have changed.
+The same single call takes 1.7 µs from Rust and 2.2 µs from JavaScript, and
+16 µs through `workclock.compat`, which keeps the schedule it builds from
+businesstimedelta's mutable rules until their attributes change.
 [benchmarks/RESULTS.md](https://github.com/Karthik-beta/workclock/blob/main/benchmarks/RESULTS.md)
 has every case with p95s, and
 [DESIGN.md](https://github.com/Karthik-beta/workclock/blob/main/DESIGN.md#performance)
