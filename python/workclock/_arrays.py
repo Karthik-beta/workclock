@@ -22,6 +22,23 @@ def is_array(value: object) -> TypeGuard[NDArray[Any]]:
     return kind.__module__ == "numpy" and kind.__name__ == "ndarray"
 
 
+def broadcast_shape(a: object, b: object) -> tuple[int, ...]:
+    """Return the shape that ``a`` and ``b`` broadcast to under NumPy's rules.
+
+    Raises ``ValueError`` naming both shapes if they do not broadcast.
+    """
+    import numpy as np
+
+    shapes = np.asarray(a).shape, np.asarray(b).shape
+    try:
+        return np.broadcast_shapes(*shapes)
+    except ValueError:
+        raise ValueError(
+            f"batch inputs of shapes {shapes[0]} and {shapes[1]} do not "
+            "broadcast together"
+        ) from None
+
+
 def to_micros(values: object, unit: str, shape: tuple[int, ...]) -> list[int]:
     """Return ``values`` as integer microseconds, broadcast to ``shape``.
 

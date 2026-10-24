@@ -442,19 +442,19 @@ class Schedule:
 
         Takes two sequences of aware datetimes of the same length and returns
         a list. If ``starts`` is a NumPy array, both arguments are read as
-        ``datetime64`` values in UTC, ``ends`` is broadcast to the shape of
-        ``starts`` (so it may be a single value), and the result is a
-        ``timedelta64[us]`` array of that shape.
+        ``datetime64`` values in UTC and broadcast together under NumPy's
+        rules, so ``ends`` may be a single value, and the result is a
+        ``timedelta64[us]`` array of the broadcast shape.
 
         Raises the errors of `between`, with ``item {i}:`` before the message,
         where ``{i}`` is the position of the failing item in the flattened
-        input. Also raises `ValueError` if the sequences differ in length, if
-        ``ends`` does not broadcast to the shape of ``starts``, or if an array
-        holds NaT or a value with digits below a microsecond, which would
-        otherwise be rounded.
+        broadcast input. Also raises `ValueError` if the sequences differ in
+        length, if the arrays' shapes do not broadcast together, or if an
+        array holds NaT or a value with digits below a microsecond, which
+        would otherwise be rounded.
         """
         if _arrays.is_array(starts):
-            shape = starts.shape
+            shape = _arrays.broadcast_shape(starts, ends)
             with _engine_errors():
                 micros = self._schedule.between_many(
                     _arrays.to_micros(starts, "datetime64", shape),
@@ -486,9 +486,9 @@ class Schedule:
         ``deltas`` is a sequence of timedeltas, one per datetime, or a single
         timedelta for all, and the results keep the ``tzinfo`` of each
         datetime. If ``dts`` is a NumPy array, it is read as ``datetime64``
-        values in UTC, ``deltas`` is read as ``timedelta64`` and broadcast to
-        the shape of ``dts``, and the result is a ``datetime64[us]`` array of
-        that shape.
+        values in UTC, ``deltas`` is read as ``timedelta64``, the two are
+        broadcast together under NumPy's rules, and the result is a
+        ``datetime64[us]`` array of the broadcast shape.
 
         Raises the errors of `add` and `between_many`, with ``item {i}:``
         before the message.
@@ -523,7 +523,7 @@ class Schedule:
         deltas: Sequence[timedelta] | NDArray[np.timedelta64] | timedelta,
     ) -> list[datetime] | NDArray[np.datetime64]:
         if _arrays.is_array(dts):
-            shape = dts.shape
+            shape = _arrays.broadcast_shape(dts, deltas)
             with _engine_errors():
                 micros = shift(
                     _arrays.to_micros(dts, "datetime64", shape),
