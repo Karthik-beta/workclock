@@ -1,0 +1,160 @@
+---
+title: Measuring time
+description: Count the working time between two instants with between, and read the sign of the result.
+---
+
+`between(a, b)` returns the working time in `[a, b)`: the time from `a` up to, but not including, `b` that the schedule counts. It is negative when `b` is before `a`. This page covers `between` in Rust, Python and JavaScript.
+
+## Count working time
+
+A support desk in London works 09:00–17:00 on weekdays with a lunch hour, and is closed on 25 and 28 December 2026. A ticket opened at 16:30 on Thursday 24 December 2026, London time. By 11:00 on Tuesday 29 December it has used 2 hours 30 minutes of working time:
+
+| Date, `Europe/London` | Why | Working time counted |
+|---|---|---|
+| Thursday 24 December, from 16:30 | Opened 30 minutes before the end of the working day | 16:30–17:00, 30 minutes |
+| Friday 25 December | Holiday | None |
+| Saturday 26 and Sunday 27 December | Not working days | None |
+| Monday 28 December | Holiday | None |
+| Tuesday 29 December, until 11:00 | Before the lunch break | 09:00–11:00, 2 hours |
+| **Total** | | **2 hours 30 minutes** |
+
+Each tab counts that time, then swaps the two instants to get the same amount with a minus sign.
+
+<Tabs groupId="lang" persist items={['Rust', 'Python', 'JavaScript']}>
+<Tab value="Rust">
+
+```rust
+use jiff::civil::{date, time};
+use jiff::{SignedDuration, Zoned};
+use workclock::{Break, Holidays, Schedule, Weekdays, WorkDay};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let days = Weekdays::MON_TO_FRI;
+    let support = Schedule::builder()
+        .time_zone("Europe/London")
+        .rule(WorkDay::new(time(9, 0, 0, 0), time(17, 0, 0, 0), days))
+        .rule(Break::new(time(12, 0, 0, 0), time(13, 0, 0, 0), days))
+        .rule(Holidays::new([date(2026, 12, 25), date(2026, 12, 28)]))
+        .build()?;
+
+    let opened: Zoned = "2026-12-24T16:30[Europe/London]".parse()?;
+    let now: Zoned = "2026-12-29T11:00[Europe/London]".parse()?;
+    let used = support.between(&opened, &now);
+    assert_eq!(used, SignedDuration::from_mins(150));
+    assert_eq!(support.between(&now, &opened), -used);
+    Ok(())
+}
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+from datetime import date, datetime, time
+from zoneinfo import ZoneInfo
+
+from workclock import Break, Holidays, Schedule, WorkDay
+
+london = ZoneInfo("Europe/London")
+support = Schedule(
+    [
+        WorkDay(time(9), time(17)),  # Monday to Friday by default
+        Break(time(12), time(13)),
+        Holidays([date(2026, 12, 25), date(2026, 12, 28)]),
+    ],
+    time_zone=london,
+)
+
+opened = datetime(2026, 12, 24, 16, 30, tzinfo=london)
+now = datetime(2026, 12, 29, 11, tzinfo=london)
+support.between(opened, now)  # 2:30:00
+support.between(now, opened)  # -1 day, 21:30:00, which is -2:30:00
+```
+
+</Tab>
+<Tab value="JavaScript">
+
+```js
+import { Schedule } from "workclock";
+
+const support = new Schedule({
+  timeZone: "Europe/London",
+  rules: [
+    { type: "workday", start: "09:00", end: "17:00" },
+    { type: "break", start: "12:00", end: "13:00" },
+    { type: "holidays", dates: ["2026-12-25", "2026-12-28"] },
+  ],
+});
+
+const opened = "2026-12-24T16:30:00Z";
+const now = "2026-12-29T11:00:00Z";
+support.between(opened, now); // 9000000 ms
+support.between(now, opened); // -9000000 ms
+```
+
+</Tab>
+</Tabs>
+
+What each language takes and returns:
+
+| | Rust | Python | JavaScript |
+|---|---|---|---|
+| Call | `workclock::Schedule::between(&self, a, b)` | `workclock.Schedule.between(a, b)` | `between(a, b)` |
+| Instants | Anything that is `Into<jiff::Timestamp>`, such as `jiff::Timestamp` or `&jiff::Zoned` | Timezone-aware `datetime` | `Date`, or an ISO 8601 string with a UTC offset |
+| Result | `jiff::SignedDuration`, exact to the nanosecond | `datetime.timedelta`, exact to the microsecond | A number of milliseconds |
+| Errors | None: the result is not a `Result` | `TypeError` for a value that is not a `datetime`, `ValueError` for a naive one, `OutOfRangeError` outside the supported range | `TypeError` for a value that is neither a `Date` nor a string, `RangeError` for an invalid `Date` or a string without an offset, `OutOfRangeError` outside the supported range |
+
+The supported range is `-009999-01-02T01:59:59Z` to `9999-12-30T22:00:00Z`. Python's `between_many` and JavaScript's `betweenMany` measure many pairs in one call.
+
+## The sign of the result
+
+- `a` before `b`: the working time in `[a, b)`, zero or more.
+- `a` after `b`: minus `between(b, a)`. The result is signed, like `b - a` for two instants, which resolves businesstimedelta issue [#12](https://github.com/seppemans/businesstimedelta/issues/12).
+- `a` equal to `b`: zero.
+
+So `between(a, b)` is always `-between(b, a)`, and an amount of time passed to `add` comes back from `between`: `between(t, add(t, d))` is `d` for every `t` and `d` ([Adding time](/docs/concepts/adding-time/#round-trips)).
+
+## What is counted
+
+`between` counts working time only, so the same calls hold for every rule:
+
+- A break inside the span is left out, and a span that starts inside a break counts from the break's end (DESIGN.md K1, K2).
+- Holidays and days not in a `WorkDay`'s days count nothing (DESIGN.md H1, B3).
+- An overnight shift counts across midnight, on the weekday it starts on (DESIGN.md O1, O5, O6).
+- Durations are elapsed real time, so a night shift is an hour shorter or longer when clocks change for daylight saving time (DST) (DESIGN.md D1, D2). [Time zones and DST](/docs/concepts/time-zones-and-dst/) has the details.
+
+## Edge cases
+
+These examples are from [DESIGN.md](https://github.com/Karthik-beta/workclock/blob/main/DESIGN.md#betweena-b), and the Rust, Python and JavaScript test suites all run them from [tests/fixtures/design_examples.json](https://github.com/Karthik-beta/workclock/blob/main/tests/fixtures/design_examples.json). Unless the row says otherwise, they use the week of Monday 5 January 2026 in UTC, and `9–17 Mon–Fri` is a `WorkDay` from 09:00 to 17:00, Monday to Friday.
+
+| ID | Schedule | Query | Result | What it shows |
+|---|---|---|---|---|
+| B1 | 9–17 Mon–Fri | `between(Mon 10:00, Mon 12:00)` | 2h | Inside one period |
+| B2 | Same | `between(Fri 16:00, next Mon 10:00)` | 2h | Across a weekend |
+| B3 | Same | `between(Sat 10:00, Sun 10:00)` | 0h | No working time in the span |
+| B4 | Same | `between(Mon 12:00, Mon 10:00)` | -2h | `b` before `a` gives a negative result |
+| B5 | Same | `between(Mon 10:00, Mon 10:00)` | 0h | Equal instants give zero |
+| K1 | 9–17 Mon–Fri, break 12–13 Mon–Fri | `between(Mon 09:00, Mon 17:00)` | 7h | A break is left out |
+| K2 | Same | `between(Mon 12:30, Mon 14:00)` | 1h | A span that starts inside a break |
+| O1 | 22–06 Mon–Fri | `between(Mon 22:00, Tue 06:00)` | 8h | An overnight shift counts across midnight |
+| O5 | Same | `between(Sat 00:00, Sat 06:00)` | 6h | Friday's shift runs into Saturday |
+| O6 | Same | `between(Mon 00:00, Mon 06:00)` | 0h | No shift starts on Sunday |
+| O7 | 00–00 Mon–Sun | `between(Mon 00:00, next Mon 00:00)` | 168h | Round-the-clock working time |
+| H1 | 9–17 Mon–Fri, holiday Wed 2026-01-07 | `between(Mon 09:00, Sat 00:00)` | 32h | A holiday counts nothing |
+| H3 | Same | `between(Wed 12:00, Thu 12:00)` | 3h | A span that starts inside a holiday |
+| H4 | Same | `between(Mon 2027-01-04 09:00, 17:00)` | 8h | No time off after the last holiday |
+| HO1 | 22–06 Mon–Fri, holiday Tue 2026-01-06 | `between(Mon 22:00, Tue 06:00)` | 2h | A holiday cuts an overnight shift at midnight |
+| Z1 | 9–17 Mon–Fri `Asia/Kolkata`, holiday 2026-01-26 | `between(2026-01-26T03:30Z, 2026-01-26T11:30Z)` | 0h | Instants in UTC, holiday in the schedule's zone |
+| Z5 | 9–18 Mon–Fri `America/Santiago`, break 12–13 | `between(2016-01-18 09:00, 18:00)` in `America/Los_Angeles` | 4h | Instants in one zone, rules in another |
+| D1 | 22–06 every day, `America/New_York` | `between(Sat 2026-03-07 22:00 EST, Sun 06:00 EDT)` | 7h | The night clocks go forward |
+| D2 | Same | `between(Sat 2026-10-31 22:00 EDT, Sun 06:00 EST)` | 9h | The night clocks go back |
+| D6 | 00–00 every day, `Europe/London` | `between(Sun 2026-03-29 00:00 GMT, Mon 00:00 BST)` | 23h | A day with a clock change is not 24 hours |
+| D7 | 00–00 every day, `America/New_York`, holiday 2026-03-08 | `between(Sat 2026-03-07 00:00, Tue 2026-03-10 00:00)` | 48h | A holiday on that day removes 23 hours |
+
+## See also
+
+- [Adding time](/docs/concepts/adding-time/): `add` and `sub`, the inverse of `between`.
+- [Periods](/docs/concepts/periods/): the stretches of working time `between` adds up.
+- [Rules](/docs/concepts/rules/): what `WorkDay`, `Break` and `Holidays` count.
+- [Inputs and precision](/docs/concepts/inputs-and-precision/): instant and duration types in each language.
+- [DESIGN.md: between(a, b)](https://github.com/Karthik-beta/workclock/blob/main/DESIGN.md#betweena-b): the specification.

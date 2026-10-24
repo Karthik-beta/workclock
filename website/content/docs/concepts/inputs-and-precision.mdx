@@ -1,0 +1,169 @@
+---
+title: Inputs and precision
+description: Which instant, duration and time zone types each language accepts, how precise results are, and which inputs are rejected.
+---
+
+Every input is converted to an instant, an absolute point in time, before workclock calculates anything, and every duration is elapsed real time. This page lists the instant, duration and time zone types for Rust, Python and JavaScript, the precision of each, and the inputs each rejects.
+
+## Types and precision
+
+| Language | Instants | Durations | Precision |
+|---|---|---|---|
+| Rust | `jiff::Timestamp` or `jiff::Zoned` | `jiff::SignedDuration` | Nanoseconds |
+| Python | Timezone-aware `datetime` | `timedelta`, or `hours=`, `minutes=` and `seconds=` keywords on `add` and `sub` | Microseconds |
+| JavaScript | `Date` or ISO 8601 string with a UTC offset | Number of milliseconds | Milliseconds |
+
+Results combine input instants, input durations and rule boundaries, and a rule boundary is a wall-clock time shifted by a whole-second UTC offset. So results are exact at each language's precision; nothing is rounded.
+
+Results come back as:
+
+- **Rust:** a `jiff::Timestamp` from `add`, `sub` and the period methods, and a `jiff::SignedDuration` from `between`.
+- **Python:** a `datetime` in the `tzinfo` of the datetime passed in, and a `timedelta` from `between`.
+- **JavaScript:** a `Date`, and a number of milliseconds from `between`.
+
+## Instants in any zone
+
+An instant's own zone does not change the answer. In this example, the London support desk's ticket was opened at 16:30 on Thursday 24 December 2026, London time, and `now` is 06:00 on 29 December in `America/New_York`, which is 11:00 in London. The working time between them is 2 hours 30 minutes in every language:
+
+<Tabs groupId="lang" persist items={['Rust', 'Python', 'JavaScript']}>
+<Tab value="Rust">
+
+```rust
+use jiff::civil::{date, time};
+use jiff::{SignedDuration, Timestamp, Zoned};
+use workclock::{Break, Holidays, Schedule, Weekdays, WorkDay};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let days = Weekdays::MON_TO_FRI;
+    let support = Schedule::builder()
+        .time_zone("Europe/London")
+        .rule(WorkDay::new(time(9, 0, 0, 0), time(17, 0, 0, 0), days))
+        .rule(Break::new(time(12, 0, 0, 0), time(13, 0, 0, 0), days))
+        .rule(Holidays::new([date(2026, 12, 25), date(2026, 12, 28)]))
+        .build()?;
+
+    let opened: Timestamp = "2026-12-24T16:30:00Z".parse()?;
+    // A civil date and time needs a zone before it is an instant.
+    let now: Zoned = date(2026, 12, 29).at(6, 0, 0, 0).in_tz("America/New_York")?;
+    assert_eq!(support.between(opened, &now), SignedDuration::from_mins(150));
+    Ok(())
+}
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+from datetime import date, datetime, time
+from zoneinfo import ZoneInfo
+
+from workclock import Break, Holidays, Schedule, WorkDay
+
+london = ZoneInfo("Europe/London")
+support = Schedule(
+    [
+        WorkDay(time(9), time(17)),  # Monday to Friday by default
+        Break(time(12), time(13)),
+        Holidays([date(2026, 12, 25), date(2026, 12, 28)]),
+    ],
+    time_zone=london,
+)
+
+opened = datetime(2026, 12, 24, 16, 30, tzinfo=london)
+now = datetime(2026, 12, 29, 6, tzinfo=ZoneInfo("America/New_York"))
+support.between(opened, now)  # 2:30:00
+```
+
+</Tab>
+<Tab value="JavaScript">
+
+```js
+import { Schedule } from "workclock";
+
+const support = new Schedule({
+  timeZone: "Europe/London",
+  rules: [
+    { type: "workday", start: "09:00", end: "17:00" },
+    { type: "break", start: "12:00", end: "13:00" },
+    { type: "holidays", dates: ["2026-12-25", "2026-12-28"] },
+  ],
+});
+
+const opened = new Date("2026-12-24T16:30:00Z");
+const now = "2026-12-29T06:00:00-05:00"; // 06:00 in New York
+support.between(opened, now); // 9000000 ms
+```
+
+</Tab>
+</Tabs>
+
+## Time zones
+
+Time zones are IANA names, such as `Europe/London`. Python also accepts a `zoneinfo.ZoneInfo` (its `key`), a pytz zone (its `zone`) and `datetime.timezone.utc` for a schedule's or rule's `time_zone`, and converts them to names. Any other `tzinfo` there raises `TypeError`, because it carries no IANA name. A `datetime` passed as an instant can have any `tzinfo` that gives a UTC offset.
+
+## Supported range
+
+Instants run from `-009999-01-02T01:59:59Z` to `9999-12-30T22:00:00Z`, the range of `jiff::Timestamp`. An input or result outside it is the out-of-range error: `workclock::Error::OutOfRange` in Rust and `OutOfRangeError` in Python and JavaScript. In Python a result must also fit in `datetime`'s years 1 to 9999, and an amount must fit in 64-bit microseconds.
+
+## Rejected inputs
+
+Inputs finer than a language's precision are rejected, not truncated:
+
+- **Python:** NumPy `datetime64` and `timedelta64` values with digits below a microsecond raise `ValueError`.
+- **JavaScript:** rule times and ISO 8601 strings with digits below a millisecond raise `RangeError`, and so do instants in a `Float64Array` that are not whole milliseconds. Durations must be whole milliseconds within ±`Number.MAX_SAFE_INTEGER`, or they raise `RangeError`. A duration that is not a number, such as a string or a `BigInt`, raises `TypeError` and is not converted.
+
+Instants without a zone are rejected too, except in the compatibility layer and in NumPy arrays, which are read as UTC.
+
+In Python, the typed API raises `ValueError` for a `datetime` without `tzinfo` (N1):
+
+```python
+from datetime import datetime, time, timezone
+
+from workclock import Schedule, WorkDay
+
+office = Schedule([WorkDay(time(9), time(17))])
+office.between(
+    datetime(2026, 1, 5, 10),  # no tzinfo
+    datetime(2026, 1, 5, 12, tzinfo=timezone.utc),
+)
+# ValueError: datetime.datetime(2026, 1, 5, 10, 0) is naive;
+# workclock needs timezone-aware datetimes
+```
+
+In JavaScript, an ISO 8601 string without a UTC offset raises `RangeError` (N2):
+
+```js
+import { Schedule } from "workclock";
+
+const office = new Schedule({
+  rules: [{ type: "workday", start: "09:00", end: "17:00" }],
+});
+office.between("2026-01-05T10:00", "2026-01-05T12:00Z");
+// RangeError: "2026-01-05T10:00" is not an ISO 8601 instant with a UTC
+// offset in the supported range -009999-01-02T01:59:59Z to
+// 9999-12-30T22:00:00Z, such as "2026-01-05T09:00:00Z"
+```
+
+In Rust, a `jiff::civil::DateTime` has no zone and does not convert to an instant; give it one with `in_tz`, as in the Rust tab of [Instants in any zone](#instants-in-any-zone).
+
+<Callout type="warning" title="Warning">
+NumPy `datetime64` values carry no zone, so `between_many`, `add_many` and `sub_many` read them as UTC and return `datetime64` results in UTC.
+</Callout>
+
+When the first argument of a Python batch method is a NumPy array, the two arguments broadcast together under NumPy's rules; lists must have the same length. `workclock.compat` treats naive datetimes as UTC, as businesstimedelta does (N3); see [Migrating from businesstimedelta](/docs/guides/migrating-from-businesstimedelta/).
+
+## Edge cases
+
+These are the examples from [DESIGN.md: Inputs and precision](https://github.com/Karthik-beta/workclock/blob/main/DESIGN.md#inputs-and-precision). They depend on the language, so each is tested in that language's suite.
+
+| ID | Language | Input | Result | Shows | Test |
+|---|---|---|---|---|---|
+| N1 | Python, typed API | `schedule.between(datetime(2026, 1, 5, 10), aware)` | `ValueError` | A naive `datetime` is rejected | [tests/python/test_typed_api.py](https://github.com/Karthik-beta/workclock/blob/main/tests/python/test_typed_api.py) |
+| N2 | JavaScript | `schedule.between("2026-01-05T10:00", "2026-01-05T12:00Z")` | `RangeError` | A string without a UTC offset is rejected | [js/test/schedule.test.ts](https://github.com/Karthik-beta/workclock/blob/main/js/test/schedule.test.ts) |
+| N3 | Python, `workclock.compat` | `rule.difference(datetime(2026, 1, 5, 10), datetime(2026, 1, 5, 12))`, 9–17 UTC | 2h | compat reads naive datetimes as UTC | [tests/python/test_compat.py](https://github.com/Karthik-beta/workclock/blob/main/tests/python/test_compat.py) |
+
+## See also
+
+- [Time zones and DST](/docs/concepts/time-zones-and-dst/): how rule times follow each zone's clock changes.
+- [Errors](/docs/concepts/errors/): the out-of-range error, and how malformed input differs from a `WorkclockError`.
+- [js/README.md: Instants and durations](https://github.com/Karthik-beta/workclock/blob/main/js/README.md#instants-and-durations), the JavaScript rules in one list.
