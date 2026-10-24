@@ -5,7 +5,7 @@ import { baseOptions } from '@/lib/layout.shared';
 import { source } from '@/lib/source';
 
 export default function Layout({ children }: { children: ReactNode }) {
-  const base = baseOptions();
+  const base = baseOptions('docs');
   return (
     <>
       <SkipLink href="#nd-page" />
