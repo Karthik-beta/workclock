@@ -89,7 +89,8 @@ shorter or longer than 24 hours by the size of the change (usually one hour).
 Holiday dates are converted into a set once, when the schedule is built.
 Bindings never call back into Python or JavaScript per date. A python-holidays
 object passed to the typed Python `Holidays` therefore contributes only the
-years it already holds; create it with `years=...`.
+years it already holds; create it with `years=...`. One that holds no years
+lists no dates, so `Holidays` raises `ValueError` for it.
 
 A holiday removes calendar time, not whole shifts. An overnight shift that
 crosses into a holiday loses only the part after midnight; a shift that starts
@@ -482,5 +483,5 @@ crossing is cheap: a loop is only 5% slower than `betweenMany` on
 | Holiday vs overnight shift | removes calendar time only | A holiday is defined as 00:00–24:00; keeps rules independent and composable. |
 | DST disambiguation | compatible | Same as jiff, RFC 5545 and Temporal, so the three bindings agree with their ecosystems. |
 | Holiday zone default | schedule's zone | Avoids the UTC/local mismatch behind upstream issue 9. |
-| python-holidays objects | typed `Holidays`: only the years the object holds; compat `HolidayRule`: every year from 1970 to 2100 first | Keeps "convert once at construction"; no per-date or per-year FFI. Compat fills in years because upstream code passes objects that fill them in on demand. |
+| python-holidays objects | typed `Holidays`: only the years the object holds, and `ValueError` if it holds none; compat `HolidayRule`: every year from 1970 to 2100 first | Keeps "convert once at construction"; no per-date or per-year FFI. Rejecting an object with no years stops it from silently removing nothing. Compat fills in years because upstream code passes objects that fill them in on demand. |
 | Duration-to-business-days (upstream issue 3) | not in 0.1.0 | A formatting feature, not a correctness fix. |
