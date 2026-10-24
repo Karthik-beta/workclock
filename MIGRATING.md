@@ -26,7 +26,7 @@ businesstimedelta's absolute value, so existing code sees no change there.
 | Overnight shifts: `difference(Mon 22:00, Tue 06:00)` is 0h, `Mon 22:00 + 4h` is Wed 02:00, `Tue 06:00 - 4h` raises `OverflowError` | 8h, Tue 02:00, Tue 02:00 |
 | A holiday list that ends before the queried range raises `TypeError` ([#8](https://github.com/seppemans/businesstimedelta/issues/8), [#10](https://github.com/seppemans/businesstimedelta/issues/10)) | Dates after the last holiday are ordinary days |
 | Holidays in a different zone from the working hours can loop forever ([#9](https://github.com/seppemans/businesstimedelta/issues/9)) | Terminates with the correct result |
-| A time-off block that starts inside a working period does not always shorten it | Working time is always the union of working hours minus the union of time off |
+| A time-off block that starts inside a period of working time does not always shorten it | Working time is always the union of working hours minus the union of time off |
 | A rule without working time (such as `start_time == end_time`) hangs on addition | Raises `workclock.NoWorkingTimeError`; `difference` returns zero |
 | Any search can run forever | Searches give up after 366 days, plus seven days per holiday date, without working time |
 
@@ -42,12 +42,18 @@ businesstimedelta's absolute value, so existing code sees no change there.
   falls in the repeated hour resolves to its first occurrence, as jiff, RFC
   5545 and JavaScript Temporal do. businesstimedelta's pytz `localize()` picks
   the second.
-- **Holidays on DST transition days** last from midnight to midnight, so 23
-  or 25 hours. businesstimedelta always removes 24 hours.
-- **python-holidays objects** are read once, when the `HolidayRule` is
-  created, after filling in every year from 1970 to 2100. Dates outside that
-  window are not holidays, and holidays added to the object later are not
-  seen. Lists of `datetime` objects raise `TypeError`; pass `date` objects.
+- **Holidays on DST transition days** last from midnight to midnight, so they
+  are shorter or longer than 24 hours by the size of the change (usually one
+  hour). businesstimedelta always removes 24 hours.
+- **Holiday dates** are read once, when the `HolidayRule` is created. Dates
+  added to the list or object later, or a new `holidays` attribute, are not
+  seen; businesstimedelta reads `holidays` on every call. A python-holidays
+  object is filled in for every year from 1970 to 2100 first, and dates
+  outside that window are not holidays. Lists of `datetime` objects raise
+  `TypeError`; pass `date` objects.
+- **Working days** must be integers from 0 (Monday) to 6. Other entries raise
+  `ValueError` when the rule is used; businesstimedelta ignored them, or
+  matched `1.0` as Tuesday.
 - **`next()` and `previous()`** on `Rules` return the whole period of working
   time, so overlapping working-hour rules form one period. businesstimedelta
   returned the block of one rule.

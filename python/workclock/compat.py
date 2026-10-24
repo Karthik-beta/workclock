@@ -1,4 +1,4 @@
-"""Drop-in replacement for businesstimedelta 1.0.1.
+"""The businesstimedelta 1.0.1 API on the workclock engine.
 
 ``import workclock.compat as businesstimedelta`` keeps code written for
 businesstimedelta working, on workclock's engine. The classes take the same

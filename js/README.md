@@ -71,8 +71,9 @@ rule without `start` or a string without an offset, throws a built-in
 ## Browsers without a bundler
 
 Import from `workclock/web`, and call its default export once before using
-anything else: `await init()` fetches the WebAssembly module next to the
-script. With a bundler, or in Node.js, import from `workclock` as above.
+anything else: `await init()` fetches `workclock_bg.wasm` from the package's
+`pkg/web/` directory, so serve that directory with your page. With a bundler,
+or in Node.js, import from `workclock` as above.
 
 ## Links
 
