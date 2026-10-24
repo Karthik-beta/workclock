@@ -6,6 +6,7 @@
 //! given must be a whole number of minutes.
 
 use std::collections::BTreeSet;
+use std::ops::Range;
 
 use jiff::civil::{Date, Time, Weekday};
 use jiff::tz::TimeZone;
@@ -143,6 +144,52 @@ impl Oracle {
             x = prev;
         }
         Ok(x)
+    }
+
+    #[allow(dead_code, reason = "only the fixture test searches for periods")]
+    pub fn next_period(&self, t: Timestamp) -> Result<Range<Timestamp>, OracleError> {
+        let mut start = t;
+        while !self.is_working(start) {
+            start = start
+                .checked_add(MINUTE)
+                .map_err(|_| OracleError::OutOfRange)?;
+            if start.duration_since(t) > self.search_limit {
+                return Err(OracleError::NoWorkingTime);
+            }
+        }
+        let mut end = start;
+        while end.duration_since(start) < self.search_limit && self.is_working(end) {
+            let Ok(next) = end.checked_add(MINUTE) else {
+                break;
+            };
+            end = next;
+        }
+        Ok(start..end)
+    }
+
+    #[allow(dead_code, reason = "only the fixture test searches for periods")]
+    pub fn previous_period(&self, t: Timestamp) -> Result<Range<Timestamp>, OracleError> {
+        let mut end = t;
+        loop {
+            let prev = end
+                .checked_sub(MINUTE)
+                .map_err(|_| OracleError::OutOfRange)?;
+            if self.is_working(prev) {
+                break;
+            }
+            end = prev;
+            if t.duration_since(end) > self.search_limit {
+                return Err(OracleError::NoWorkingTime);
+            }
+        }
+        let mut start = end;
+        while end.duration_since(start) < self.search_limit {
+            match start.checked_sub(MINUTE) {
+                Ok(prev) if self.is_working(prev) => start = prev,
+                _ => break,
+            }
+        }
+        Ok(start..end)
     }
 
     fn available(&self, t: Timestamp) -> bool {

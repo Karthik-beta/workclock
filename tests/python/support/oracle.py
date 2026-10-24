@@ -124,6 +124,38 @@ class Oracle:
             x = prev
         return x
 
+    def next_period(self, t: datetime) -> Block:
+        t = t.astimezone(timezone.utc)
+        start = t
+        while not self.is_working(start):
+            start = step(start, MINUTE)
+            if start - t > self.search_limit:
+                raise OracleError("no_working_time")
+        end = start
+        while (
+            end - start < self.search_limit
+            and end + MINUTE <= LAST
+            and self.is_working(end)
+        ):
+            end += MINUTE
+        return start, end
+
+    def previous_period(self, t: datetime) -> Block:
+        t = t.astimezone(timezone.utc)
+        end = t
+        while not self.is_working(step(end, -MINUTE)):
+            end -= MINUTE
+            if t - end > self.search_limit:
+                raise OracleError("no_working_time")
+        start = end
+        while (
+            end - start < self.search_limit
+            and start - MINUTE >= FIRST
+            and self.is_working(start - MINUTE)
+        ):
+            start -= MINUTE
+        return start, end
+
     def _available(self, t: datetime) -> bool:
         return any(r.contains(t) for r in self.workdays)
 
