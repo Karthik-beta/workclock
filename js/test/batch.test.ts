@@ -111,7 +111,7 @@ describe("errors name the failing item", () => {
   test("a malformed amount", () => {
     // @ts-expect-error amounts are numbers
     expect(() => office.addMany(dates.slice(0, 2), [HOUR, "1h"])).toThrow(
-      new TypeError("item 1: durations must be numbers"),
+      new TypeError('item 1: durations must be numbers, got "1h"'),
     );
     expect(() => office.subMany(dates.slice(0, 2), [HOUR, Number.NaN])).toThrow(/^item 1: /);
   });

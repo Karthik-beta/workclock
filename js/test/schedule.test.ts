@@ -246,7 +246,7 @@ describe("malformed input", () => {
     // @ts-expect-error options must be an object
     [() => new Schedule(null), "expected an options object, got null"],
     // @ts-expect-error rules are required
-    [() => new Schedule({}), "`rules` must be an array"],
+    [() => new Schedule({}), "`rules` must be an array, got undefined"],
     [
       // @ts-expect-error unknown rule type
       () => new Schedule({ rules: [{ type: "shift", start: "09:00", end: "17:00" }] }),
@@ -255,7 +255,7 @@ describe("malformed input", () => {
     // @ts-expect-error rules must be objects
     [() => new Schedule({ rules: [workday, null] }), "rules[1]: expected a rule object, got null"],
     // @ts-expect-error start must be a string
-    [() => new Schedule({ rules: [{ ...workday, start: 9 }] }), "rules[0]: `start` must be a string"],
+    [() => new Schedule({ rules: [{ ...workday, start: 9 }] }), "rules[0]: `start` must be a string, got 9"],
     [
       // @ts-expect-error start is required
       () => new Schedule({ rules: [workday, { type: "break", end: "13:00" }] }),
@@ -264,7 +264,12 @@ describe("malformed input", () => {
     [
       // @ts-expect-error dates must be an array
       () => new Schedule({ rules: [{ type: "holidays", dates: "2026-12-25" }] }),
-      "rules[0]: `dates` must be an array",
+      'rules[0]: `dates` must be an array, got "2026-12-25"',
+    ],
+    [
+      // @ts-expect-error days must be an array
+      () => new Schedule({ rules: [{ ...workday, days: "mon" }] }),
+      'rules[0]: `days` must be an array, got "mon"',
     ],
     [
       // @ts-expect-error dates must be strings
@@ -272,11 +277,16 @@ describe("malformed input", () => {
       "rules[0]: holiday dates must be strings, got 20261225",
     ],
     // @ts-expect-error instants are Dates or strings
-    [() => office.between(0, "2026-01-05T09:00:00Z"), "expected a Date or an ISO 8601 string"],
+    [() => office.between(0, "2026-01-05T09:00:00Z"), "expected a Date or an ISO 8601 string, got 0"],
     [
       // @ts-expect-error durations are numbers
       () => office.add("2026-01-05T09:00:00Z", "3600000"),
       '`ms` must be a number of milliseconds, got "3600000"',
+    ],
+    [
+      // @ts-expect-error durations are numbers
+      () => office.add("2026-01-05T09:00:00Z", 3600000n),
+      "`ms` must be a number of milliseconds, got 3600000n",
     ],
     [
       // @ts-expect-error durations are numbers
