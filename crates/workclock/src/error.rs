@@ -25,7 +25,7 @@ use std::fmt;
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum Error {
-    /// The schedule has no working time.
+    /// No working time was found.
     ///
     /// [`ScheduleBuilder::build`](crate::ScheduleBuilder::build) returns it
     /// when the working hours minus the breaks are empty.
@@ -47,7 +47,7 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Error::NoWorkingTime => f.write_str("schedule has no working time"),
+            Error::NoWorkingTime => f.write_str("no working time found"),
             Error::OutOfRange => f.write_str(
                 "result is outside the supported range -009999-01-02T01:59:59Z to 9999-12-30T22:00:00Z",
             ),
@@ -77,6 +77,11 @@ mod tests {
         ]
         .into();
         assert_eq!(errors.len(), 2);
+    }
+
+    #[test]
+    fn no_working_time_message_names_no_cause() {
+        assert_eq!(Error::NoWorkingTime.to_string(), "no working time found");
     }
 
     #[test]
