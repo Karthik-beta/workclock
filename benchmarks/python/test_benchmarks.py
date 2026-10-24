@@ -9,6 +9,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from typing import Any
 
 import businesstimedelta
+import holidays
 import numpy as np
 import pytest
 import pytz
@@ -52,13 +53,13 @@ def office() -> workclock.Schedule:
     )
 
 
-def rules(module: Any) -> Between:  # noqa: ANN401
+def rules(module: Any, holiday_dates: Any = HOLIDAYS) -> Between:  # noqa: ANN401
     days = {"working_days": WEEKDAYS, "tz": LONDON}
     difference: Between = module.Rules(
         [
             module.WorkDayRule(start_time=time(9), end_time=time(17), **days),
             module.LunchTimeRule(start_time=time(12), end_time=time(13), **days),
-            module.HolidayRule(HOLIDAYS, tz=LONDON),
+            module.HolidayRule(holiday_dates, tz=LONDON),
         ]
     ).difference
     return difference
@@ -86,6 +87,17 @@ def between(request: pytest.FixtureRequest) -> Between:
 
 @pytest.mark.benchmark(group="single")
 def test_single(benchmark: BenchmarkFixture, between: Between) -> None:
+    a = datetime(2026, 3, 10, 10, 15, tzinfo=timezone.utc)
+    b = datetime(2026, 3, 10, 15, 45, tzinfo=timezone.utc)
+    benchmark(between, a, b)
+
+
+@pytest.mark.benchmark(group="single")
+@pytest.mark.parametrize("module", [compat, businesstimedelta], ids=["compat", "btd"])
+def test_single_python_holidays(benchmark: BenchmarkFixture, module: Any) -> None:  # noqa: ANN401
+    # compat fills the object in for 1970 to 2100: 1,156 dates.
+    between = rules(module, holidays.country_holidays("GB", subdiv="ENG"))
+    benchmark.extra_info["implementation"] = f"{module.__name__}, python-holidays"
     a = datetime(2026, 3, 10, 10, 15, tzinfo=timezone.utc)
     b = datetime(2026, 3, 10, 15, 45, tzinfo=timezone.utc)
     benchmark(between, a, b)

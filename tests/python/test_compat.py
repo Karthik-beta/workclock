@@ -139,6 +139,44 @@ def test_rule_attributes_can_change_after_construction() -> None:
     assert diff.hours == 9
 
 
+def test_rules_see_changes_to_the_rules_they_combine(btd: ModuleType) -> None:
+    workday = btd.WorkDayRule(
+        datetime.time(9), datetime.time(17), working_days=[0, 1, 2, 3, 4]
+    )
+    lunch = btd.LunchTimeRule(working_days=[0, 1, 2, 3, 4])
+    rules = btd.Rules([workday, lunch])
+
+    def monday() -> int:
+        hours: int = rules.difference(utc(2026, 1, 5, 9), utc(2026, 1, 5, 20)).hours
+        return hours
+
+    assert monday() == 7
+    workday.end_time = datetime.time(18)
+    assert monday() == 8
+    lunch.start_time = datetime.time(11)
+    assert monday() == 7
+    workday.working_days.remove(0)
+    assert monday() == 0
+    workday.working_days.append(0)
+    rules.unavailable_rules.clear()
+    assert monday() == 9
+
+
+def test_rules_build_their_schedule_again_only_after_a_change() -> None:
+    workday = compat.WorkDayRule(datetime.time(9), datetime.time(17))
+    us = compat.HolidayRule(holidays.country_holidays("US", years=2026))
+    rules = compat.Rules([workday, us])
+    built = rules._schedule()
+    assert rules._schedule() is built
+    workday.tz = ZoneInfo("America/New_York")
+    assert rules._schedule() is not built
+    diff = rules.difference(utc(2026, 1, 5, 14), utc(2026, 1, 5, 23))
+    assert diff.hours == 8
+    built = rules._schedule()
+    us.tz = ZoneInfo("Pacific/Kiritimati")
+    assert rules._schedule() is not built
+
+
 def test_holiday_rule_errors_are_workclock_errors() -> None:
     mars = compat.HolidayRule([datetime.date(2026, 1, 1)], tz="Mars/Olympus_Mons")
     with pytest.raises(UnknownZoneError, match="Mars/Olympus_Mons"):

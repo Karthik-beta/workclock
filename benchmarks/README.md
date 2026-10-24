@@ -23,8 +23,10 @@ cd js && npm run build:node && npm run bench
 ```
 
 The Python suite also measures workclock's `compat` API, `between_many` on
-lists and on NumPy arrays, and businesstimedelta 1.0.1. One round of the
-batch case takes businesstimedelta about half an hour; add
+lists and on NumPy arrays, and businesstimedelta 1.0.1. It runs the single case
+on `compat` and businesstimedelta a second time with a python-holidays object
+for England in place of the list; `compat` fills it in for 1970 to 2100. One
+round of the batch case takes businesstimedelta about half an hour; add
 `-k "not (test_batch and businesstimedelta)"` to skip it.
 
 The JavaScript suite runs the batch case three ways: `between` in a loop, and

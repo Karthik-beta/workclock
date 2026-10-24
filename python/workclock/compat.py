@@ -69,6 +69,8 @@ def localize_unlocalized_dt(dt: _dt.datetime) -> _dt.datetime:
 class Rule:
     """Base class for rules: blocks of either working time or time off."""
 
+    _built: tuple[object, Schedule] | None = None
+
     def __init__(self, tz: Zone = _UTC, time_off: bool = False) -> None:
         """Set the rule's time zone and whether it is time off."""
         self.tz = tz
@@ -106,7 +108,22 @@ class Rule:
         return BusinessTimeDelta(self, hours=result.days * 24, seconds=result.seconds)
 
     def _schedule(self) -> Schedule:
-        """Return an engine schedule of this rule's blocks."""
+        """Return an engine schedule of this rule's blocks.
+
+        Rules are mutable, so the schedule is built again whenever the
+        attributes it is built from have changed since the last call.
+        """
+        key = self._key()
+        built = self._built
+        if built is None or built[0] != key:
+            built = self._built = (key, self._build())
+        return built[1]
+
+    def _key(self) -> object:
+        """Return a snapshot of the attributes the schedule is built from."""
+        return None
+
+    def _build(self) -> Schedule:
         raise TypeError(
             f"{type(self).__name__} is not supported by workclock.compat, which "
             "runs WorkDayRule, LunchTimeRule, HolidayRule and Rules on its engine"
@@ -154,7 +171,16 @@ class WorkDayRule(Rule):
         rule = kind(self.start_time, self.end_time, days, time_zone=self.tz)
         return [rule]
 
-    def _schedule(self) -> Schedule:
+    def _key(self) -> object:
+        return (
+            self.start_time,
+            self.end_time,
+            tuple(self.working_days),
+            self.tz,
+            self.time_off,
+        )
+
+    def _build(self) -> Schedule:
         return Schedule(self._engine_rule(WorkDay))
 
 
@@ -284,6 +310,10 @@ class HolidayRule(Rule):
             left -= length
             x = start
 
+    def _key(self) -> object:
+        # The dates are read once, at construction.
+        return self.tz
+
     def _engine_rule(self) -> Holidays:
         return Holidays(self._dates, time_zone=self.tz)
 
@@ -310,7 +340,13 @@ class Rules(Rule):
         self.unavailable_rules = [x for x in rules if x.time_off]
         super().__init__(tz, time_off)
 
-    def _schedule(self) -> Schedule:
+    def _key(self) -> object:
+        return tuple(
+            tuple((rule, rule._key()) for rule in rules)
+            for rules in (self.available_rules, self.unavailable_rules)
+        )
+
+    def _build(self) -> Schedule:
         engine_rules: list[WorkDay | Break | Holidays] = []
         for rule in self.available_rules:
             if not isinstance(rule, WorkDayRule):

@@ -461,9 +461,10 @@ one period at a time in Python.
 A call from JavaScript costs about 0.4 µs more. A call from the typed Python
 API costs about 6 µs more, spent converting aware datetimes to epoch
 microseconds and the result back to a `timedelta`, and in the call itself.
-compat adds about 50 µs on top, because it builds an engine schedule from its
-rule objects on every call. businesstimedelta's rules are mutable, so caching
-that schedule would have to detect changes to them.
+compat keeps the engine schedule it built from its rule objects. Because
+businesstimedelta's rules are mutable, every call compares the attributes the
+schedule was built from with their current values, and builds it again only
+when they differ.
 
 **Batches.** A batch call converts its inputs once and then runs the engine
 on every pair with the GIL released. With NumPy arrays the conversion is

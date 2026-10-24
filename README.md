@@ -178,8 +178,9 @@ Medians on a 2017 laptop (Intel i5-8250U, Windows 11), from Python:
 | 1,000,000 pairs | 24.5 min | 3.34 s (`between_many` on NumPy arrays) | 440× |
 
 The same single call takes 2.1 µs from Rust and 2.5 µs from JavaScript.
-`workclock.compat` takes 56 µs, because it rebuilds the schedule on every call
-to match businesstimedelta's mutable rules.
+`workclock.compat` takes 56 µs. businesstimedelta's rules are mutable, so it
+compares their attributes on every call and rebuilds the schedule only when they
+have changed.
 [benchmarks/RESULTS.md](https://github.com/Karthik-beta/workclock/blob/main/benchmarks/RESULTS.md)
 has every case with p95s, and
 [DESIGN.md](https://github.com/Karthik-beta/workclock/blob/main/DESIGN.md#performance)
