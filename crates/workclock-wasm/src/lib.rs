@@ -162,7 +162,10 @@ impl Schedule {
         }
         let rules = property(options, "rules")?;
         if !Array::is_array(&rules) {
-            return Err(type_error("`rules` must be an array"));
+            return Err(type_error(&format!(
+                "`rules` must be an array, got {}",
+                show(&rules)
+            )));
         }
         for (i, value) in Array::from(&rules).iter().enumerate() {
             builder = builder.rule(rule(&value).map_err(|e| prefixed(&format!("rules[{i}]"), e))?);
@@ -409,7 +412,7 @@ fn optional_string(object: &JsValue, key: &str) -> Result<Option<String>, JsValu
     value
         .as_string()
         .map(Some)
-        .ok_or_else(|| type_error(&format!("`{key}` must be a string")))
+        .ok_or_else(|| type_error(&format!("`{key}` must be a string, got {}", show(&value))))
 }
 
 fn hours(rule: &JsValue) -> Result<(Time, Time, Weekdays), JsValue> {
@@ -438,7 +441,10 @@ fn hours(rule: &JsValue) -> Result<(Time, Time, Weekdays), JsValue> {
             .map(|day| weekday(&day))
             .collect::<Result<Weekdays, JsValue>>()?
     } else {
-        return Err(type_error("`days` must be an array"));
+        return Err(type_error(&format!(
+            "`days` must be an array, got {}",
+            show(&days)
+        )));
     };
     Ok((start, end, days))
 }
@@ -462,7 +468,10 @@ fn weekday(day: &JsValue) -> Result<Weekday, JsValue> {
 fn dates(rule: &JsValue) -> Result<Vec<Date>, JsValue> {
     let dates = property(rule, "dates")?;
     if !Array::is_array(&dates) {
-        return Err(type_error("`dates` must be an array"));
+        return Err(type_error(&format!(
+            "`dates` must be an array, got {}",
+            show(&dates)
+        )));
     }
     Array::from(&dates)
         .iter()
@@ -491,7 +500,10 @@ fn instant(value: &JsValue) -> Result<Timestamp, JsValue> {
         return from_millis(ms).ok_or_else(|| out_of_range(&String::from(date.to_iso_string())));
     }
     let Some(text) = value.as_string() else {
-        return Err(type_error("expected a Date or an ISO 8601 string"));
+        return Err(type_error(&format!(
+            "expected a Date or an ISO 8601 string, got {}",
+            show(value)
+        )));
     };
     let t: Timestamp = text.parse().map_err(|_| {
         range_error(&format!(
@@ -562,8 +574,12 @@ fn durations(value: &JsValue, len: usize) -> Result<Vec<SignedDuration>, JsValue
             .iter()
             .enumerate()
             .map(|(i, ms)| {
-                ms.as_f64()
-                    .ok_or_else(|| at(i, type_error("durations must be numbers")))
+                ms.as_f64().ok_or_else(|| {
+                    at(
+                        i,
+                        type_error(&format!("durations must be numbers, got {}", show(&ms))),
+                    )
+                })
             })
             .collect::<Result<_, _>>()?
     } else {
@@ -606,6 +622,11 @@ fn prefixed(prefix: &str, error: JsValue) -> JsValue {
 fn show(value: &JsValue) -> String {
     if let Some(text) = value.as_string() {
         return format!("{text:?}");
+    }
+    if let Some(big) = value.dyn_ref::<js_sys::BigInt>() {
+        if let Ok(digits) = big.to_string(10) {
+            return format!("{}n", String::from(digits));
+        }
     }
     if let Some(number) = value.as_f64() {
         return number_text(number);
