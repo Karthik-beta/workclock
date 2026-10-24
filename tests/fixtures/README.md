@@ -13,6 +13,8 @@ suites all run it, so the bindings cannot disagree on these cases.
   - `between` with instants `a` and `b`; `expect.seconds` is the signed result.
   - `add` or `sub` with an instant `t` and a signed `seconds`; `expect.instant`
     is the result.
+  - `next_period` or `previous_period` with an instant `t`; `expect.period` is
+    the result as `[start, end]`.
   - `build`, which only constructs the schedule.
 - Instants are RFC 3339 with an offset and are compared as instants, not as
   strings. A case that must fail has `expect.error`: `no_working_time`,

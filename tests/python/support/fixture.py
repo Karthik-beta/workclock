@@ -70,13 +70,23 @@ class Sub:
 
 
 @dataclass(frozen=True)
+class NextPeriod:
+    t: datetime
+
+
+@dataclass(frozen=True)
+class PreviousPeriod:
+    t: datetime
+
+
+@dataclass(frozen=True)
 class Build:
     pass
 
 
-Op = Union[Between, Add, Sub, Build]
-# A `between` result, an `add`/`sub` result, or the kind of error.
-Expect = Union[timedelta, datetime, str]
+Op = Union[Between, Add, Sub, NextPeriod, PreviousPeriod, Build]
+# A `between` result, an `add`/`sub` result, a period, or the kind of error.
+Expect = Union[timedelta, datetime, tuple[datetime, datetime], str]
 
 
 @dataclass(frozen=True)
@@ -105,6 +115,10 @@ def _op(case: dict[str, Any]) -> Op:
         return Add(instant(case["t"]), timedelta(seconds=case["seconds"]))
     if case["op"] == "sub":
         return Sub(instant(case["t"]), timedelta(seconds=case["seconds"]))
+    if case["op"] == "next_period":
+        return NextPeriod(instant(case["t"]))
+    if case["op"] == "previous_period":
+        return PreviousPeriod(instant(case["t"]))
     assert case["op"] == "build", case["op"]
     return Build()
 
@@ -114,6 +128,9 @@ def _expect(expect: dict[str, Any]) -> Expect:
         return timedelta(seconds=expect["seconds"])
     if "instant" in expect:
         return instant(expect["instant"])
+    if "period" in expect:
+        start, end = expect["period"]
+        return instant(start), instant(end)
     return str(expect["error"])
 
 

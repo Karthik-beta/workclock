@@ -123,6 +123,40 @@ export class Oracle {
     return x;
   }
 
+  nextPeriod(t: number): Block {
+    let start = t;
+    while (!this.isWorking(start)) {
+      start = step(start, MINUTE);
+      if (start - t > this.searchLimit) {
+        throw new OracleError("no_working_time");
+      }
+    }
+    let end = start;
+    while (end - start < this.searchLimit && end + MINUTE <= LAST && this.isWorking(end)) {
+      end += MINUTE;
+    }
+    return [start, end];
+  }
+
+  previousPeriod(t: number): Block {
+    let end = t;
+    while (!this.isWorking(step(end, -MINUTE))) {
+      end -= MINUTE;
+      if (t - end > this.searchLimit) {
+        throw new OracleError("no_working_time");
+      }
+    }
+    let start = end;
+    while (
+      end - start < this.searchLimit &&
+      start - MINUTE >= FIRST &&
+      this.isWorking(start - MINUTE)
+    ) {
+      start -= MINUTE;
+    }
+    return [start, end];
+  }
+
   private available(t: number): boolean {
     return this.workdays.some((r) => r.contains(t));
   }

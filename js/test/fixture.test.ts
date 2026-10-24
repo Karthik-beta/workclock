@@ -3,22 +3,36 @@
 
 import { describe, expect, test } from "vitest";
 
-import { Schedule } from "../node.js";
+import { type Period, Schedule } from "../node.js";
 import { type Case, load, scheduleOptions, type ScheduleSpec } from "./support/fixture.js";
 import { Oracle, OracleError } from "./support/oracle.js";
 
-type Outcome = { seconds: number } | { instant: number } | { error: string } | { built: true };
+type Outcome =
+  | { seconds: number }
+  | { instant: number }
+  | { period: [number, number] }
+  | { error: string }
+  | { built: true };
 
 interface Implementation {
   between(a: string, b: string): number;
   add(t: string, ms: number): number;
   sub(t: string, ms: number): number;
+  nextPeriod(t: string): [number, number];
+  previousPeriod(t: string): [number, number];
 }
 
 const fixture = load();
 
 function expected(c: Case): Outcome {
-  return "instant" in c.expect ? { instant: Date.parse(c.expect.instant) } : c.expect;
+  if ("instant" in c.expect) {
+    return { instant: Date.parse(c.expect.instant) };
+  }
+  if ("period" in c.expect) {
+    const [start, end] = c.expect.period;
+    return { period: [Date.parse(start), Date.parse(end)] };
+  }
+  return c.expect;
 }
 
 function outcome(c: Case, build: (spec: ScheduleSpec) => Implementation): Outcome {
@@ -33,6 +47,10 @@ function outcome(c: Case, build: (spec: ScheduleSpec) => Implementation): Outcom
         return { instant: schedule.add(c.t, c.seconds * 1000) };
       case "sub":
         return { instant: schedule.sub(c.t, c.seconds * 1000) };
+      case "next_period":
+        return { period: schedule.nextPeriod(c.t) };
+      case "previous_period":
+        return { period: schedule.previousPeriod(c.t) };
     }
   } catch (error) {
     const kind = (error as { kind?: unknown }).kind;
@@ -49,7 +67,13 @@ function engine(spec: ScheduleSpec): Implementation {
     between: (a, b) => schedule.between(a, b),
     add: (t, ms) => schedule.add(t, ms).getTime(),
     sub: (t, ms) => schedule.sub(t, ms).getTime(),
+    nextPeriod: (t) => times(schedule.nextPeriod(t)),
+    previousPeriod: (t) => times(schedule.previousPeriod(t)),
   };
+}
+
+function times(period: Period): [number, number] {
+  return [period.start.getTime(), period.end.getTime()];
 }
 
 function oracle(spec: ScheduleSpec): Implementation {
@@ -58,6 +82,8 @@ function oracle(spec: ScheduleSpec): Implementation {
     between: (a, b) => schedule.between(Date.parse(a), Date.parse(b)),
     add: (t, ms) => schedule.add(Date.parse(t), ms),
     sub: (t, ms) => schedule.sub(Date.parse(t), ms),
+    nextPeriod: (t) => schedule.nextPeriod(Date.parse(t)),
+    previousPeriod: (t) => schedule.previousPeriod(Date.parse(t)),
   };
 }
 

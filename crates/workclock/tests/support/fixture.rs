@@ -1,6 +1,7 @@
 //! Loader for `tests/fixtures/design_examples.json`.
 
 use std::collections::BTreeMap;
+use std::ops::Range;
 
 use jiff::Timestamp;
 use serde::Deserialize;
@@ -28,11 +29,13 @@ pub struct Case {
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(tag = "op", rename_all = "lowercase")]
+#[serde(tag = "op", rename_all = "snake_case")]
 pub enum Op {
     Between { a: String, b: String },
     Add { t: String, seconds: i64 },
     Sub { t: String, seconds: i64 },
+    NextPeriod { t: String },
+    PreviousPeriod { t: String },
     Build,
 }
 
@@ -41,6 +44,7 @@ pub enum Op {
 pub enum Expect {
     Seconds(i64),
     Instant(String),
+    Period([String; 2]),
     Error(String),
 }
 
@@ -49,6 +53,7 @@ pub enum Expect {
 pub enum Outcome {
     Seconds(i64),
     Instant(Timestamp),
+    Period(Range<Timestamp>),
     Built,
 }
 
@@ -58,6 +63,7 @@ impl Case {
         match &self.expect {
             Expect::Seconds(s) => Ok(Outcome::Seconds(*s)),
             Expect::Instant(t) => Ok(Outcome::Instant(instant(t))),
+            Expect::Period([start, end]) => Ok(Outcome::Period(instant(start)..instant(end))),
             Expect::Error(e) => Err(e),
         }
     }

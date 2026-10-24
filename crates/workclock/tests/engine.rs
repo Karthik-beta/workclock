@@ -24,6 +24,8 @@ fn run(spec: &ScheduleSpec, op: &Op) -> Result<Outcome, workclock::Error> {
         Op::Sub { t, seconds } => {
             Outcome::Instant(schedule.sub(instant(t), SignedDuration::from_secs(*seconds))?)
         }
+        Op::NextPeriod { t } => Outcome::Period(schedule.next_period(instant(t))?),
+        Op::PreviousPeriod { t } => Outcome::Period(schedule.previous_period(instant(t))?),
         Op::Build => Outcome::Built,
     })
 }

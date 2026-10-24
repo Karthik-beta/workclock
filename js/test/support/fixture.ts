@@ -29,9 +29,14 @@ export interface ScheduleSpec {
 export type Op =
   | { op: "between"; a: string; b: string }
   | { op: "add" | "sub"; t: string; seconds: number }
+  | { op: "next_period" | "previous_period"; t: string }
   | { op: "build" };
 
-export type Expect = { seconds: number } | { instant: string } | { error: ErrorKind };
+export type Expect =
+  | { seconds: number }
+  | { instant: string }
+  | { period: [start: string, end: string] }
+  | { error: ErrorKind };
 
 export type Case = Op & { id: string; schedule: string; expect: Expect };
 

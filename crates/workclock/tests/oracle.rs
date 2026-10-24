@@ -23,6 +23,8 @@ fn run(spec: &ScheduleSpec, op: &Op) -> Result<Outcome, OracleError> {
         Op::Sub { t, seconds } => {
             Outcome::Instant(oracle.sub(instant(t), SignedDuration::from_secs(*seconds))?)
         }
+        Op::NextPeriod { t } => Outcome::Period(oracle.next_period(instant(t))?),
+        Op::PreviousPeriod { t } => Outcome::Period(oracle.previous_period(instant(t))?),
         Op::Build => Outcome::Built,
     })
 }
