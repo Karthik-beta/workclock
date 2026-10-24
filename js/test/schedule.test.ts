@@ -199,7 +199,12 @@ describe("errors", () => {
     },
   );
 
-  test.each(["-009999-01-02T01:59:58.999Z", "9999-12-30T22:00:00.001Z"])(
+  test.each([
+    "-009999-01-02T01:59:58.999Z",
+    "9999-12-30T22:00:00.001Z",
+    "-009999-01-01T00:00:00Z",
+    "9999-12-31T23:00:00Z",
+  ])(
     "%s is out of range as a string and as a Date",
     (iso) => {
       expect(() => always.add(iso, 0)).toThrow(OutOfRangeError);
@@ -327,10 +332,6 @@ describe("malformed input", () => {
       '"2026-01-05T09:00:00.0001Z" has digits below a millisecond',
     ],
     [() => office.between(new Date(Number.NaN), "2026-01-06T09:00:00Z"), "invalid Date"],
-    [
-      () => office.between("9999-12-31T23:00:00Z", "2026-01-06T09:00:00Z"),
-      '"9999-12-31T23:00:00Z" is not an ISO 8601 instant with a UTC offset in the supported range',
-    ],
     [
       () => office.between("+010000-01-01T00:00:00Z", "2026-01-06T09:00:00Z"),
       '"+010000-01-01T00:00:00Z" is not an ISO 8601 instant with a UTC offset in the supported range',

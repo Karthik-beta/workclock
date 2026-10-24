@@ -12,6 +12,7 @@
 #![allow(clippy::missing_errors_doc, clippy::doc_markdown)]
 
 use jiff::civil::{Date, Time, Weekday};
+use jiff::fmt::temporal::{Pieces, PiecesOffset};
 use jiff::{SignedDuration, Timestamp};
 use js_sys::{Array, Float64Array, Reflect};
 use wasm_bindgen::prelude::*;
@@ -506,9 +507,13 @@ fn instant(value: &JsValue) -> Result<Timestamp, JsValue> {
         )));
     };
     let t: Timestamp = text.parse().map_err(|_| {
-        range_error(&format!(
-            "{text:?} is not an ISO 8601 instant with a UTC offset in the supported range {RANGE}, such as \"2026-01-05T09:00:00Z\""
-        ))
+        if is_instant_outside_range(&text) {
+            out_of_range(&text)
+        } else {
+            range_error(&format!(
+                "{text:?} is not an ISO 8601 instant with a UTC offset in the supported range {RANGE}, such as \"2026-01-05T09:00:00Z\""
+            ))
+        }
     })?;
     if t.subsec_nanosecond() % 1_000_000 != 0 {
         return Err(range_error(&format!(
@@ -516,8 +521,20 @@ fn instant(value: &JsValue) -> Result<Timestamp, JsValue> {
         )));
     }
     // jiff parses instants up to a fraction of a second beyond either end of
-    // the range it accepts as milliseconds, which is the range for Dates.
+    // the range it accepts as whole milliseconds.
     Timestamp::from_millisecond(t.as_millisecond()).map_err(|_| out_of_range(&text))
+}
+
+/// Whether `text` is a well-formed date, time and offset that lies outside
+/// the range of a `Timestamp`, such as "9999-12-31T23:00:00Z".
+fn is_instant_outside_range(text: &str) -> bool {
+    Pieces::parse(text).is_ok_and(|pieces| {
+        pieces.time().is_some()
+            && matches!(
+                pieces.offset(),
+                Some(PiecesOffset::Zulu | PiecesOffset::Numeric(_))
+            )
+    })
 }
 
 /// An instant `ms` milliseconds after the Unix epoch.

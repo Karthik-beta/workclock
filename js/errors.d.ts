@@ -22,7 +22,10 @@ export declare class NoWorkingTimeError extends WorkclockError {
   readonly kind: "no_working_time";
 }
 
-/** An instant falls outside the supported range of years -9999 to 9999. */
+/**
+ * An instant falls outside the supported range, -009999-01-02T01:59:59Z to
+ * 9999-12-30T22:00:00Z.
+ */
 export declare class OutOfRangeError extends WorkclockError {
   readonly kind: "out_of_range";
 }
