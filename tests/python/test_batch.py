@@ -146,6 +146,21 @@ def test_bad_batches_are_rejected(nights: Schedule) -> None:
         )
 
 
+def test_numbers_are_not_read_as_instants_or_durations(nights: Schedule) -> None:
+    starts = np.array(["2026-01-05T22:00"], dtype="datetime64[us]")
+    with pytest.raises(TypeError, match=r"^expected timedelta64 values, got int"):
+        nights.add_many(starts, 3600)  # type: ignore[call-overload]
+    with pytest.raises(TypeError, match=r"^expected timedelta64 values, got float"):
+        nights.sub_many(starts, np.array([1.5]))
+    with pytest.raises(TypeError, match=r"^expected datetime64 values, got int"):
+        nights.between_many(np.array([0]), starts)
+    with pytest.raises(
+        TypeError,
+        match=r"^deltas must be a timedelta or a sequence of timedeltas, got 3600$",
+    ):
+        nights.add_many([utc(5, 22)], 3600)  # type: ignore[call-overload]
+
+
 def test_conversion_errors_name_the_failing_item(nights: Schedule) -> None:
     with pytest.raises(ValueError, match=r"item 1: .* is naive"):
         nights.between_many([utc(5, 22), datetime(2026, 1, 5)], [utc(5, 22)] * 2)
