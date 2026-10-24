@@ -29,7 +29,15 @@ from typing import Union, overload
 
 from workclock import _workclock
 from workclock._errors import NoWorkingTimeError
-from workclock._schedule import Break, Holidays, Schedule, WorkDay, _datetime, _micros
+from workclock._schedule import (
+    Break,
+    Holidays,
+    Schedule,
+    WorkDay,
+    _datetime,
+    _engine_errors,
+    _micros,
+)
 from workclock._zones import zone_name
 
 __all__ = [
@@ -280,10 +288,14 @@ class HolidayRule(Rule):
         return Holidays(self._dates, time_zone=self.tz)
 
     def _local_date(self, t: int) -> _dt.date:
-        return _dt.date(*_workclock.local_date(zone_name(self.tz), t))
+        with _engine_errors():
+            return _dt.date(*_workclock.local_date(zone_name(self.tz), t))
 
     def _bounds(self, day: _dt.date) -> tuple[int, int]:
-        return _workclock.day_bounds(zone_name(self.tz), (day.year, day.month, day.day))
+        with _engine_errors():
+            return _workclock.day_bounds(
+                zone_name(self.tz), (day.year, day.month, day.day)
+            )
 
 
 class Rules(Rule):

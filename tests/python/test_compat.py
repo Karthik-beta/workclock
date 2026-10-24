@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 
 import holidays
 import pytest
-from workclock import NoWorkingTimeError, compat
+from workclock import NoWorkingTimeError, OutOfRangeError, UnknownZoneError, compat
 
 UTC = datetime.timezone.utc
 
@@ -137,6 +137,15 @@ def test_rule_attributes_can_change_after_construction() -> None:
     rule.end_time = datetime.time(18)
     diff = rule.difference(utc(2026, 1, 5, 9), utc(2026, 1, 5, 20))
     assert diff.hours == 9
+
+
+def test_holiday_rule_errors_are_workclock_errors() -> None:
+    mars = compat.HolidayRule([datetime.date(2026, 1, 1)], tz="Mars/Olympus_Mons")
+    with pytest.raises(UnknownZoneError, match="Mars/Olympus_Mons"):
+        mars.next(utc(2026, 1, 1))
+    last = compat.HolidayRule([datetime.date(9999, 12, 31)])
+    with pytest.raises(OutOfRangeError):
+        last.next(utc(9999, 12, 30, 12))
 
 
 def test_holiday_rules_work_on_their_own() -> None:
