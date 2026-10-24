@@ -195,6 +195,11 @@
 .prose a:hover {
   text-decoration-color: var(--wc-link-underline-hover);
 }
+/* Heading anchors and cards are links too, but are not styled as inline links. */
+.prose :is(h1, h2, h3, h4, h5, h6) a,
+.prose a[data-card] {
+  text-decoration-line: none;
+}
 
 /* One focus style everywhere; Fumadocs' ring is switched off so there is no double ring. */
 :focus-visible {
@@ -236,6 +241,38 @@ table,
 time,
 .tabular {
   font-variant-numeric: tabular-nums;
+}
+
+/* Layout widths (wiki: Layout and Spacing). Only --fd-layout-width is documented by Fumadocs. */
+:root {
+  --fd-layout-width: var(--wc-page);
+  scroll-padding-top: calc(var(--wc-header) + 16px);
+}
+
+/* Header height: the variable drives the grid, the h-14 class draws the bar. */
+#nd-notebook-layout {
+  --fd-header-height: var(--wc-header);
+}
+#nd-subnav [data-header-body],
+#nd-nav,
+#nd-nav nav {
+  height: var(--wc-header);
+}
+
+@media (min-width: 768px) {
+  #nd-notebook-layout:has(#nd-sidebar) {
+    --fd-sidebar-width: var(--wc-sidebar);
+  }
+}
+
+@media (min-width: 1280px) {
+  #nd-notebook-layout:has(#nd-toc) {
+    --fd-toc-width: var(--wc-toc);
+  }
+}
+
+#nd-page .prose {
+  max-width: var(--wc-prose);
 }
 
 .landing-container {
