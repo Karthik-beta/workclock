@@ -141,9 +141,9 @@ class WorkDayRule(Rule):
     def _engine_rule(self, kind: type[WorkDay | Break]) -> list[WorkDay | Break]:
         if self.start_time == self.end_time:
             return []
-        rule = kind(
-            self.start_time, self.end_time, self.working_days, time_zone=self.tz
-        )
+        # The typed API rejects bool days; businesstimedelta reads True as 1.
+        days = [int(day) if isinstance(day, bool) else day for day in self.working_days]
+        rule = kind(self.start_time, self.end_time, days, time_zone=self.tz)
         return [rule]
 
     def _schedule(self) -> Schedule:

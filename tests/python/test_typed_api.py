@@ -7,6 +7,7 @@ from typing import get_args, get_type_hints
 from zoneinfo import ZoneInfo
 
 import holidays
+import numpy as np
 import pytest
 import pytz
 import workclock
@@ -202,10 +203,18 @@ def test_invalid_rules_are_rejected() -> None:
 def test_rule_errors_name_the_bad_values() -> None:
     with pytest.raises(ValueError, match=r"to 6, got 'mon', 7$"):
         WorkDay(time(9), time(17), [1, "mon", 7])  # type: ignore[list-item]
+    with pytest.raises(ValueError, match=r"to 6, got True, False$"):
+        WorkDay(time(9), time(17), [1, True, False])
     with pytest.raises(ValueError, match="days must be a list"):
         WorkDay(time(9), time(17), "01")  # type: ignore[arg-type]
     with pytest.raises(TypeError, match="dates must be a list"):
         Holidays("2026-01-01")  # type: ignore[arg-type]
+
+
+def test_days_accept_any_integer_type() -> None:
+    rule = WorkDay(time(9), time(17), [np.int64(1), np.uint8(2)])
+    assert rule == WorkDay(time(9), time(17), [1, 2])
+    assert {type(day) for day in rule.days} == {int}
 
 
 def test_rules_are_comparable_values() -> None:

@@ -57,6 +57,13 @@ def test_adding_and_subtracting_zero_snaps(btd: ModuleType) -> None:
     assert saturday - zero == utc(2026, 1, 9, 17)
 
 
+def test_working_days_compare_as_integers(btd: ModuleType) -> None:
+    # businesstimedelta tests `weekday() in working_days`, and True == 1.
+    rule = btd.WorkDayRule(datetime.time(9), datetime.time(17), working_days=[True])
+    diff = rule.difference(utc(2026, 1, 5), utc(2026, 1, 7))
+    assert diff.timedelta == datetime.timedelta(hours=8)
+
+
 def test_hours_and_seconds_split_the_delta(btd: ModuleType) -> None:
     # C5
     delta = btd.BusinessTimeDelta(
