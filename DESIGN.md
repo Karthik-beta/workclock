@@ -307,6 +307,8 @@ without `tzinfo`, and the JavaScript API rejects an ISO string without an
 offset. The compatibility layer treats naive datetimes as UTC, as
 businesstimedelta does. NumPy `datetime64` values carry no zone, so the Python
 batch methods read them as UTC and return `datetime64` results in UTC.
+When the first argument of a batch method is a NumPy array, the two arguments
+broadcast together under NumPy's rules; lists must have the same length.
 
 | ID | Binding | Input | Result |
 |---|---|---|---|
@@ -371,7 +373,13 @@ Library code does not panic.
   `kind`, so it works across the node, bundler and web builds.
 - Malformed input is not a `WorkclockError`. Python raises `TypeError` for a
   wrong type and `ValueError` for a bad value, such as a naive datetime;
-  JavaScript raises `TypeError` and `RangeError` in the same way.
+  JavaScript raises `TypeError` and `RangeError` in the same way; `add` and
+  `sub` take only numbers, so a string or `BigInt` duration is a `TypeError`
+  rather than being converted.
+- The Python and JavaScript no-working-time errors say which cause they have:
+  building names the empty working hours, and a failed search names the bound
+  and the instant it started from. Rust's `Error::NoWorkingTime` has one
+  message for both.
 - In batch methods, the message of an error caused by one item starts with
   `item {i}: `, where `i` is the item's zero-based index.
 
