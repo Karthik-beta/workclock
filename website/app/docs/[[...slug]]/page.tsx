@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { DocsBody, DocsDescription, DocsPage, DocsTitle } from 'fumadocs-ui/layouts/notebook/page';
 import { createRelativeLink } from 'fumadocs-ui/mdx';
+import { FeedbackLink } from '@/components/feedback-link';
 import { getMDXComponents } from '@/components/mdx';
 import { PageActions } from '@/components/page-actions';
 import { pageMarkdownUrl } from '@/lib/llms';
@@ -21,6 +22,7 @@ export default async function Page(props: PageProps<'/docs/[[...slug]]'>) {
       <DocsBody>
         <MDX components={getMDXComponents({ a: createRelativeLink(source, page) })} />
       </DocsBody>
+      <FeedbackLink pageUrl={new URL(`.${page.url}/`, siteUrl).href} />
     </DocsPage>
   );
 }
