@@ -84,6 +84,24 @@ def test_numpy_results_keep_the_input_shape(nights: Schedule) -> None:
     assert (worked == np.timedelta64(1, "h")).all()
 
 
+def test_numpy_arguments_broadcast_together(nights: Schedule) -> None:
+    start = np.array(["2026-01-05T22:00"], dtype="datetime64[us]")
+    ends = np.array(
+        ["2026-01-06T00:00", "2026-01-06T02:00", "2026-01-06T04:00"],
+        dtype="datetime64[us]",
+    )
+    worked = nights.between_many(start, ends)
+    assert worked.shape == (3,)
+    assert worked.tolist() == [timedelta(hours=h) for h in (2, 4, 6)]
+    column = np.array([["2026-01-05T22:00"], ["2026-01-06T22:00"]], dtype="M8[us]")
+    added = nights.add_many(column, np.array([1, 2, 3], dtype="timedelta64[h]"))
+    assert added.shape == (2, 3)
+    assert added.tolist() == [
+        [datetime(2026, 1, day, 22) + timedelta(hours=h) for h in (1, 2, 3)]
+        for day in (5, 6)
+    ]
+
+
 def test_numpy_digits_below_a_microsecond_are_rejected(nights: Schedule) -> None:
     starts = np.array(
         ["2026-01-05T22:00", "2026-01-05T22:00:00.000000001"], dtype="datetime64[ns]"
@@ -112,7 +130,9 @@ def test_bad_batches_are_rejected(nights: Schedule) -> None:
         nights.add_many([utc(5, 22)] * 2, [timedelta(hours=1)])
     with pytest.raises(ValueError, match="differ in length: 1 and 2"):
         nights.sub_many([utc(5, 22)], [timedelta(hours=1)] * 2)
-    with pytest.raises(ValueError, match="broadcast"):
+    with pytest.raises(
+        ValueError, match=r"shapes \(2,\) and \(3,\) do not broadcast together"
+    ):
         nights.add_many(
             np.array(["2026-01-05T22:00"] * 2, dtype="datetime64[us]"),
             np.array([1, 2, 3], dtype="timedelta64[h]"),
