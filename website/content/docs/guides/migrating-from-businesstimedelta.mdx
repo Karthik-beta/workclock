@@ -1,0 +1,122 @@
+---
+title: Migrating
+description: Run businesstimedelta 1.0.1 code on workclock by changing one import, see what changes, and move to the typed workclock.Schedule API.
+---
+
+Your Python code computes due dates and elapsed working time with businesstimedelta 1.0.1. You want it to run on workclock with as few changes as possible, then move to the typed API when it suits you. This guide is for Python only: businesstimedelta and `workclock.compat` are Python packages, and the Rust and JavaScript bindings have no compatibility layer.
+
+## Change one import
+
+<RepoFile path="MIGRATING.md">
+<include>../../../../MIGRATING.md#migrating-from-businesstimedelta</include>
+</RepoFile>
+
+<RepoFile path="MIGRATING.md">
+<include>../../../../MIGRATING.md#fixed</include>
+</RepoFile>
+
+<RepoFile path="MIGRATING.md">
+<include>../../../../MIGRATING.md#intentional-differences</include>
+</RepoFile>
+
+## Move to the typed API
+
+The typed API is `workclock.Schedule` with the rules `workclock.WorkDay`, `workclock.Break` and `workclock.Holidays`. It runs on the same engine as `workclock.compat`. Both samples in this section use the London support desk: working hours 09:00–17:00 Monday to Friday in `Europe/London`, a 12:00–13:00 break, holidays on 25 and 28 December 2026, and a ticket opened at 16:30 on Thursday 24 December 2026 with an 8-hour SLA.
+
+In Python, with `workclock.compat`. It takes a zone name such as `"Europe/London"` where businesstimedelta needed a pytz zone, and reads naive datetimes as UTC, which on 24 December is also London time:
+
+```python title="Before: workclock.compat"
+from datetime import date, datetime, time
+
+import workclock.compat as businesstimedelta
+
+london = "Europe/London"
+workday = businesstimedelta.WorkDayRule(time(9), time(17), tz=london)
+lunch = businesstimedelta.LunchTimeRule(tz=london)  # 12:00–13:00
+holidays = businesstimedelta.HolidayRule(
+    [date(2026, 12, 25), date(2026, 12, 28)], tz=london
+)
+support = businesstimedelta.Rules([workday, lunch, holidays])
+
+opened = datetime(2026, 12, 24, 16, 30)  # naive: read as UTC
+eight_hours = businesstimedelta.BusinessTimeDelta(support, hours=8)
+opened + eight_hours  # 2026-12-30 09:30, UTC
+support.difference(opened, datetime(2026, 12, 29, 11))
+# <BusinessTimeDelta 2 hours 1800 seconds>
+```
+
+In Python, with `workclock.Schedule`. Every datetime carries its zone, and the results come back in that zone:
+
+```python title="After: workclock.Schedule"
+from datetime import date, datetime, time
+from zoneinfo import ZoneInfo
+
+from workclock import Break, Holidays, Schedule, WorkDay
+
+london = ZoneInfo("Europe/London")
+support = Schedule(
+    [
+        WorkDay(time(9), time(17)),  # Monday to Friday by default
+        Break(time(12), time(13)),
+        Holidays([date(2026, 12, 25), date(2026, 12, 28)]),
+    ],
+    time_zone=london,
+)
+
+opened = datetime(2026, 12, 24, 16, 30, tzinfo=london)
+support.add(opened, hours=8)  # 2026-12-30 09:30, London time
+support.between(opened, datetime(2026, 12, 29, 11, tzinfo=london))  # 2:30:00
+```
+
+Both reach 09:30 on Wednesday 30 December 2026. The ticket uses 30 minutes on 24 December, none over the holidays and the weekend, 7 hours on Tuesday 29 December and 30 minutes on 30 December:
+
+<WeekStrip />
+
+### Replace each name
+
+| `workclock.compat` | `workclock` typed API |
+|---|---|
+| `WorkDayRule(start_time, end_time, working_days, tz)` | `WorkDay(start, end, days, time_zone=...)` |
+| `LunchTimeRule(start_time, end_time, working_days, tz)` | `Break(start, end, days, time_zone=...)` |
+| `HolidayRule(holidays, tz)` | `Holidays(dates, time_zone=...)` |
+| `Rules([...])` | `Schedule([...], time_zone=...)` |
+| `dt + BusinessTimeDelta(rule, hours=8)` | `schedule.add(dt, hours=8)` |
+| `dt - BusinessTimeDelta(rule, hours=8)` | `schedule.sub(dt, hours=8)` |
+| `rule.difference(dt1, dt2)` | `schedule.between(dt1, dt2)` |
+| `rule.next(dt)`, `rule.previous(dt)` | `schedule.next_period(dt)`, `schedule.previous_period(dt)` |
+
+What else changes:
+
+- **Aware datetimes only.** `workclock.Schedule` raises `ValueError` for a naive datetime instead of reading it as UTC.
+- **No default times.** `WorkDay` and `Break` need `start` and `end`; `WorkDayRule` defaulted to 09:00–18:00 and `LunchTimeRule` to 12:00–13:00. `days` still defaults to Monday to Friday.
+- **No `time_off` flag.** The rule type says it: `WorkDay` is working time, `Break` and `Holidays` are time off.
+- **`between` returns a `datetime.timedelta`**, not a `BusinessTimeDelta` with `hours` and `seconds`, and it is negative when the second datetime is before the first ([#12](https://github.com/seppemans/businesstimedelta/issues/12)).
+- **Errors when the schedule is built.** `Schedule(...)` raises `workclock.NoWorkingTimeError` if the working hours minus the breaks are empty. In `workclock.compat`, `Rules.difference` returns zero for such rules (C4).
+- **Batch methods.** `between_many`, `add_many` and `sub_many` take lists or NumPy arrays and process them in one call.
+
+## Edge cases
+
+Where `workclock.compat` keeps businesstimedelta's behaviour and the typed API does not. The IDs are the examples in [DESIGN.md](https://github.com/Karthik-beta/workclock/blob/main/DESIGN.md), each checked by a test.
+
+| Case | `workclock.compat` | `workclock.Schedule` |
+|---|---|---|
+| Second datetime before the first | `difference` is positive (C1) | `between` is negative (B4) |
+| Adding zero at Saturday 10:00, 9–17 Mon–Fri | Monday 09:00 (C2) | Saturday 10:00 (A5) |
+| Subtracting zero at Saturday 10:00 | Friday 17:00 (C3) | Saturday 10:00 (A8) |
+| `start == end`, such as 09:00–09:00 | An empty rule (C4) | A 24-hour shift (O9) |
+| A naive datetime | Read as UTC (N3) | `ValueError` (N1) |
+| A 22:00–06:00 shift, Monday 22:00 to Tuesday 06:00 | 8 hours (C7) | 8 hours (O1) |
+
+- Overnight and 24-hour shifts, breaks and holidays: [Rules](/docs/concepts/rules/).
+- Adding zero, and adding past a holiday: [Adding time](/docs/concepts/adding-time/).
+- Signed results: [Measuring time](/docs/concepts/measuring-time/).
+- Repeated and skipped times when clocks change for daylight saving time (DST): [Time zones and DST](/docs/concepts/time-zones-and-dst/).
+- Naive datetimes and the supported range: [Inputs and precision](/docs/concepts/inputs-and-precision/).
+- Every error class and when it is raised: [Errors](/docs/concepts/errors/).
+
+## See also
+
+- [Quickstart: Python](/docs/quickstart/python/)
+- [Schedules](/docs/concepts/schedules/)
+- [MIGRATING.md](https://github.com/Karthik-beta/workclock/blob/main/MIGRATING.md), the source of the lists on this page
+- [`python/workclock/compat.py`](https://github.com/Karthik-beta/workclock/blob/main/python/workclock/compat.py), the compatibility layer's docstrings
