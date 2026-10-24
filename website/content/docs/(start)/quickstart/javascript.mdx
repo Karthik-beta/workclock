@@ -1,0 +1,73 @@
+---
+title: "Quickstart: JavaScript"
+description: Build a Node.js program that finds when a support ticket is due and how much of its SLA has been used.
+---
+
+By the end of this page you will have a JavaScript program for Node.js that works out when a support ticket is due, counting only working hours, and how much of its SLA has been used.
+
+## Install
+
+<Callout type="warning" title="Warning">
+In development. No release has been published yet.
+</Callout>
+
+workclock needs Node.js 22 or later. In your project's directory:
+
+```sh
+npm i workclock
+```
+
+The package ships its TypeScript types. In a browser, load it through a bundler, or without one from `workclock/web` ([Install: Browsers without a bundler](/docs/install/#browsers-without-a-bundler)).
+
+## Write the program
+
+A support desk in London works 09:00–17:00 on weekdays with a lunch hour, and is closed on 25 and 28 December 2026. A ticket opened at 16:30 on Christmas Eve with an 8-hour SLA is due at 09:30 on 30 December. At 11:00 on 29 December, 2 hours 30 minutes of the SLA have been used.
+
+In JavaScript, save this as `sla.mjs`. Instants are `Date`s or ISO 8601 strings with an offset, and durations are milliseconds. London time is UTC in December, so 16:30 London time is `"2026-12-24T16:30:00Z"`.
+
+```js title="sla.mjs"
+import { Schedule } from "workclock";
+
+const HOUR = 3_600_000; // milliseconds
+
+const support = new Schedule({
+  timeZone: "Europe/London",
+  rules: [
+    { type: "workday", start: "09:00", end: "17:00" },
+    { type: "break", start: "12:00", end: "13:00" },
+    { type: "holidays", dates: ["2026-12-25", "2026-12-28"] },
+  ],
+});
+
+const opened = "2026-12-24T16:30:00Z";
+const due = support.add(opened, 8 * HOUR); // Date 2026-12-30T09:30:00.000Z
+const now = "2026-12-29T11:00:00Z";
+const used = support.between(opened, now); // 9000000 ms
+
+console.log(`due ${due.toISOString()}, used ${used / HOUR} h`);
+```
+
+## Run it
+
+```sh
+node sla.mjs
+```
+
+It prints:
+
+```text
+due 2026-12-30T09:30:00.000Z, used 2.5 h
+```
+
+09:30 UTC is 09:30 London time in December:
+
+<WeekStrip />
+
+## What just happened
+
+`new Schedule` combined three rules, read in the `Europe/London` time zone: a `"workday"` rule for 09:00–17:00, which defaults to Monday to Friday, a `"break"` rule for 12:00–13:00, and a `"holidays"` rule for 25 and 28 December. `support.add` counted 8 hours of working time from the moment the ticket was opened, skipping the evening, the weekend, the holidays and the lunch hour, and returned the due instant as a `Date`. `support.between` returned the working time between two instants as a number of milliseconds, 9,000,000 here. [`js/examples/sla.mjs`](https://github.com/Karthik-beta/workclock/blob/main/js/examples/sla.mjs) extends this program with `nextPeriod`, which finds when the current stretch of working time ends, and `addMany`, which computes many due times in one call.
+
+## Next steps
+
+- [Schedules](/docs/concepts/schedules/): how rules combine into working time.
+- [Adding time](/docs/concepts/adding-time/): what `add` and `sub` return, including at the edges of working time.
