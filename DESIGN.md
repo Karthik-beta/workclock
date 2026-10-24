@@ -183,6 +183,65 @@ outside, `sub` lands on the start of the working time that `add` consumed
 | A10 | same | `sub(Sat 10:00, 1h)` | Fri 16:00 |
 | A11 | 9–17 Mon–Fri, break 12–13 | `add(Mon 12:30, 0h)` (inside the break) | Mon 12:30 |
 
+### next_period(t) and previous_period(t)
+
+Both return a period as `[start, end)`: a `Range<Timestamp>` in Rust, a
+`(start, end)` tuple in the `tzinfo` of `t` in Python, and `{ start, end }`
+`Date`s from `nextPeriod` and `previousPeriod` in JavaScript.
+
+- `next_period(t)` returns the period that contains `t`, starting at `t`, or
+  else the first period that starts after `t`. A period that ends at `t` does
+  not contain it (P6).
+- `previous_period(t)` returns the period that contains the instant just
+  before `t`, ending at `t`, or else the last period that ends before `t`. A
+  period that starts at `t` is skipped (P8).
+- A period is a maximal stretch of working time, whichever rules produce it:
+  an overnight shift is one period across midnight (P9), and shifts that touch
+  or overlap form one period (P11, P12). Breaks and holidays split working
+  time into separate periods (P13–P18).
+- A period is capped at the search bound: `next_period` returns at most the
+  bound from the period's start, and `previous_period` at most the bound up to
+  its end (P19–P21). Only round-the-clock schedules have periods that long.
+- `next_period` fails with the no-working-time error if no period starts
+  within the search bound after `t`, and `previous_period` if none ends within
+  the bound before `t` (P22, P23).
+- If the search reaches the end of the supported range (the start, for
+  `previous_period`) before finding working time, the result is the
+  out-of-range error (P24). A period that runs into either end of the range
+  stops there.
+
+| ID | Schedule | Query | Result |
+|---|---|---|---|
+| P1 | 9–17 Mon–Fri | `next_period(Mon 10:00)` | Mon 10:00–17:00 |
+| P2 | same | `previous_period(Mon 10:00)` | Mon 09:00–10:00 |
+| P3 | same | `next_period(Sat 10:00)` | Mon 2026-01-12 09:00–17:00 |
+| P4 | same | `previous_period(Sat 10:00)` | Fri 09:00–17:00 |
+| P5 | same | `next_period(Mon 09:00)` | Mon 09:00–17:00 |
+| P6 | same | `next_period(Mon 17:00)` | Tue 09:00–17:00 |
+| P7 | same | `previous_period(Mon 17:00)` | Mon 09:00–17:00 |
+| P8 | same | `previous_period(Tue 09:00)` | Mon 09:00–17:00 |
+| P9 | 22–06 Mon–Fri | `next_period(Mon 23:00)` | Mon 23:00–Tue 06:00 |
+| P10 | same | `previous_period(Tue 02:00)` | Mon 22:00–Tue 02:00 |
+| P11 | 00–00 Mon–Fri | `next_period(Sat 10:00)` | Mon 2026-01-12 00:00–Sat 2026-01-17 00:00 |
+| P12 | 9–17 Mon–Fri and 13–20 Mon–Fri | `next_period(Mon 10:00)` | Mon 10:00–20:00 |
+| P13 | 9–17 Mon–Fri, break 12–13 | `next_period(Mon 12:30)` (inside the break) | Mon 13:00–17:00 |
+| P14 | same | `previous_period(Mon 12:30)` | Mon 09:00–12:00 |
+| P15 | 9–17 Mon–Fri, holiday Wed 2026-01-07 | `next_period(Tue 17:00)` | Thu 09:00–17:00 |
+| P16 | same | `previous_period(Thu 09:00)` | Tue 09:00–17:00 |
+| P17 | 22–06 Mon–Fri, holiday Tue 2026-01-06 | `next_period(Mon 22:00)` | Mon 22:00–Tue 00:00 |
+| P18 | same | `next_period(Tue 00:00)` | Wed 00:00–06:00 |
+| P19 | 00–00 Mon–Sun | `next_period(Mon 10:00)` | Mon 10:00–Wed 2027-01-06 10:00 (366 days) |
+| P20 | 00–00 Mon–Sun, holiday Thu 2027-01-14 | `next_period(Mon 00:00)` | Mon 00:00–Wed 2027-01-13 00:00 (373 days) |
+| P21 | same | `previous_period(Mon 2028-01-24 00:00)` | Sat 2027-01-16 00:00–Mon 2028-01-24 00:00 (373 days) |
+| P22 | 9–10 every day Etc/GMT+3, break 9–10 every day America/Sao_Paulo | `next_period(Fri 2021-01-01 00:00)` | no-working-time error |
+| P23 | same | `previous_period(Fri 2021-01-01 00:00)` | no-working-time error |
+| P24 | 9–17 Mon–Fri | `next_period(Thu 9999-12-30 18:00)` | out-of-range error |
+
+In P20 and P21 the holiday makes the bound 373 days, and each period would
+otherwise run one day past it. P22's schedule builds because the break missed
+the shift while Sao Paulo kept summer time; since Brazil dropped it in 2019,
+the break covers the whole shift.
+
 ## Time zones and DST
 
 Rule times are wall-clock times in the rule's zone. Durations are elapsed real
