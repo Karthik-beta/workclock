@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "postbuild": "node scripts/copy-markdown.mjs",
-    "types:check": "next typegen && tsc --noEmit"
+    "types:check": "next typegen && tsc --noEmit",
+    "check:agents": "node scripts/check-agent-files.mjs"
   },
   "engines": {
     "node": ">=22"
