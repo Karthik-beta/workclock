@@ -1,0 +1,173 @@
+---
+title: Periods
+description: Find the stretch of working time at, after or before an instant, with next_period and previous_period.
+---
+
+A period is a maximal stretch of working time, written `[start, end)`: it includes `start` but not `end`. `next_period` and `previous_period` return the period at, after or before an instant; JavaScript names them `nextPeriod` and `previousPeriod`. This page covers Rust, Python and JavaScript.
+
+## Which period is returned
+
+- `next_period(t)` returns the period that contains `t`, starting at `t`. If `t` is outside working time, it returns the first period that starts after `t`. A period that ends at `t` does not contain it.
+- `previous_period(t)` returns the period that contains the instant just before `t`, ending at `t`. Otherwise it returns the last period that ends before `t`. A period that starts at `t` is skipped.
+- A period is one stretch of working time, whichever rules produce it. An overnight shift is one period across midnight, and shifts that touch or overlap form one period. Breaks and holidays split working time into separate periods.
+
+The London support desk from the README works 09:00–17:00 Monday to Friday in `Europe/London`, with a break from 12:00 to 13:00, and is closed on 25 and 28 December 2026. Each `[====)` is one period, in London time:
+
+```text
+              09:00            12:00   13:00            17:00
+Thu 24 Dec    [================)       [================)
+Fri 25 Dec    holiday
+Sat 26 Dec    weekend
+Sun 27 Dec    weekend
+Mon 28 Dec    holiday
+Tue 29 Dec    [================)       [================)
+```
+
+From 11:00 on Tuesday 29 December, `next_period` returns 11:00–12:00: the morning period, starting at 11:00. From 09:00 on Tuesday, `previous_period` skips the period that starts at 09:00 and returns 13:00–17:00 on Thursday 24 December, past both holidays and the weekend.
+
+## Return values
+
+| Language | Method | Returns |
+|---|---|---|
+| Rust | `workclock::Schedule::next_period`, `previous_period` | `Result<std::ops::Range<jiff::Timestamp>, workclock::Error>` |
+| Python | `workclock.Schedule.next_period`, `previous_period` | A `(start, end)` tuple of `datetime`s in the `tzinfo` of the datetime passed in |
+| JavaScript | `Schedule.nextPeriod`, `previousPeriod` | A `Period`, `{ start, end }`, of two `Date`s |
+
+## Find the next and previous period
+
+<Tabs groupId="lang" persist items={['Rust', 'Python', 'JavaScript']}>
+<Tab value="Rust">
+
+```rust
+use jiff::civil::{date, time};
+use jiff::Zoned;
+use workclock::{Break, Holidays, Schedule, Weekdays, WorkDay};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let days = Weekdays::MON_TO_FRI;
+    let support = Schedule::builder()
+        .time_zone("Europe/London")
+        .rule(WorkDay::new(time(9, 0, 0, 0), time(17, 0, 0, 0), days))
+        .rule(Break::new(time(12, 0, 0, 0), time(13, 0, 0, 0), days))
+        .rule(Holidays::new([date(2026, 12, 25), date(2026, 12, 28)]))
+        .build()?;
+
+    let now: Zoned = "2026-12-29T11:00[Europe/London]".parse()?;
+    let next = support.next_period(&now)?;
+    assert_eq!(next.start.to_string(), "2026-12-29T11:00:00Z");
+    assert_eq!(next.end.to_string(), "2026-12-29T12:00:00Z");
+
+    let morning: Zoned = "2026-12-29T09:00[Europe/London]".parse()?;
+    let previous = support.previous_period(&morning)?;
+    assert_eq!(previous.start.to_string(), "2026-12-24T13:00:00Z");
+    assert_eq!(previous.end.to_string(), "2026-12-24T17:00:00Z");
+    Ok(())
+}
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+from datetime import date, datetime, time
+from zoneinfo import ZoneInfo
+
+from workclock import Break, Holidays, Schedule, WorkDay
+
+london = ZoneInfo("Europe/London")
+support = Schedule(
+    [
+        WorkDay(time(9), time(17)),  # Monday to Friday by default
+        Break(time(12), time(13)),
+        Holidays([date(2026, 12, 25), date(2026, 12, 28)]),
+    ],
+    time_zone=london,
+)
+
+now = datetime(2026, 12, 29, 11, tzinfo=london)
+support.next_period(now)
+# (2026-12-29 11:00, 2026-12-29 12:00), London time
+
+morning = datetime(2026, 12, 29, 9, tzinfo=london)
+support.previous_period(morning)
+# (2026-12-24 13:00, 2026-12-24 17:00), London time
+```
+
+</Tab>
+<Tab value="JavaScript">
+
+```js
+import { Schedule } from "workclock";
+
+const support = new Schedule({
+  timeZone: "Europe/London",
+  rules: [
+    { type: "workday", start: "09:00", end: "17:00" },
+    { type: "break", start: "12:00", end: "13:00" },
+    { type: "holidays", dates: ["2026-12-25", "2026-12-28"] },
+  ],
+});
+
+const next = support.nextPeriod("2026-12-29T11:00:00Z");
+next.start; // Date 2026-12-29T11:00:00.000Z
+next.end; // Date 2026-12-29T12:00:00.000Z
+
+const previous = support.previousPeriod("2026-12-29T09:00:00Z");
+previous.start; // Date 2026-12-24T13:00:00.000Z
+previous.end; // Date 2026-12-24T17:00:00.000Z
+```
+
+</Tab>
+</Tabs>
+
+London's offset from UTC is zero in December, so the UTC instants in the Rust and JavaScript tabs are also London wall-clock times.
+
+## Long periods and errors
+
+Every search stops at the search bound: 366 days, plus seven days per holiday date in the schedule.
+
+- **Round-the-clock schedules.** A period is capped at the search bound. `next_period` returns at most the bound from the period's start, and `previous_period` at most the bound up to its end. Only schedules that work round the clock have periods that long (P19–P21).
+- **No working time.** `next_period` fails with the no-working-time error if no period starts within the search bound after `t`, and `previous_period` if none ends within the bound before `t` (P22, P23). That is `workclock::Error::NoWorkingTime` in Rust and `NoWorkingTimeError` in Python and JavaScript.
+- **End of the supported range.** If the search reaches the end of the supported range (the start, for `previous_period`) before finding working time, the result is the out-of-range error: `workclock::Error::OutOfRange`, or `OutOfRangeError` in Python and JavaScript (P24). A period that runs into either end of the range stops there.
+
+[Errors](/docs/concepts/errors/) lists every error class in each language.
+
+## Edge cases
+
+These are the period examples from [DESIGN.md](https://github.com/Karthik-beta/workclock/blob/main/DESIGN.md#next_periodt-and-previous_periodt). Each ID is a case in [tests/fixtures/design_examples.json](https://github.com/Karthik-beta/workclock/blob/main/tests/fixtures/design_examples.json), which the Rust, Python and JavaScript test suites all run. Unless noted, dates are in the week of Monday 5 January 2026, times are UTC, and `9–17 Mon–Fri` is a `WorkDay` from 09:00 to 17:00, Monday to Friday.
+
+| ID | Schedule | Query | Result | Shows |
+|---|---|---|---|---|
+| P1 | 9–17 Mon–Fri | `next_period(Mon 10:00)` | Mon 10:00–17:00 | Inside a period, the result starts at `t` |
+| P2 | same | `previous_period(Mon 10:00)` | Mon 09:00–10:00 | Inside a period, the result ends at `t` |
+| P3 | same | `next_period(Sat 10:00)` | Mon 2026-01-12 09:00–17:00 | Outside working time, the first period after `t` |
+| P4 | same | `previous_period(Sat 10:00)` | Fri 09:00–17:00 | Outside working time, the last period before `t` |
+| P5 | same | `next_period(Mon 09:00)` | Mon 09:00–17:00 | A period that starts at `t` contains it |
+| P6 | same | `next_period(Mon 17:00)` | Tue 09:00–17:00 | A period that ends at `t` does not contain it |
+| P7 | same | `previous_period(Mon 17:00)` | Mon 09:00–17:00 | A period that ends at `t` is returned whole |
+| P8 | same | `previous_period(Tue 09:00)` | Mon 09:00–17:00 | A period that starts at `t` is skipped |
+| P9 | 22–06 Mon–Fri | `next_period(Mon 23:00)` | Mon 23:00–Tue 06:00 | An overnight shift is one period across midnight |
+| P10 | same | `previous_period(Tue 02:00)` | Mon 22:00–Tue 02:00 | The same, searching back |
+| P11 | 00–00 Mon–Fri | `next_period(Sat 10:00)` | Mon 2026-01-12 00:00–Sat 2026-01-17 00:00 | 24-hour shifts that touch form one period |
+| P12 | 9–17 Mon–Fri and 13–20 Mon–Fri | `next_period(Mon 10:00)` | Mon 10:00–20:00 | Overlapping rules form one period |
+| P13 | 9–17 Mon–Fri, break 12–13 | `next_period(Mon 12:30)` | Mon 13:00–17:00 | From inside a break, the period after it |
+| P14 | same | `previous_period(Mon 12:30)` | Mon 09:00–12:00 | From inside a break, the period before it |
+| P15 | 9–17 Mon–Fri, holiday Wed 2026-01-07 | `next_period(Tue 17:00)` | Thu 09:00–17:00 | A holiday is skipped |
+| P16 | same | `previous_period(Thu 09:00)` | Tue 09:00–17:00 | The same, searching back |
+| P17 | 22–06 Mon–Fri, holiday Tue 2026-01-06 | `next_period(Mon 22:00)` | Mon 22:00–Tue 00:00 | A holiday cuts an overnight shift at midnight |
+| P18 | same | `next_period(Tue 00:00)` | Wed 00:00–06:00 | The part of a holiday's shift after the next midnight is kept |
+| P19 | 00–00 Mon–Sun | `next_period(Mon 10:00)` | Mon 10:00–Wed 2027-01-06 10:00 (366 days) | A period is capped at the search bound |
+| P20 | 00–00 Mon–Sun, holiday Thu 2027-01-14 | `next_period(Mon 00:00)` | Mon 00:00–Wed 2027-01-13 00:00 (373 days) | One holiday date adds seven days to the bound |
+| P21 | same | `previous_period(Mon 2028-01-24 00:00)` | Sat 2027-01-16 00:00–Mon 2028-01-24 00:00 (373 days) | The cap applies searching back too |
+| P22 | 9–10 every day `Etc/GMT+3`, break 9–10 every day `America/Sao_Paulo` | `next_period(Fri 2021-01-01 00:00)` | No-working-time error | No period starts within the search bound |
+| P23 | same | `previous_period(Fri 2021-01-01 00:00)` | No-working-time error | No period ends within the search bound |
+| P24 | 9–17 Mon–Fri | `next_period(Thu 9999-12-30 18:00)` | Out-of-range error | The search reaches the end of the supported range |
+
+In P20 and P21 each period would otherwise run one day past the bound. P22's schedule builds because the break missed the shift while São Paulo kept summer time; since Brazil dropped it in 2019, the break covers the whole shift.
+
+## See also
+
+- [Adding time](/docs/concepts/adding-time/): `add` and `sub`, which walk through the same periods.
+- [Rules](/docs/concepts/rules/): overnight shifts, breaks and holidays, which decide where periods start and end.
+- [Errors](/docs/concepts/errors/): the no-working-time and out-of-range errors in each language.
+- [DESIGN.md: next_period(t) and previous_period(t)](https://github.com/Karthik-beta/workclock/blob/main/DESIGN.md#next_periodt-and-previous_periodt), the specification.

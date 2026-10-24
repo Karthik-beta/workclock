@@ -1,0 +1,92 @@
+---
+title: Install
+description: Add workclock to a Rust, Python or JavaScript project, with the toolchain and time zone data each one needs.
+---
+
+This page shows how to add workclock to a Rust, Python or JavaScript project, which language versions it supports, and where each package gets its time zone data.
+
+## Add the package
+
+<Callout type="warning" title="Warning">
+In development. No release has been published yet.
+</Callout>
+
+<Tabs groupId="install" persist items={['cargo', 'pip', 'uv', 'npm']}>
+<Tab value="cargo">
+
+```sh
+cargo add workclock jiff
+```
+
+The Rust API takes and returns [jiff](https://docs.rs/jiff) 0.2 types, so Rust code depends on jiff too.
+
+</Tab>
+<Tab value="pip">
+
+```sh
+pip install workclock
+```
+
+</Tab>
+<Tab value="uv">
+
+```sh
+uv add workclock
+```
+
+</Tab>
+<Tab value="npm">
+
+```sh
+npm i workclock
+```
+
+</Tab>
+</Tabs>
+
+## Requirements
+
+- **Rust:** 1.85 or later.
+- **Python:** CPython 3.9 or later. The wheels use the stable ABI (abi3), one per platform: Linux x86_64 and aarch64 (manylinux and musllinux), macOS x86_64 and arm64, and Windows x64. Free-threaded CPython cannot load abi3 wheels. Other platforms build from the sdist, which needs a Rust toolchain.
+- **JavaScript:** Node.js 22 or later. The package is WebAssembly with TypeScript types included, so it needs no Rust toolchain. Browsers load it through a bundler, or without one from `workclock/web`.
+
+### Browsers without a bundler
+
+In JavaScript, import from `workclock/web` and call its default export once before using anything else. `init()` fetches `workclock_bg.wasm` from the package's `pkg/web/` directory, so serve that directory with your page. With a bundler, or in Node.js, import from `workclock` instead.
+
+```js
+import init, { Schedule } from "workclock/web";
+
+await init();
+
+const support = new Schedule({
+  timeZone: "Europe/London",
+  rules: [{ type: "workday", start: "09:00", end: "17:00" }],
+});
+```
+
+## Time zone data
+
+Working hours are wall-clock times in an IANA time zone, so every binding needs the IANA time zone database.
+
+- **JavaScript:** the npm package bundles the database and always uses its bundled copy, whose zone rules are as current as the workclock release.
+- **Python:** the wheels bundle the database too. They use the system database when there is one, and the bundled copy otherwise.
+- **Rust:** the crate uses jiff's defaults: the system database (`/usr/share/zoneinfo`, or the directory in `TZDIR`) on Linux and macOS, and a bundled copy on Windows.
+
+On a Linux image without tzdata, as some slim and distroless images are, every named zone in Rust, even `"UTC"`, is an unknown-zone error (`workclock::Error::UnknownZone`). Install the `tzdata` package, point `TZDIR` at a zoneinfo directory, or enable jiff's `tzdb-bundle-always` feature to bundle the database:
+
+```sh
+cargo add jiff --features tzdb-bundle-always
+```
+
+The Python samples on this site build their datetimes with the standard library's `zoneinfo.ZoneInfo`, which is separate from workclock's copy. On Windows, which has no system database, `ZoneInfo("Europe/London")` needs the [`tzdata`](https://pypi.org/project/tzdata/) package from PyPI ([zoneinfo: data sources](https://docs.python.org/3/library/zoneinfo.html#data-sources)):
+
+```sh
+pip install tzdata
+```
+
+Results can differ between machines only when their databases disagree about a zone's history or future. [Time zones and DST](/docs/concepts/time-zones-and-dst/) explains how workclock uses the zones.
+
+## Next steps
+
+Write a first program in your language: [Quickstart: Rust](/docs/quickstart/rust/), [Quickstart: Python](/docs/quickstart/python/) or [Quickstart: JavaScript](/docs/quickstart/javascript/).
