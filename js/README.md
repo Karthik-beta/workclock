@@ -46,6 +46,7 @@ its own `timeZone`.
   `"2026-01-05T09:00:00Z"` or `"2026-01-05T10:00:00+01:00"`. A string without
   an offset is rejected.
 - Durations are whole numbers of milliseconds, negative to go back in time.
+  Any other type throws `TypeError`; it is not converted.
 - Results are `Date`s and numbers, exact to the millisecond.
 - The supported range is -009999-01-02T01:59:59Z to 9999-12-30T22:00:00Z.
 

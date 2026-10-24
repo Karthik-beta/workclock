@@ -21,7 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   timezone-aware datetimes. Accepts zone names, `zoneinfo.ZoneInfo` and pytz
   zones. Errors subclass `WorkclockError` and the matching built-in exception.
 - Python: `between_many`, `add_many` and `sub_many` process a batch in one
-  call, from lists or NumPy `datetime64`/`timedelta64` arrays.
+  call, from lists or NumPy `datetime64`/`timedelta64` arrays, which
+  broadcast together under NumPy's rules.
+- Python: `Schedule` pickles and deep-copies, so it can be passed to
+  `multiprocessing` workers, and `workclock.Rule` names the type of its
+  rules.
 - Python: type hints with a `py.typed` marker, and a stub for the compiled
   extension.
 - Python: `workclock.compat`, the businesstimedelta 1.0.1 API on the
