@@ -35,6 +35,20 @@ export function remarkRepoFile() {
 }
 
 function rewriteLinks(node: Nodes, dir: string, file: VFile) {
+  // A heading is already a link to itself on the site, so a link inside it becomes its text,
+  // like CHANGELOG.md's "## [Unreleased]".
+  if (node.type === 'heading') {
+    node.children = node.children.flatMap((c) =>
+      c.type === 'link' || c.type === 'linkReference' ? c.children : [c],
+    );
+    const heading = node;
+    replaceSource(
+      file,
+      heading,
+      (s) => `${'#'.repeat(heading.depth)} ${heading.children.map((c) => s.stringify(c)).join('')}`,
+    );
+    return;
+  }
   if (node.type === 'link' && !/^([a-z]+:|#|\/)/.test(node.url)) {
     const link = node;
     link.url = new URL(dir + link.url, `${repoUrl}/blob/main/`).href;
