@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { repoUrl } from '@/lib/shared';
+import { repoUrl, siteUrl } from '@/lib/shared';
 
 const linkClass = 'hover:text-text';
 
@@ -8,7 +8,7 @@ const columns: { title: string; links: { label: string; href: string }[] }[] = [
     title: 'Project',
     links: [
       { label: 'GitHub repository', href: repoUrl },
-      { label: 'Changelog', href: `${repoUrl}/blob/main/CHANGELOG.md` },
+      { label: 'Changelog', href: '/docs/changelog/' },
       { label: 'Security', href: `${repoUrl}/blob/main/SECURITY.md` },
       { label: 'Contributing', href: `${repoUrl}/blob/main/CONTRIBUTING.md` },
     ],
@@ -16,10 +16,11 @@ const columns: { title: string; links: { label: string; href: string }[] }[] = [
   {
     title: 'Docs',
     links: [
-      { label: 'Install', href: '/docs/' },
-      { label: 'Concepts', href: '/docs/' },
-      { label: 'Migrating', href: `${repoUrl}/blob/main/MIGRATING.md` },
-      { label: 'Benchmarks', href: `${repoUrl}/blob/main/benchmarks/RESULTS.md` },
+      { label: 'Install', href: '/docs/install/' },
+      { label: 'Concepts', href: '/docs/concepts/schedules/' },
+      { label: 'Migrating', href: '/docs/guides/migrating-from-businesstimedelta/' },
+      { label: 'Benchmarks', href: '/docs/benchmarks/' },
+      { label: 'llms.txt', href: `${siteUrl}llms.txt` },
     ],
   },
 ];
