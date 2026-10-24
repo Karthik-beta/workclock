@@ -126,6 +126,19 @@ def test_naive_datetimes_are_rejected(office: Schedule) -> None:
         office.add(datetime(2026, 1, 5, 10), hours=1)
 
 
+def test_instants_that_are_not_datetimes_are_type_errors(office: Schedule) -> None:
+    text = "2026-01-05T10:00:00+00:00"
+    for call in (
+        lambda: office.between(text, utc(5, 12)),  # type: ignore[arg-type]
+        lambda: office.add(text, hours=1),  # type: ignore[arg-type]
+        lambda: office.sub(text, hours=1),  # type: ignore[arg-type]
+        lambda: office.next_period(text),  # type: ignore[arg-type]
+        lambda: office.previous_period(text),  # type: ignore[arg-type]
+    ):
+        with pytest.raises(TypeError, match="expected a datetime, got '2026"):
+            call()
+
+
 def test_errors_subclass_builtin_exceptions() -> None:
     assert issubclass(NoWorkingTimeError, ValueError)
     assert issubclass(OutOfRangeError, OverflowError)
@@ -136,12 +149,49 @@ def test_errors_subclass_builtin_exceptions() -> None:
 
 def test_build_errors() -> None:
     # E1, E3, E6
-    with pytest.raises(NoWorkingTimeError):
+    empty = (
+        r"^schedule has no working time: its working hours minus its breaks "
+        r"are empty$"
+    )
+    with pytest.raises(NoWorkingTimeError, match=empty):
         Schedule([])
-    with pytest.raises(NoWorkingTimeError):
+    with pytest.raises(NoWorkingTimeError, match=empty):
         Schedule([WorkDay(time(9), time(17)), Break(time(9), time(17))])
     with pytest.raises(UnknownZoneError, match="Mars/Olympus_Mons"):
         Schedule([WorkDay(time(9), time(17))], time_zone="Mars/Olympus_Mons")
+
+
+def test_failed_searches_name_their_start() -> None:
+    # Brazil dropped summer time in 2019; since then the break, in Sao Paulo,
+    # covers the whole shift, but in 2001 it missed it, so the schedule builds.
+    schedule = Schedule(
+        [
+            WorkDay(time(9), time(10), range(7), time_zone="Etc/GMT+3"),
+            Break(time(9), time(10), range(7), time_zone="America/Sao_Paulo"),
+        ]
+    )
+    start = datetime(2021, 1, 1, tzinfo=ZoneInfo("Asia/Tokyo"))
+    message = (
+        r"^no working time within 366 days, plus seven days per holiday date, "
+        r"of 2021-01-01T00:00:00\+09:00$"
+    )
+    for search in (
+        lambda: schedule.add(start, hours=1),
+        lambda: schedule.sub(start, hours=1),
+        lambda: schedule.next_period(start),
+        lambda: schedule.previous_period(start),
+    ):
+        with pytest.raises(NoWorkingTimeError, match=message):
+            search()
+    with pytest.raises(NoWorkingTimeError, match=rf"^item 1: {message[1:]}"):
+        schedule.add_many([datetime(2001, 1, 1, tzinfo=UTC), start], timedelta(hours=1))
+    with pytest.raises(
+        NoWorkingTimeError, match=r"^item 2: no working time .* of 2021-01-01T00:00$"
+    ):
+        schedule.sub_many(
+            np.array([["2001-01-01T00:00"], ["2021-01-01T00:00"]], dtype="M8[m]"),
+            np.array([1, 2], dtype="m8[h]"),
+        )
 
 
 def test_results_past_the_supported_range_are_errors() -> None:
