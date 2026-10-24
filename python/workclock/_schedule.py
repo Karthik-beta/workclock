@@ -3,11 +3,20 @@
 from __future__ import annotations
 
 import math
+import operator
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta, timezone, tzinfo
-from typing import TYPE_CHECKING, Any, Optional, TypeVar, Union, overload
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Optional,
+    SupportsIndex,
+    TypeVar,
+    Union,
+    overload,
+)
 
 from workclock import _arrays, _workclock
 from workclock._errors import (
@@ -116,6 +125,17 @@ def _datetime(micros: int, tz: tzinfo | None) -> datetime:
         ) from None
 
 
+def _is_weekday(value: object) -> bool:
+    """Return whether ``value`` is an integer from 0 to 6."""
+    # bool is an int subclass, but True and False are not weekdays.
+    if isinstance(value, bool):
+        return False
+    try:
+        return 0 <= operator.index(value) <= 6  # type: ignore[arg-type]
+    except TypeError:
+        return False
+
+
 @dataclass(frozen=True, init=False)
 class _Hours:
     start: time
@@ -127,7 +147,7 @@ class _Hours:
         self,
         start: time,
         end: time,
-        days: Iterable[int] = range(5),
+        days: Iterable[SupportsIndex] = range(5),
         *,
         time_zone: str | tzinfo | None = None,
     ) -> None:
@@ -139,8 +159,7 @@ class _Hours:
                 f"not the string {days!r}"
             )
         given = tuple(days)
-        unique = frozenset(given)
-        bad = [day for day in given if not (isinstance(day, int) and 0 <= day <= 6)]
+        bad = [day for day in given if not _is_weekday(day)]
         if bad:
             raise ValueError(
                 "days must be integers from 0 (Monday) to 6, got "
@@ -148,7 +167,7 @@ class _Hours:
             )
         object.__setattr__(self, "start", start)
         object.__setattr__(self, "end", end)
-        object.__setattr__(self, "days", unique)
+        object.__setattr__(self, "days", frozenset(map(operator.index, given)))
         object.__setattr__(self, "time_zone", _optional_zone(time_zone))
 
     def _spec(self) -> _HoursSpec:
@@ -167,7 +186,8 @@ class WorkDay(_Hours):
     makes the time from ``start`` to ``end`` available for work. If ``end``
     is not after ``start``, the shift is overnight and ends on the next date,
     so ``start == end`` is a 24-hour shift. A shift belongs to the day it
-    starts on. ``time_zone`` defaults to the schedule's.
+    starts on. ``days`` takes any integer type, such as NumPy's, but not
+    ``bool``. ``time_zone`` defaults to the schedule's.
 
     Raises `TypeError` if ``start`` or ``end`` is not a ``datetime.time`` or
     ``time_zone`` has no IANA name, and `ValueError` if a time has a tzinfo
