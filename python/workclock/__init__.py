@@ -6,7 +6,7 @@ from workclock._errors import (
     UnknownZoneError,
     WorkclockError,
 )
-from workclock._schedule import Break, Holidays, Schedule, WorkDay
+from workclock._schedule import Break, Holidays, Rule, Schedule, WorkDay
 from workclock._workclock import __version__
 
 __all__ = [
@@ -14,6 +14,7 @@ __all__ = [
     "Holidays",
     "NoWorkingTimeError",
     "OutOfRangeError",
+    "Rule",
     "Schedule",
     "UnknownZoneError",
     "WorkDay",
