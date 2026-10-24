@@ -1,7 +1,5 @@
-import { readFile } from 'node:fs/promises';
-import path from 'node:path';
 import { Callout } from 'fumadocs-ui/components/callout';
-import init, { Schedule } from 'workclock/web';
+import { Schedule } from 'workclock/web';
 import { CheckIt } from '@/components/landing/check-it';
 import { InstallCommands } from '@/components/landing/install-commands';
 import { MigrateNote } from '@/components/landing/migrate-note';
@@ -13,13 +11,10 @@ import { SkipLink } from '@/components/skip-link';
 import { WeekStripDemo } from '@/components/week-strip/demo';
 import { repoUrl } from '@/lib/shared';
 import { computeStrip, readmeInputs } from '@/lib/week-strip';
+import { initWorkclock } from '@/lib/workclock-build';
 
 async function readmeStrip() {
-  await init({
-    module_or_path: await readFile(
-      path.join(process.cwd(), 'node_modules/workclock/pkg/web/workclock_bg.wasm'),
-    ),
-  });
+  await initWorkclock();
   const result = computeStrip(Schedule, readmeInputs);
   if (!result.ok) throw new Error(`The README scenario failed: ${result.message}`);
   return result.strip;
