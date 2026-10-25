@@ -1,0 +1,141 @@
+---
+title: Delivery ETAs
+description: Find when an order is dispatched by adding a handling time to the time it was placed, counting only the warehouse's operating hours, with add.
+---
+
+A warehouse dispatches each order 6 working hours after it is placed. When does an order placed now leave the building? This guide answers it with `add`, in Rust, Python and JavaScript.
+
+## The schedule
+
+A warehouse in London is open 08:00–18:00 on weekdays, stops for lunch, and is closed on 25 and 28 December 2026. As rules, in the `Europe/London` time zone:
+
+- `WorkDay`: 08:00–18:00, Monday to Friday.
+- `Break`: 12:00–13:00, Monday to Friday.
+- `Holidays`: Friday 25 and Monday 28 December 2026.
+
+Handling takes 6 hours of operating time. One order is placed at 15:00 on Thursday 24 December 2026, London time, and another at 10:00 on Saturday 26 December, when the warehouse is closed.
+
+## Find the dispatch time
+
+<Tabs groupId="lang" persist items={['Rust', 'Python', 'JavaScript']}>
+<Tab value="Rust">
+
+```rust
+use jiff::civil::{date, time};
+use jiff::{SignedDuration, Zoned};
+use workclock::{Break, Holidays, Schedule, Weekdays, WorkDay};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let days = Weekdays::MON_TO_FRI;
+    let warehouse = Schedule::builder()
+        .time_zone("Europe/London")
+        .rule(WorkDay::new(time(8, 0, 0, 0), time(18, 0, 0, 0), days))
+        .rule(Break::new(time(12, 0, 0, 0), time(13, 0, 0, 0), days))
+        .rule(Holidays::new([date(2026, 12, 25), date(2026, 12, 28)]))
+        .build()?;
+    let handling = SignedDuration::from_hours(6);
+
+    let placed: Zoned = "2026-12-24T15:00[Europe/London]".parse()?;
+    let dispatch = warehouse.add(&placed, handling)?;
+    assert_eq!(dispatch.to_string(), "2026-12-29T11:00:00Z");
+
+    let saturday: Zoned = "2026-12-26T10:00[Europe/London]".parse()?;
+    let dispatch = warehouse.add(&saturday, handling)?;
+    assert_eq!(dispatch.to_string(), "2026-12-29T15:00:00Z");
+    Ok(())
+}
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+from datetime import date, datetime, time, timedelta
+from zoneinfo import ZoneInfo
+
+from workclock import Break, Holidays, Schedule, WorkDay
+
+london = ZoneInfo("Europe/London")
+warehouse = Schedule(
+    [
+        WorkDay(time(8), time(18)),  # Monday to Friday by default
+        Break(time(12), time(13)),
+        Holidays([date(2026, 12, 25), date(2026, 12, 28)]),
+    ],
+    time_zone=london,
+)
+handling = timedelta(hours=6)
+
+placed = datetime(2026, 12, 24, 15, tzinfo=london)
+warehouse.add(placed, handling)  # 2026-12-29 11:00, London time
+
+saturday = datetime(2026, 12, 26, 10, tzinfo=london)
+warehouse.add(saturday, handling)  # 2026-12-29 15:00, London time
+```
+
+</Tab>
+<Tab value="JavaScript">
+
+```js
+import { Schedule } from "workclock";
+
+const HOUR = 3_600_000; // 1 hour in milliseconds
+
+const warehouse = new Schedule({
+  timeZone: "Europe/London",
+  rules: [
+    { type: "workday", start: "08:00", end: "18:00" },
+    { type: "break", start: "12:00", end: "13:00" },
+    { type: "holidays", dates: ["2026-12-25", "2026-12-28"] },
+  ],
+});
+const handling = 6 * HOUR;
+
+// London is at UTC+00:00 in December, so these are London times.
+const placed = "2026-12-24T15:00:00Z";
+warehouse.add(placed, handling); // Date 2026-12-29T11:00:00.000Z
+
+const saturday = "2026-12-26T10:00:00Z";
+warehouse.add(saturday, handling); // Date 2026-12-29T15:00:00.000Z
+```
+
+</Tab>
+</Tabs>
+
+## The result
+
+The order placed at 15:00 on Thursday 24 December is dispatched at 11:00 on Tuesday 29 December 2026, London time:
+
+| Date, `Europe/London` | Operating time used |
+|---|---|
+| Thursday 24 December, 15:00–18:00 | 3 hours |
+| Friday 25 December | None: a holiday |
+| Saturday 26 and Sunday 27 December | None: not working days |
+| Monday 28 December | None: a holiday |
+| Tuesday 29 December, 08:00–11:00 | 3 hours |
+
+<WeekStrip workStart="08:00" workEnd="18:00" openedTime="15:00" slaHours={6} />
+
+The order placed at 10:00 on Saturday 26 December starts counting when the warehouse next opens, at 08:00 on Tuesday 29 December. It uses 08:00–12:00 and 13:00–15:00, and is dispatched at 15:00 that day.
+
+For a delivery leg with different hours, such as a courier that works on Saturdays, build a second schedule for the courier and add its time to the dispatch instant.
+
+## Edge cases
+
+- **An order that uses up the morning** is dispatched at 12:00, when the lunch break starts, not at 13:00: 4 hours from 08:00 on Tuesday end at 12:00 (DESIGN.md A2, [Adding time: Where the result lands](/docs/concepts/adding-time/#where-the-result-lands)).
+- **An order placed during the break** starts counting at 13:00: 1 hour from 12:30 ends at 14:00 (DESIGN.md K4).
+- **Different hours on Saturdays.** Add a second `WorkDay` rule for Saturday with its own hours; working time is the union of all `WorkDay` rules ([Schedules](/docs/concepts/schedules/)).
+- **Holidays.** Each date in `Holidays` removes 00:00 to the next 00:00 in the schedule's time zone ([Rules: Holidays](/docs/concepts/rules/#holidays)).
+- **Daylight saving time (DST).** Operating hours are wall-clock times, so 08:00 stays 08:00 London time after the clocks change. An order placed at 15:00 on Friday 27 March 2026 is dispatched at 11:00 on Monday 30 March, London time (BST), which is 10:00 UTC ([Time zones and DST](/docs/concepts/time-zones-and-dst/)).
+
+What 0.1.0 does not do ([DESIGN.md: Scope](https://github.com/Karthik-beta/workclock/blob/main/DESIGN.md#scope)):
+
+- **Lead times in business days**, such as "delivered in 2 business days". workclock adds working time, not days.
+- **Different hours on one date**, such as closing early on Christmas Eve. Operating hours repeat by weekday, with no per-date overrides. A whole closed day is a holiday.
+
+## See also
+
+- [Adding time](/docs/concepts/adding-time/): what `add` and `sub` return.
+- [Support SLAs](/docs/guides/support-slas/): the same `add`, with `between` for the time left.
+- [Batch operations](/docs/guides/batch-operations/): dispatch times for many orders in one call.
+- [Errors](/docs/concepts/errors/): what `add` raises when there is no working time within the search bound.

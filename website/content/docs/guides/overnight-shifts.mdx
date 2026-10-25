@@ -1,0 +1,158 @@
+---
+title: Overnight shifts
+description: Count, extend and look up 22:00–06:00 shifts that cross midnight, with between, add and next_period.
+---
+
+Our night team works 22:00–06:00, Monday to Friday. How long is a shift, when does a job that needs 3 hours of shift time finish, how many hours does the team work in a week, and when does the next shift start after the weekend? This guide answers each with one call, in Rust, Python and JavaScript.
+
+## The schedule
+
+One rule, in the `Europe/London` time zone:
+
+- `WorkDay`: 22:00–06:00, Monday to Friday.
+
+Because the end is before the start, each shift is overnight: it starts at 22:00 on its weekday and ends at 06:00 the next date. A shift belongs to the weekday it starts on, so Friday's shift runs into Saturday morning, and no shift ends on Monday morning, because none starts on Sunday ([Rules: Overnight shifts](/docs/concepts/rules/#overnight-shifts)).
+
+The week of Monday 5 January 2026, in London time:
+
+| Shift | Starts | Ends | Working time |
+|---|---|---|---|
+| Monday | Monday 5 January, 22:00 | Tuesday 6 January, 06:00 | 8 hours |
+| Tuesday | Tuesday 6 January, 22:00 | Wednesday 7 January, 06:00 | 8 hours |
+| Wednesday | Wednesday 7 January, 22:00 | Thursday 8 January, 06:00 | 8 hours |
+| Thursday | Thursday 8 January, 22:00 | Friday 9 January, 06:00 | 8 hours |
+| Friday | Friday 9 January, 22:00 | Saturday 10 January, 06:00 | 8 hours |
+| Saturday and Sunday | No shift | | None |
+| **Week** | | | **40 hours** |
+
+This page has no week strip: the strip draws working hours that end on the day they start, so it cannot show a shift that crosses midnight. The table above is the week it would show.
+
+## Count, extend and find shifts
+
+Each tab counts Monday's shift, adds 3 hours of shift time to 04:00 on Tuesday, counts the whole week from Monday 00:00 to the next Monday 00:00, and finds the next shift after Friday's ends.
+
+<Tabs groupId="lang" persist items={['Rust', 'Python', 'JavaScript']}>
+<Tab value="Rust">
+
+```rust
+use jiff::civil::time;
+use jiff::{SignedDuration, Zoned};
+use workclock::{Schedule, Weekdays, WorkDay};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let days = Weekdays::MON_TO_FRI;
+    let nights = Schedule::builder()
+        .time_zone("Europe/London")
+        .rule(WorkDay::new(time(22, 0, 0, 0), time(6, 0, 0, 0), days))
+        .build()?;
+
+    let monday: Zoned = "2026-01-05T22:00[Europe/London]".parse()?;
+    let tuesday: Zoned = "2026-01-06T06:00[Europe/London]".parse()?;
+    let shift = nights.between(&monday, &tuesday);
+    assert_eq!(shift, SignedDuration::from_hours(8));
+
+    let job: Zoned = "2026-01-06T04:00[Europe/London]".parse()?;
+    let done = nights.add(&job, SignedDuration::from_hours(3))?;
+    assert_eq!(done.to_string(), "2026-01-06T23:00:00Z");
+
+    let week_start: Zoned = "2026-01-05T00:00[Europe/London]".parse()?;
+    let week_end: Zoned = "2026-01-12T00:00[Europe/London]".parse()?;
+    let week = nights.between(&week_start, &week_end);
+    assert_eq!(week, SignedDuration::from_hours(40));
+
+    let saturday: Zoned = "2026-01-10T06:00[Europe/London]".parse()?;
+    let next = nights.next_period(&saturday)?;
+    assert_eq!(next.start.to_string(), "2026-01-12T22:00:00Z");
+    assert_eq!(next.end.to_string(), "2026-01-13T06:00:00Z");
+    Ok(())
+}
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+from datetime import datetime, time
+from zoneinfo import ZoneInfo
+
+from workclock import Schedule, WorkDay
+
+london = ZoneInfo("Europe/London")
+nights = Schedule(
+    [WorkDay(time(22), time(6))],  # Monday to Friday by default
+    time_zone=london,
+)
+
+monday = datetime(2026, 1, 5, 22, tzinfo=london)
+tuesday = datetime(2026, 1, 6, 6, tzinfo=london)
+nights.between(monday, tuesday)  # 8:00:00
+
+job = datetime(2026, 1, 6, 4, tzinfo=london)
+nights.add(job, hours=3)  # 2026-01-06 23:00, London time
+
+week_start = datetime(2026, 1, 5, tzinfo=london)
+week_end = datetime(2026, 1, 12, tzinfo=london)
+nights.between(week_start, week_end)  # 1 day, 16:00:00, which is 40 hours
+
+saturday = datetime(2026, 1, 10, 6, tzinfo=london)
+nights.next_period(saturday)
+# (2026-01-12 22:00, 2026-01-13 06:00), London time
+```
+
+</Tab>
+<Tab value="JavaScript">
+
+```js
+import { Schedule } from "workclock";
+
+const HOUR = 3_600_000; // 1 hour in milliseconds
+
+const nights = new Schedule({
+  timeZone: "Europe/London",
+  rules: [{ type: "workday", start: "22:00", end: "06:00" }],
+});
+
+// London is at UTC+00:00 in January, so these are London times.
+const monday = "2026-01-05T22:00:00Z";
+const tuesday = "2026-01-06T06:00:00Z";
+nights.between(monday, tuesday); // 28800000 ms
+
+const job = "2026-01-06T04:00:00Z";
+nights.add(job, 3 * HOUR); // Date 2026-01-06T23:00:00.000Z
+
+const weekStart = "2026-01-05T00:00:00Z";
+const weekEnd = "2026-01-12T00:00:00Z";
+nights.between(weekStart, weekEnd); // 144000000 ms
+
+const next = nights.nextPeriod("2026-01-10T06:00:00Z");
+next.start; // Date 2026-01-12T22:00:00.000Z
+next.end; // Date 2026-01-13T06:00:00.000Z
+```
+
+</Tab>
+</Tabs>
+
+## The result
+
+- Monday's shift, 22:00 on Monday to 06:00 on Tuesday, counts 8 hours across midnight (DESIGN.md O1).
+- A job started at 04:00 on Tuesday uses the last 2 hours of Monday's shift, waits through the day, and uses 1 hour of Tuesday's shift: it finishes at 23:00 on Tuesday 6 January. A shift already in progress counts from the query instant (DESIGN.md O4).
+- The week from Monday 00:00 to the next Monday 00:00 has 40 hours, including the 6 hours of Friday's shift that fall on Saturday (DESIGN.md O5).
+- After Friday's shift ends at 06:00 on Saturday 10 January, the next shift is Monday 12 January, 22:00 to Tuesday 13 January, 06:00. `next_period` returns the whole shift as one period, across midnight.
+
+businesstimedelta 1.0.1 does not count across midnight: for the same rule it gives 0 hours for Monday's shift, and adding 4 hours at Monday 22:00 lands on Wednesday instead of 02:00 on Tuesday ([Migrating from businesstimedelta](/docs/guides/migrating-from-businesstimedelta/)).
+
+## Edge cases
+
+- **A break inside the shift.** A `Break` runs on the dates it starts on, like a `WorkDay`. A 02:00–02:30 break in Monday-to-Friday night shifts falls on Tuesday to Saturday, so give it those days: `days=range(1, 6)` in Python, `["tue", "wed", "thu", "fri", "sat"]` in JavaScript. With the default Monday to Friday, Friday's shift keeps its break time and the week has 38 hours instead of 37 hours 30 minutes ([Rules: Break](/docs/concepts/rules/#break)).
+- **A holiday cuts a shift at midnight.** A holiday removes calendar time, not whole shifts. With a holiday on Tuesday, Monday's shift keeps its 2 hours before midnight, and Tuesday's shift keeps its 6 hours after the next midnight (DESIGN.md HO1–HO3, [Rules: Holidays](/docs/concepts/rules/#holidays)).
+- **Daylight saving time (DST).** A night shift that spans a clock change is an hour shorter or longer. London's clocks change at 01:00 UTC on a Sunday, so a Monday-to-Friday rota never spans one; with shifts every night, the night of Saturday 28 March 2026 has 7 hours and the night of Saturday 24 October 2026 has 9 hours ([Time zones and DST: A night shift across a DST change](/docs/concepts/time-zones-and-dst/#a-night-shift-across-a-dst-change)).
+- **24-hour shifts.** A `WorkDay` whose start equals its end, such as 09:00–09:00, is a 24-hour shift (DESIGN.md O7–O9).
+
+Not in 0.1.0: a different shift on one date, such as a short night on New Year's Eve. Shifts repeat by weekday, with no per-date overrides ([DESIGN.md: Scope](https://github.com/Karthik-beta/workclock/blob/main/DESIGN.md#scope)).
+
+## See also
+
+- [Rules](/docs/concepts/rules/): the `WorkDay` rule and its overnight examples.
+- [Periods](/docs/concepts/periods/): `next_period` and `previous_period`.
+- [Payroll and overtime](/docs/guides/payroll-and-overtime/): contracted hours and overtime from a timesheet.
+- [DESIGN.md: WorkDay](https://github.com/Karthik-beta/workclock/blob/main/DESIGN.md#workday): the specification and examples O1–O9.
