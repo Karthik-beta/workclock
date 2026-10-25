@@ -289,7 +289,8 @@ jobs:
       # site's own absolute URLs against the built files. It skips Next.js'
       # __next.*.txt prefetch files, which repeat each page's links, and goes
       # slowly enough that github.com does not answer 503. It skips the
-      # CHANGELOG's release links, which exist only once the tag is pushed.
+      # CHANGELOG's release links, which exist only once the tag is pushed,
+      # and npmjs.com, which answers automated requests with 403.
       - run: mkdir -p .preview && cp -r out .preview/workclock
         working-directory: website
       - uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
@@ -303,7 +304,7 @@ jobs:
             --root-dir ${{ github.workspace }}/website/.preview
             --index-files index.html
             --remap 'https://karthik-beta\.github\.io/workclock/(.*) file://${{ github.workspace }}/website/.preview/workclock/$1'
-            --exclude '^https://(claude\.ai|chatgpt\.com)/'
+            --exclude '^https://(claude\.ai|chatgpt\.com|www\.npmjs\.com)/'
             --exclude '^https://github\.com/Karthik-beta/workclock/(compare|releases/tag)/'
             'website/.preview/**/*.html' 'website/.preview/**/*.md' 'website/.preview/**/*.txt'
           fail: true
