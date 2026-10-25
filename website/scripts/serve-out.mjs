@@ -28,7 +28,13 @@ function send(res, status, file) {
 
 createServer((req, res) => {
   const url = new URL(req.url ?? '/', 'http://localhost');
-  const pathname = decodeURIComponent(url.pathname);
+  let pathname;
+  try {
+    pathname = decodeURIComponent(url.pathname);
+  } catch {
+    res.writeHead(400).end();
+    return;
+  }
   if (pathname === '/' || pathname === base) {
     res.writeHead(302, { Location: `${base}/` }).end();
     return;
