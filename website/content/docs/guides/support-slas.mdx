@@ -138,7 +138,7 @@ Used plus left is always the SLA: `between(opened, now) + between(now, due)` is 
 - **Holidays.** Each date in `Holidays` removes 00:00 to the next 00:00 in the schedule's time zone, not in UTC ([Rules: Holidays](/docs/concepts/rules/#holidays)).
 - **Daylight saving time (DST).** Working hours are wall-clock times in `Europe/London`, so 09:00 stays 09:00 after the clocks change ([Time zones and DST](/docs/concepts/time-zones-and-dst/)).
 
-What 0.1.0 does not do ([DESIGN.md: Scope](https://github.com/Karthik-beta/workclock/blob/main/DESIGN.md#scope)):
+What 0.1.1 does not do ([DESIGN.md: Scope](https://github.com/Karthik-beta/workclock/blob/main/DESIGN.md#scope)):
 
 - **SLAs in business days**, such as "by the end of the next business day". workclock counts working time, not days, and cannot convert a duration into business days.
 - **Shorter hours on one date**, such as closing at 13:00 on Christmas Eve. Working hours repeat by weekday; there are no per-date overrides. A whole closed day is a holiday.

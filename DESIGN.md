@@ -16,7 +16,7 @@ workclock answers two questions:
 - Which instant is reached after adding or subtracting an amount of working
   time?
 
-Not in 0.1.0: converting a duration into business days or weeks (upstream
+Not in 0.1.1: converting a duration into business days or weeks (upstream
 [seppemans/businesstimedelta#3](https://github.com/seppemans/businesstimedelta/issues/3)),
 and per-date overrides of working hours.
 
@@ -493,4 +493,4 @@ crossing is cheap: a loop is only 5% slower than `betweenMany` on
 | DST disambiguation | compatible | Same as jiff, RFC 5545 and Temporal, so the three bindings agree with their ecosystems. |
 | Holiday zone default | schedule's zone | Avoids the UTC/local mismatch behind upstream issue 9. |
 | python-holidays objects | typed `Holidays`: only the years the object holds, and `ValueError` if it holds none; compat `HolidayRule`: every year from 1970 to 2100 first | Keeps "convert once at construction"; no per-date or per-year FFI. Rejecting an object with no years stops it from silently removing nothing. Compat fills in years because upstream code passes objects that fill them in on demand. |
-| Duration-to-business-days (upstream issue 3) | not in 0.1.0 | A formatting feature, not a correctness fix. |
+| Duration-to-business-days (upstream issue 3) | not in 0.1.1 | A formatting feature, not a correctness fix. |

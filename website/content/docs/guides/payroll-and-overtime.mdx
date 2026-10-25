@@ -161,7 +161,7 @@ In Python, subtracting two datetimes with the same `tzinfo` gives the difference
 - **Holidays.** Each date in `Holidays` removes 00:00 to the next 00:00 in the schedule's time zone ([Rules: Holidays](/docs/concepts/rules/#holidays)).
 - **DST.** `between` returns elapsed real time, so a night shift across a clock change is an hour shorter or longer ([Time zones and DST](/docs/concepts/time-zones-and-dst/)).
 
-Not in 0.1.0: contracts with different hours on one date, such as a half day on Christmas Eve. Working hours repeat by weekday, with no per-date overrides, and results are durations, not business days ([DESIGN.md: Scope](https://github.com/Karthik-beta/workclock/blob/main/DESIGN.md#scope)).
+Not in 0.1.1: contracts with different hours on one date, such as a half day on Christmas Eve. Working hours repeat by weekday, with no per-date overrides, and results are durations, not business days ([DESIGN.md: Scope](https://github.com/Karthik-beta/workclock/blob/main/DESIGN.md#scope)).
 
 ## See also
 

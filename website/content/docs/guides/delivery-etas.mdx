@@ -128,7 +128,7 @@ For a delivery leg with different hours, such as a courier that works on Saturda
 - **Holidays.** Each date in `Holidays` removes 00:00 to the next 00:00 in the schedule's time zone ([Rules: Holidays](/docs/concepts/rules/#holidays)).
 - **Daylight saving time (DST).** Operating hours are wall-clock times, so 08:00 stays 08:00 London time after the clocks change. An order placed at 15:00 on Friday 27 March 2026 is dispatched at 11:00 on Monday 30 March, London time (BST), which is 10:00 UTC ([Time zones and DST](/docs/concepts/time-zones-and-dst/)).
 
-What 0.1.0 does not do ([DESIGN.md: Scope](https://github.com/Karthik-beta/workclock/blob/main/DESIGN.md#scope)):
+What 0.1.1 does not do ([DESIGN.md: Scope](https://github.com/Karthik-beta/workclock/blob/main/DESIGN.md#scope)):
 
 - **Lead times in business days**, such as "delivered in 2 business days". workclock adds working time, not days.
 - **Different hours on one date**, such as closing early on Christmas Eve. Operating hours repeat by weekday, with no per-date overrides. A whole closed day is a holiday.
