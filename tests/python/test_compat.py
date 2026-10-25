@@ -186,6 +186,14 @@ def test_holiday_rule_errors_are_workclock_errors() -> None:
         last.next(utc(9999, 12, 30, 12))
 
 
+def test_holiday_rule_difference_reaches_the_ends_of_the_range() -> None:
+    new_year = [datetime.date(2026, 1, 1)]
+    rule = compat.HolidayRule(new_year)
+    assert rule.difference(utc(1, 1, 1), utc(2026, 1, 2)).hours == 24
+    kiritimati = compat.HolidayRule(new_year, tz="Etc/GMT-14")
+    assert kiritimati.difference(utc(2025, 12, 1), utc(9999, 12, 30, 20)).hours == 24
+
+
 def test_holiday_rules_work_on_their_own() -> None:
     rule = compat.HolidayRule([datetime.date(2026, 1, 1), datetime.date(2026, 1, 2)])
     two_hours = compat.BusinessTimeDelta(rule, hours=2)
