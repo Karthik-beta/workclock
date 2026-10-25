@@ -18,7 +18,8 @@ const mono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL(siteUrl),
+  // The origin only: Next.js adds the base path to file-based images itself.
+  metadataBase: new URL(new URL(siteUrl).origin),
   title: { default: 'workclock', template: '%s | workclock' },
 };
 
