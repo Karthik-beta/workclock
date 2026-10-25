@@ -32,6 +32,30 @@ round of the batch case takes businesstimedelta about half an hour; add
 The JavaScript suite runs the batch case three ways: `between` in a loop, and
 `betweenMany` on arrays of `Date`s and on `Float64Array`s.
 
+## Instruction counts
+
+A second Rust suite counts the instructions each case executes, with
+[gungraun](https://crates.io/crates/gungraun) running it under Valgrind's
+Callgrind. Unlike a time, the count repeats exactly from run to run of the same
+build, so it can catch a small slowdown in a pull request. `batch` uses 10,000
+pairs here instead of 1,000,000: code under Valgrind runs far slower, and the
+cost per pair is what matters.
+
+Valgrind does not run on Windows; WSL works. gungraun needs Rust 1.88 or
+later. Install `gungraun-runner` at the version of `gungraun` in `Cargo.lock`;
+the runner refuses any other version.
+
+```sh
+cargo install --locked --version <gungraun version in Cargo.lock> gungraun-runner
+cargo bench -p workclock --bench instructions
+```
+
+Each run compares itself with the previous one. To compare two commits, run
+the first with `-- --save-baseline=base` and the second with
+`-- --baseline=base`. If `single` or `year` uses more than 3% more
+instructions, the run fails with exit status 3; `batch` only reports the
+change.
+
 ## Results
 
 [RESULTS.md](RESULTS.md) has the latest numbers and the machine they ran on.
