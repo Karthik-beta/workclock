@@ -1,0 +1,657 @@
+---
+title: Python
+description: Every public class, method and exception of the workclock Python package, with signatures, parameters, return values and errors.
+---
+
+This page lists the public API of the `workclock` Python package: `workclock.Schedule`, the rules `WorkDay`, `Break` and `Holidays`, the operations, the batch methods and the exceptions. workclock needs CPython 3.9 or later. Every datetime it takes must be timezone-aware, and every result comes back in the `tzinfo` of the datetime passed in. The businesstimedelta-compatible API is on [Python compat](/docs/reference/python-compat/).
+
+## `Schedule`
+
+```python
+Schedule(
+    rules: Iterable[Rule],
+    *,
+    time_zone: str | tzinfo | None = None,
+)
+```
+
+`workclock.Schedule` is working time defined by rules: the union of every `WorkDay`, minus every `Break` and every `Holidays` date. The order of the rules does not matter. [Schedules](/docs/concepts/schedules/) explains how rules combine.
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `rules` | `Iterable[Rule]` | Required | `WorkDay`, `Break` and `Holidays` rules, in any order. |
+| `time_zone` | `str`, `tzinfo` or `None` | `None` | Keyword only. The time zone of rules that do not set their own: an IANA name, a `zoneinfo.ZoneInfo`, a pytz zone or `datetime.timezone.utc`. `None` means UTC. |
+
+Returns a `Schedule` with these attributes:
+
+| Attribute | Type | Description |
+|---|---|---|
+| `rules` | `tuple[Rule, ...]` | The rules the schedule was built from. |
+| `time_zone` | `str` or `None` | The IANA name of `time_zone`, or `None` if it was not given. |
+
+A schedule pickles and deep-copies as its rules and time zone, and is built again from them.
+
+| Raises | When |
+|---|---|
+| `TypeError` | A rule is not a `WorkDay`, `Break` or `Holidays`, or `time_zone` has no IANA name. |
+| `UnknownZoneError` | The schedule's or a rule's time zone is not in the IANA database (E6). |
+| `NoWorkingTimeError` | The working hours minus the breaks are empty over a 14-day reference window, including when there is no `WorkDay` (E1–E3). |
+
+In Python:
+
+```python
+from datetime import date, time
+from zoneinfo import ZoneInfo
+
+from workclock import Break, Holidays, Schedule, WorkDay
+
+support = Schedule(
+    [
+        WorkDay(time(9), time(17)),  # Monday to Friday by default
+        Break(time(12), time(13)),
+        Holidays([date(2026, 12, 25), date(2026, 12, 28)]),
+    ],
+    time_zone=ZoneInfo("Europe/London"),
+)
+support.time_zone  # 'Europe/London'
+```
+
+## `WorkDay`
+
+```python
+WorkDay(
+    start: time,
+    end: time,
+    days: Iterable[SupportsIndex] = range(5),
+    *,
+    time_zone: str | tzinfo | None = None,
+)
+```
+
+`workclock.WorkDay` is working hours on some days of the week. On each local date whose weekday is in `days`, it makes the time from `start` to `end` available for work. A shift belongs to the date it starts on. [Rules: WorkDay](/docs/concepts/rules/#workday) covers overnight and 24-hour shifts.
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `start` | `datetime.time` | Required | Wall-clock start, without a `tzinfo`. |
+| `end` | `datetime.time` | Required | Wall-clock end, without a `tzinfo`. At or before `start`, the shift ends on the next date, so `start == end` is a 24-hour shift. |
+| `days` | `Iterable[SupportsIndex]` | `range(5)` | Weekdays on which shifts start, from 0 (Monday) to 6 (Sunday). Any integer type, such as NumPy's, but not `bool`. The default is Monday to Friday. |
+| `time_zone` | `str`, `tzinfo` or `None` | `None` | Keyword only. The rule's time zone, as for `Schedule`. `None` uses the schedule's. |
+
+Returns an immutable `WorkDay` with the attributes `start`, `end`, `days` (a `frozenset[int]`) and `time_zone` (an IANA name or `None`). Rules are equal when these attributes are equal.
+
+| Raises | When |
+|---|---|
+| `TypeError` | `start` or `end` is not a `datetime.time`, or `time_zone` has no IANA name. |
+| `ValueError` | `start` or `end` has a `tzinfo`, or `days` is a string or holds anything but integers from 0 to 6. |
+
+An unknown time zone name raises `UnknownZoneError` when the `Schedule` is built, not here.
+
+In Python, a 22:00–06:00 night shift in UTC (DESIGN.md O2):
+
+```python
+from datetime import datetime, time, timezone
+
+from workclock import Schedule, WorkDay
+
+nights = Schedule([WorkDay(time(22), time(6), days=[0, 1, 2, 3, 4])])
+monday = datetime(2026, 1, 5, 22, tzinfo=timezone.utc)
+nights.add(monday, hours=4)  # 2026-01-06 02:00, UTC
+```
+
+## `Break`
+
+```python
+Break(
+    start: time,
+    end: time,
+    days: Iterable[SupportsIndex] = range(5),
+    *,
+    time_zone: str | tzinfo | None = None,
+)
+```
+
+`workclock.Break` is time off on some days of the week, such as a lunch break. It takes the same parameters as `WorkDay`, including overnight breaks, has the same attributes and raises the same errors, and removes its time from the working time. A break outside working time has no effect. `days` defaults to Monday to Friday, so a break on a weekend `WorkDay` needs its own `days`.
+
+In Python:
+
+```python
+from datetime import datetime, time
+from zoneinfo import ZoneInfo
+
+from workclock import Break, Schedule, WorkDay
+
+london = ZoneInfo("Europe/London")
+support = Schedule(
+    [WorkDay(time(9), time(17)), Break(time(12), time(13))],
+    time_zone=london,
+)
+opened = datetime(2026, 12, 24, 11, 30, tzinfo=london)
+support.add(opened, hours=1)  # 2026-12-24 13:30, London time
+```
+
+## `Holidays`
+
+```python
+Holidays(
+    dates: Iterable[date],
+    *,
+    time_zone: str | tzinfo | None = None,
+)
+```
+
+`workclock.Holidays` is dates that are not worked. Each date removes the time from 00:00 to the next 00:00 in the rule's time zone. Searching past the last date is not an error. [Rules: Holidays](/docs/concepts/rules/#holidays) covers holidays on DST change days.
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `dates` | `Iterable[date]` | Required | `datetime.date` objects, or a python-holidays object. Read once, when the rule is created. A python-holidays object contributes only the years it already holds, so create it with `years=...`. |
+| `time_zone` | `str`, `tzinfo` or `None` | `None` | Keyword only. The rule's time zone, as for `Schedule`. `None` uses the schedule's. |
+
+Returns an immutable `Holidays` with the attributes `dates` (a `frozenset[date]`) and `time_zone` (an IANA name or `None`).
+
+| Raises | When |
+|---|---|
+| `TypeError` | `dates` is a string or holds anything but `datetime.date` objects, including `datetime.datetime` objects, or `time_zone` has no IANA name. |
+| `ValueError` | `dates` is a python-holidays object that holds no years. |
+
+In Python:
+
+```python
+from datetime import date, datetime, time
+from zoneinfo import ZoneInfo
+
+from workclock import Holidays, Schedule, WorkDay
+
+london = ZoneInfo("Europe/London")
+support = Schedule(
+    [
+        WorkDay(time(9), time(17)),
+        Holidays([date(2026, 12, 25), date(2026, 12, 28)]),
+    ],
+    time_zone=london,
+)
+support.next_period(datetime(2026, 12, 24, 17, tzinfo=london))
+# (2026-12-29 09:00, 2026-12-29 17:00), London time
+```
+
+## `Rule`
+
+```python
+Rule = Union[WorkDay, Break, Holidays]
+```
+
+`workclock.Rule` is the type of any rule a `Schedule` takes, for type annotations.
+
+In Python:
+
+```python
+from datetime import date, time
+
+from workclock import Break, Holidays, Rule, Schedule, WorkDay
+
+rules: list[Rule] = [
+    WorkDay(time(9), time(17)),
+    Break(time(12), time(13)),
+    Holidays([date(2026, 12, 25), date(2026, 12, 28)]),
+]
+support = Schedule(rules, time_zone="Europe/London")
+```
+
+## `Schedule.add`
+
+```python
+Schedule.add(
+    dt: datetime,
+    delta: timedelta | None = None,
+    /,
+    *,
+    hours: float = 0,
+    minutes: float = 0,
+    seconds: float = 0,
+) -> datetime
+```
+
+Finds the instant a given amount of working time after another. The amount is `delta` plus `hours`, `minutes` and `seconds`. [Adding time](/docs/concepts/adding-time/) explains where results land.
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `dt` | `datetime` | Required | Positional only. The aware datetime to count from. |
+| `delta` | `timedelta` or `None` | `None` | Positional only. Working time to add. |
+| `hours` | `float` | `0` | Keyword only. Hours of working time to add. |
+| `minutes` | `float` | `0` | Keyword only. Minutes of working time to add. |
+| `seconds` | `float` | `0` | Keyword only. Seconds of working time to add. |
+
+Returns the earliest `datetime` with exactly the amount of working time between `dt` and it, in the `tzinfo` of `dt`. An amount of zero returns `dt` unchanged, and a negative amount subtracts.
+
+| Raises | When |
+|---|---|
+| `TypeError` | `dt` is not a `datetime`, `delta` is not a `timedelta`, or a keyword amount is not a number. |
+| `ValueError` | `dt` is naive, or a keyword amount is NaN. |
+| `NoWorkingTimeError` | The search crosses 366 days, plus seven days per holiday date, without finding working time. |
+| `OutOfRangeError` | `dt` is outside the supported range, the amount does not fit in 64-bit microseconds, or the result is outside the supported range or `datetime`'s years 1 to 9999. |
+
+In Python:
+
+```python
+from datetime import date, datetime, time
+from zoneinfo import ZoneInfo
+
+from workclock import Break, Holidays, Schedule, WorkDay
+
+london = ZoneInfo("Europe/London")
+support = Schedule(
+    [
+        WorkDay(time(9), time(17)),
+        Break(time(12), time(13)),
+        Holidays([date(2026, 12, 25), date(2026, 12, 28)]),
+    ],
+    time_zone=london,
+)
+opened = datetime(2026, 12, 24, 16, 30, tzinfo=london)
+support.add(opened, hours=8)  # 2026-12-30 09:30, London time
+```
+
+## `Schedule.sub`
+
+```python
+Schedule.sub(
+    dt: datetime,
+    delta: timedelta | None = None,
+    /,
+    *,
+    hours: float = 0,
+    minutes: float = 0,
+    seconds: float = 0,
+) -> datetime
+```
+
+Finds the instant a given amount of working time before another. It takes the same parameters as `Schedule.add` and raises the same errors.
+
+Returns the latest `datetime` with exactly the amount of working time between it and `dt`, in the `tzinfo` of `dt`. An amount of zero returns `dt` unchanged, and a negative amount adds.
+
+In Python:
+
+```python
+from datetime import date, datetime, time
+from zoneinfo import ZoneInfo
+
+from workclock import Break, Holidays, Schedule, WorkDay
+
+london = ZoneInfo("Europe/London")
+support = Schedule(
+    [
+        WorkDay(time(9), time(17)),
+        Break(time(12), time(13)),
+        Holidays([date(2026, 12, 25), date(2026, 12, 28)]),
+    ],
+    time_zone=london,
+)
+due = datetime(2026, 12, 30, 9, 30, tzinfo=london)
+support.sub(due, hours=8)  # 2026-12-24 16:30, London time
+```
+
+## `Schedule.between`
+
+```python
+Schedule.between(a: datetime, b: datetime) -> timedelta
+```
+
+Measures the working time between two instants. [Measuring time](/docs/concepts/measuring-time/) explains what is counted.
+
+| Parameter | Type | Description |
+|---|---|---|
+| `a` | `datetime` | The aware start. |
+| `b` | `datetime` | The aware end. |
+
+Returns the working time as a `timedelta`, negative when `b` is before `a`. `between` never searches, so it never raises `NoWorkingTimeError`.
+
+| Raises | When |
+|---|---|
+| `TypeError` | `a` or `b` is not a `datetime`. |
+| `ValueError` | `a` or `b` is naive. |
+| `OutOfRangeError` | `a` or `b` is outside the supported range. |
+
+In Python:
+
+```python
+from datetime import date, datetime, time
+from zoneinfo import ZoneInfo
+
+from workclock import Break, Holidays, Schedule, WorkDay
+
+london = ZoneInfo("Europe/London")
+support = Schedule(
+    [
+        WorkDay(time(9), time(17)),
+        Break(time(12), time(13)),
+        Holidays([date(2026, 12, 25), date(2026, 12, 28)]),
+    ],
+    time_zone=london,
+)
+opened = datetime(2026, 12, 24, 16, 30, tzinfo=london)
+now = datetime(2026, 12, 29, 11, tzinfo=london)
+support.between(opened, now)  # 2:30:00
+```
+
+## `Schedule.next_period`
+
+```python
+Schedule.next_period(dt: datetime) -> tuple[datetime, datetime]
+```
+
+Finds the period of working time that contains an instant, or else the first one after it. A period is a maximal stretch of working time. [Periods](/docs/concepts/periods/) explains which period is returned.
+
+| Parameter | Type | Description |
+|---|---|---|
+| `dt` | `datetime` | The aware datetime to search from. |
+
+Returns the period as `(start, end)`, in the `tzinfo` of `dt`. If `dt` is inside a period, `start` is `dt`. A period never runs longer than the search bound of 366 days, plus seven days per holiday date.
+
+| Raises | When |
+|---|---|
+| `TypeError` | `dt` is not a `datetime`. |
+| `ValueError` | `dt` is naive. |
+| `NoWorkingTimeError` | No working time starts within the search bound. |
+| `OutOfRangeError` | `dt` is outside the supported range, or the period reaches past the supported range or `datetime`'s years 1 to 9999. |
+
+In Python:
+
+```python
+from datetime import date, datetime, time
+from zoneinfo import ZoneInfo
+
+from workclock import Break, Holidays, Schedule, WorkDay
+
+london = ZoneInfo("Europe/London")
+support = Schedule(
+    [
+        WorkDay(time(9), time(17)),
+        Break(time(12), time(13)),
+        Holidays([date(2026, 12, 25), date(2026, 12, 28)]),
+    ],
+    time_zone=london,
+)
+now = datetime(2026, 12, 29, 11, tzinfo=london)
+support.next_period(now)
+# (2026-12-29 11:00, 2026-12-29 12:00), London time
+```
+
+## `Schedule.previous_period`
+
+```python
+Schedule.previous_period(dt: datetime) -> tuple[datetime, datetime]
+```
+
+Finds the period of working time that contains an instant, or else the last one before it. It takes the same parameter as `Schedule.next_period` and raises the same errors.
+
+Returns the period as `(start, end)`, in the `tzinfo` of `dt`. If `dt` is inside a period, `end` is `dt`.
+
+In Python:
+
+```python
+from datetime import date, datetime, time
+from zoneinfo import ZoneInfo
+
+from workclock import Break, Holidays, Schedule, WorkDay
+
+london = ZoneInfo("Europe/London")
+support = Schedule(
+    [
+        WorkDay(time(9), time(17)),
+        Break(time(12), time(13)),
+        Holidays([date(2026, 12, 25), date(2026, 12, 28)]),
+    ],
+    time_zone=london,
+)
+now = datetime(2026, 12, 29, 11, tzinfo=london)
+support.previous_period(now)
+# (2026-12-29 09:00, 2026-12-29 11:00), London time
+```
+
+## `Schedule.between_many`
+
+```python
+Schedule.between_many(
+    starts: Sequence[datetime] | NDArray[np.datetime64],
+    ends: Sequence[datetime] | NDArray[np.datetime64],
+) -> list[timedelta] | NDArray[np.timedelta64]
+```
+
+Runs `Schedule.between` for each pair of `starts` and `ends` in one call.
+
+| Parameter | Type | Description |
+|---|---|---|
+| `starts` | `Sequence[datetime]` or `NDArray[np.datetime64]` | The aware starts, or a NumPy array of `datetime64` values. |
+| `ends` | `Sequence[datetime]` or `NDArray[np.datetime64]` | The aware ends, as many as `starts`. If `starts` is a NumPy array, any value that broadcasts with it, such as one `datetime64`. |
+
+Returns a `list[timedelta]` for sequences. If `starts` is a NumPy array, both arguments are read as `datetime64` values in UTC and broadcast together under NumPy's rules, and the result is a `timedelta64[us]` array of the broadcast shape.
+
+| Raises | When |
+|---|---|
+| The errors of `Schedule.between` | An item fails. The message starts with `item {i}: `, where `i` is the item's zero-based index in the flattened broadcast input. |
+| `ValueError` | The sequences differ in length, the arrays' shapes do not broadcast together, or an array holds NaT or a value with digits below a microsecond. |
+| `TypeError` | An array holds plain numbers, which carry no unit. |
+
+In Python:
+
+```python
+from datetime import date, datetime, time
+from zoneinfo import ZoneInfo
+
+from workclock import Break, Holidays, Schedule, WorkDay
+
+london = ZoneInfo("Europe/London")
+support = Schedule(
+    [
+        WorkDay(time(9), time(17)),
+        Break(time(12), time(13)),
+        Holidays([date(2026, 12, 25), date(2026, 12, 28)]),
+    ],
+    time_zone=london,
+)
+opened = [
+    datetime(2026, 12, 24, 16, 30, tzinfo=london),
+    datetime(2026, 12, 29, 9, tzinfo=london),
+]
+now = datetime(2026, 12, 29, 11, tzinfo=london)
+support.between_many(opened, [now, now])  # [2:30:00, 2:00:00]
+```
+
+## `Schedule.add_many`
+
+```python
+Schedule.add_many(
+    dts: Sequence[datetime] | NDArray[np.datetime64],
+    deltas: Sequence[timedelta] | NDArray[np.timedelta64] | timedelta,
+) -> list[datetime] | NDArray[np.datetime64]
+```
+
+Runs `Schedule.add` for each datetime and amount in one call.
+
+| Parameter | Type | Description |
+|---|---|---|
+| `dts` | `Sequence[datetime]` or `NDArray[np.datetime64]` | The aware datetimes to count from, or a NumPy array of `datetime64` values. |
+| `deltas` | `Sequence[timedelta]`, `NDArray[np.timedelta64]` or `timedelta` | One amount per datetime, or one `timedelta` for all. |
+
+Returns a `list[datetime]` for sequences, each result in the `tzinfo` of its datetime. If `dts` is a NumPy array, it is read as `datetime64` values in UTC, `deltas` as `timedelta64` values, the two broadcast together under NumPy's rules, and the result is a `datetime64[us]` array of the broadcast shape.
+
+| Raises | When |
+|---|---|
+| The errors of `Schedule.add` | An item fails. The message starts with `item {i}: `, where `i` is the item's zero-based index. |
+| `TypeError` | `deltas` is neither a `timedelta` nor a sequence, or an array holds plain numbers. |
+| `ValueError` | The same cases as `Schedule.between_many`. |
+
+In Python, with a NumPy array of instants in UTC, which is London time in December:
+
+```python
+from datetime import date, time, timedelta
+
+import numpy as np
+from workclock import Break, Holidays, Schedule, WorkDay
+
+support = Schedule(
+    [
+        WorkDay(time(9), time(17)),
+        Break(time(12), time(13)),
+        Holidays([date(2026, 12, 25), date(2026, 12, 28)]),
+    ],
+    time_zone="Europe/London",
+)
+opened = np.array(
+    ["2026-12-24T16:30", "2026-12-29T11:00"], dtype="datetime64[m]"
+)
+support.add_many(opened, timedelta(hours=8))
+# array(['2026-12-30T09:30:00.000000', '2026-12-30T12:00:00.000000'],
+#       dtype='datetime64[us]')
+```
+
+## `Schedule.sub_many`
+
+```python
+Schedule.sub_many(
+    dts: Sequence[datetime] | NDArray[np.datetime64],
+    deltas: Sequence[timedelta] | NDArray[np.timedelta64] | timedelta,
+) -> list[datetime] | NDArray[np.datetime64]
+```
+
+Runs `Schedule.sub` for each datetime and amount in one call. It takes the same parameters as `Schedule.add_many`, returns the same types and raises the same errors.
+
+In Python:
+
+```python
+from datetime import date, datetime, time, timedelta
+from zoneinfo import ZoneInfo
+
+from workclock import Break, Holidays, Schedule, WorkDay
+
+london = ZoneInfo("Europe/London")
+support = Schedule(
+    [
+        WorkDay(time(9), time(17)),
+        Break(time(12), time(13)),
+        Holidays([date(2026, 12, 25), date(2026, 12, 28)]),
+    ],
+    time_zone=london,
+)
+due = [
+    datetime(2026, 12, 30, 9, 30, tzinfo=london),
+    datetime(2026, 12, 30, 12, tzinfo=london),
+]
+support.sub_many(due, timedelta(hours=8))
+# [2026-12-24 16:30, 2026-12-29 11:00], London time
+```
+
+## `WorkclockError`
+
+```python
+class WorkclockError(Exception)
+```
+
+`workclock.WorkclockError` is the base class of the three errors below. An error kind added in a later version is raised as a plain `WorkclockError`. Malformed input raises `TypeError` or `ValueError` instead, which is not a `WorkclockError`. [Errors](/docs/concepts/errors/) explains when each error is raised.
+
+In Python:
+
+```python
+from datetime import time
+
+from workclock import Schedule, WorkclockError, WorkDay
+
+try:
+    Schedule([WorkDay(time(9), time(17))], time_zone="Mars/Olympus_Mons")
+except WorkclockError as error:
+    print(error)  # unknown time zone `Mars/Olympus_Mons`
+```
+
+## `NoWorkingTimeError`
+
+```python
+class NoWorkingTimeError(WorkclockError, ValueError)
+```
+
+`workclock.NoWorkingTimeError` is raised when a schedule has no working time, or a search finds none within its bound of 366 days, plus seven days per holiday date. `Schedule` raises it when built; `add`, `sub`, `next_period`, `previous_period`, `add_many` and `sub_many` raise it when a search fails. The message names the cause:
+
+- Building: `schedule has no working time: its working hours minus its breaks are empty`.
+- A failed search: `no working time within 366 days, plus seven days per holiday date, of {start}`, where `start` is the datetime the search began from.
+
+In Python, a `WorkDay` with no days (E2):
+
+```python
+from datetime import time
+
+from workclock import NoWorkingTimeError, Schedule, WorkDay
+
+try:
+    Schedule([WorkDay(time(9), time(17), days=[])])
+except NoWorkingTimeError as error:
+    print(error)
+    # schedule has no working time: its working hours minus its breaks
+    # are empty
+```
+
+## `OutOfRangeError`
+
+```python
+class OutOfRangeError(WorkclockError, OverflowError)
+```
+
+`workclock.OutOfRangeError` is raised when an input datetime, an amount or a result is outside the supported range. Instants run from `-009999-01-02T01:59:59Z` to `9999-12-30T22:00:00Z`; results must also fit in `datetime`'s years 1 to 9999, and amounts in 64-bit microseconds. [Inputs and precision](/docs/concepts/inputs-and-precision/#supported-range) has the details.
+
+In Python, a result past the end of the range (E5):
+
+```python
+from datetime import datetime, time, timezone
+
+from workclock import OutOfRangeError, Schedule, WorkDay
+
+office = Schedule([WorkDay(time(9), time(17))])
+thursday = datetime(9999, 12, 30, 16, tzinfo=timezone.utc)
+try:
+    office.add(thursday, hours=2)
+except OutOfRangeError as error:
+    print(error)
+    # result is outside the supported range -009999-01-02T01:59:59Z to
+    # 9999-12-30T22:00:00Z
+```
+
+## `UnknownZoneError`
+
+```python
+class UnknownZoneError(WorkclockError, ValueError)
+```
+
+`workclock.UnknownZoneError` is raised when `Schedule` is built with a time zone name, for the schedule or a rule, that is not in the IANA database. [Time zones and DST: Time zone data](/docs/concepts/time-zones-and-dst/#time-zone-data) says which copy of the database the Python package uses.
+
+In Python (E6):
+
+```python
+from datetime import time
+
+from workclock import Schedule, UnknownZoneError, WorkDay
+
+try:
+    Schedule([WorkDay(time(9), time(17))], time_zone="Mars/Olympus_Mons")
+except UnknownZoneError as error:
+    print(error)  # unknown time zone `Mars/Olympus_Mons`
+```
+
+## `__version__`
+
+```python
+__version__: str
+```
+
+`workclock.__version__` is the version of the installed package.
+
+In Python:
+
+```python
+import workclock
+
+workclock.__version__  # '0.1.0'
+```
+
+## See also
+
+- [Python compat](/docs/reference/python-compat/): `workclock.compat`, the businesstimedelta 1.0.1 API.
+- [Quickstart: Python](/docs/quickstart/python/): a complete program.
+- [Inputs and precision](/docs/concepts/inputs-and-precision/): which datetimes, durations and time zones are accepted.
+- [`python/workclock/_schedule.py`](https://github.com/Karthik-beta/workclock/blob/main/python/workclock/_schedule.py), the docstrings this page is written from.
