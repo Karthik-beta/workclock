@@ -42,7 +42,7 @@ const header = `# workclock
 
 > Fast, correct business-time arithmetic (working hours, SLAs, shifts) for Rust, Python and JavaScript, and a maintained replacement for businesstimedelta, with a compatibility layer for existing code.
 
-Status: in development. No release has been published yet.
+Status: pre-1.0; the API may still change in a minor release.
 
 - Install: \`cargo add workclock jiff\` (Rust; the API uses jiff 0.2 types), \`pip install workclock\` or \`uv add workclock\` (Python), \`npm i workclock\` (JavaScript and TypeScript).
 - Requires Rust 1.85+, CPython 3.9+, Node.js 22+.
