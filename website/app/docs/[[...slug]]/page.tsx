@@ -6,6 +6,7 @@ import { FeedbackLink } from '@/components/feedback-link';
 import { getMDXComponents } from '@/components/mdx';
 import { PageActions } from '@/components/page-actions';
 import { pageMarkdownUrl } from '@/lib/llms';
+import { pageImageUrl } from '@/lib/og';
 import { siteUrl } from '@/lib/shared';
 import { source } from '@/lib/source';
 
@@ -39,5 +40,10 @@ export async function generateMetadata(props: PageProps<'/docs/[[...slug]]'>): P
     title: page.data.title,
     description: page.data.description,
     alternates: { types: { 'text/markdown': pageMarkdownUrl(page) } },
+    openGraph: {
+      title: page.data.title,
+      description: page.data.description,
+      images: { url: pageImageUrl(page), width: 1200, height: 630, alt: `workclock docs: ${page.data.title}` },
+    },
   };
 }

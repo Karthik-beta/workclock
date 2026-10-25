@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" role="img" aria-label="workclock">
+  <defs><clipPath id="c"><circle cx="100" cy="100" r="96"/></clipPath></defs>
+  <g clip-path="url(#c)" fill="#0F1729">
+    <rect x="0" y="9" width="200" height="22" rx="11"/>
+    <rect x="0" y="41" width="200" height="22" rx="11"/>
+    <rect x="0" y="73" width="200" height="22" rx="11"/>
+    <rect x="0" y="105" width="138" height="22" rx="11"/>
+    <rect x="0" y="137" width="200" height="22" rx="11"/>
+    <rect x="0" y="169" width="200" height="22" rx="11"/>
+  </g>
+  <circle cx="160" cy="116" r="11" fill="#D98A00"/>
+</svg>
