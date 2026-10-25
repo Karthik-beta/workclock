@@ -14,6 +14,9 @@ const navLinks = [
   <NavLink key="migrating" href={migrating}>
     Migrating
   </NavLink>,
+  <NavLink key="playground" href="/playground/">
+    Playground
+  </NavLink>,
   <NavLink key="benchmarks" href={benchmarks}>
     Benchmarks
   </NavLink>,
