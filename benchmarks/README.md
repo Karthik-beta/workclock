@@ -84,8 +84,25 @@ regression.
 ## Results
 
 [RESULTS.md](RESULTS.md) has the latest numbers and the machine they ran on.
-To regenerate it, run the three suites with their JSON output and combine
-them:
+
+The Benchmarks workflow (`.github/workflows/benchmarks.yml`) runs all three
+suites on a GitHub-hosted Ubuntu runner and builds RESULTS.md from them. It
+runs for every `v*` tag, and anyone with write access can start it from the
+Actions tab, or with:
+
+```sh
+gh workflow run benchmarks.yml
+gh workflow run benchmarks.yml -f businesstimedelta-batch=true
+```
+
+businesstimedelta's batch case only runs when that input is on, which adds
+about half an hour. RESULTS.md appears on the run's summary page and, with the
+raw JSON and Criterion's output, in its `benchmark-results` artifact. The
+workflow never commits; to update the file in the repository, download it
+from the run and open a pull request.
+
+To regenerate it locally, run the three suites with their JSON output and
+combine them:
 
 ```sh
 cargo bench -p workclock --bench workclock
