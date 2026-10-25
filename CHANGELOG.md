@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Python compat: `HolidayRule.difference` no longer raises `OverflowError`
+  for datetimes whose local date is the first or last date `datetime.date`
+  can hold.
+
 ## [0.1.0] - 2026-10-25
 
 ### Added

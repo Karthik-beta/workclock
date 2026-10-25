@@ -269,12 +269,8 @@ class HolidayRule(Rule):
             ]
         )
         # One date of slack on each side, as in next().
-        low = bisect.bisect_left(
-            self._dates, self._local_date(a) - _dt.timedelta(days=1)
-        )
-        high = bisect.bisect_right(
-            self._dates, self._local_date(b) + _dt.timedelta(days=1)
-        )
+        low = max(bisect.bisect_left(self._dates, self._local_date(a)) - 1, 0)
+        high = bisect.bisect_right(self._dates, self._local_date(b)) + 1
         total = 0
         for day in self._dates[low:high]:
             start, end = self._bounds(day)
