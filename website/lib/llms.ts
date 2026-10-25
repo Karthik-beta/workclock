@@ -60,7 +60,10 @@ export function llmsIndex(): string {
     '## Docs',
     pages.filter((p) => !optional.has(p.url)).map(item).join('\n'),
     '## Reference',
-    `- [DESIGN.md](${raw('DESIGN.md')}): the specification, with an example and an ID for every edge case`,
+    [
+      '- [Rust API on docs.rs](https://docs.rs/workclock)',
+      `- [DESIGN.md](${raw('DESIGN.md')}): the specification, with an example and an ID for every edge case`,
+    ].join('\n'),
     '## Optional',
     [
       ...pages.filter((p) => optional.has(p.url) && p.url !== '/docs/changelog').map(item),
