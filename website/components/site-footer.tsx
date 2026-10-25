@@ -14,6 +14,15 @@ const columns: { title: string; links: { label: string; href: string }[] }[] = [
     ],
   },
   {
+    title: 'Packages',
+    links: [
+      { label: 'crates.io', href: 'https://crates.io/crates/workclock' },
+      { label: 'docs.rs', href: 'https://docs.rs/workclock' },
+      { label: 'PyPI', href: 'https://pypi.org/project/workclock/' },
+      { label: 'npm', href: 'https://www.npmjs.com/package/workclock' },
+    ],
+  },
+  {
     title: 'Docs',
     links: [
       { label: 'Install', href: '/docs/install/' },
