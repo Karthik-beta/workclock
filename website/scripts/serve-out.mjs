@@ -42,7 +42,7 @@ createServer((req, res) => {
   const file = pathname.startsWith(`${base}/`)
     ? path.join(root, pathname.slice(base.length))
     : undefined;
-  if (file?.startsWith(root) && existsSync(file)) {
+  if (file?.startsWith(root + path.sep) && existsSync(file)) {
     const target = statSync(file).isDirectory() ? path.join(file, 'index.html') : file;
     if (existsSync(target)) return send(res, 200, target);
   }
