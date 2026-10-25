@@ -1,0 +1,171 @@
+---
+title: Payroll and overtime
+description: Split the time on a timesheet into contracted hours and overtime by counting the working time inside each clock-in and clock-out span with between.
+---
+
+An agent's timesheet lists when they clocked in and out. How many of those hours fell inside their contracted hours, and how many are overtime? This guide counts both with `between`, in Rust, Python and JavaScript.
+
+## The schedule
+
+Agents on the London support desk are contracted for the desk's working hours. The schedule is the contract, in the `Europe/London` time zone:
+
+- `WorkDay`: 09:00–17:00, Monday to Friday.
+- `Break`: 12:00–13:00, Monday to Friday, an unpaid lunch hour.
+- `Holidays`: Friday 25 and Monday 28 December 2026.
+
+The agent's timesheet, in London time. They clock out for lunch:
+
+| Date | Clock in | Clock out |
+|---|---|---|
+| Monday 28 December 2026, a holiday | 10:00 | 14:00 |
+| Tuesday 29 December 2026 | 08:30 | 12:00 |
+| Tuesday 29 December 2026 | 13:00 | 18:15 |
+
+For each row, `between(clock_in, clock_out)` on the contract is the contracted time in the span. The rest of the span, its elapsed time minus the contracted time, is overtime.
+
+## Count contracted hours and overtime
+
+<Tabs groupId="lang" persist items={['Rust', 'Python', 'JavaScript']}>
+<Tab value="Rust">
+
+```rust
+use jiff::civil::{date, time};
+use jiff::{SignedDuration, Zoned};
+use workclock::{Break, Holidays, Schedule, Weekdays, WorkDay};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let days = Weekdays::MON_TO_FRI;
+    let contract = Schedule::builder()
+        .time_zone("Europe/London")
+        .rule(WorkDay::new(time(9, 0, 0, 0), time(17, 0, 0, 0), days))
+        .rule(Break::new(time(12, 0, 0, 0), time(13, 0, 0, 0), days))
+        .rule(Holidays::new([date(2026, 12, 25), date(2026, 12, 28)]))
+        .build()?;
+
+    let timesheet = [
+        ("2026-12-28T10:00", "2026-12-28T14:00"), // Monday, a holiday
+        ("2026-12-29T08:30", "2026-12-29T12:00"), // Tuesday morning
+        ("2026-12-29T13:00", "2026-12-29T18:15"), // Tuesday afternoon
+    ];
+    let mut paid = SignedDuration::ZERO;
+    let mut overtime = SignedDuration::ZERO;
+    for (start, end) in timesheet {
+        let clock_in: Zoned = format!("{start}[Europe/London]").parse()?;
+        let clock_out: Zoned = format!("{end}[Europe/London]").parse()?;
+        let contracted = contract.between(&clock_in, &clock_out);
+        paid += contracted;
+        overtime += clock_in.duration_until(&clock_out) - contracted;
+    }
+    assert_eq!(paid, SignedDuration::from_hours(7));
+    assert_eq!(overtime, SignedDuration::from_mins(345));
+    Ok(())
+}
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+from datetime import date, datetime, time, timedelta, timezone
+from zoneinfo import ZoneInfo
+
+from workclock import Break, Holidays, Schedule, WorkDay
+
+london = ZoneInfo("Europe/London")
+utc = timezone.utc
+contract = Schedule(
+    [
+        WorkDay(time(9), time(17)),  # Monday to Friday by default
+        Break(time(12), time(13)),
+        Holidays([date(2026, 12, 25), date(2026, 12, 28)]),
+    ],
+    time_zone=london,
+)
+
+timesheet = [
+    ("2026-12-28 10:00", "2026-12-28 14:00"),  # Monday, a holiday
+    ("2026-12-29 08:30", "2026-12-29 12:00"),  # Tuesday morning
+    ("2026-12-29 13:00", "2026-12-29 18:15"),  # Tuesday afternoon
+]
+paid = overtime = timedelta(0)
+for start, end in timesheet:
+    clock_in = datetime.fromisoformat(start).replace(tzinfo=london)
+    clock_out = datetime.fromisoformat(end).replace(tzinfo=london)
+    contracted = contract.between(clock_in, clock_out)
+    # In UTC, so the difference is elapsed time across a DST change too.
+    on_clock = clock_out.astimezone(utc) - clock_in.astimezone(utc)
+    paid += contracted
+    overtime += on_clock - contracted
+
+paid  # 7:00:00
+overtime  # 5:45:00
+```
+
+</Tab>
+<Tab value="JavaScript">
+
+```js
+import { Schedule } from "workclock";
+
+const contract = new Schedule({
+  timeZone: "Europe/London",
+  rules: [
+    { type: "workday", start: "09:00", end: "17:00" },
+    { type: "break", start: "12:00", end: "13:00" },
+    { type: "holidays", dates: ["2026-12-25", "2026-12-28"] },
+  ],
+});
+
+// London is at UTC+00:00 in December, so these are London times.
+const timesheet = [
+  ["2026-12-28T10:00:00Z", "2026-12-28T14:00:00Z"], // Monday, a holiday
+  ["2026-12-29T08:30:00Z", "2026-12-29T12:00:00Z"], // Tuesday morning
+  ["2026-12-29T13:00:00Z", "2026-12-29T18:15:00Z"], // Tuesday afternoon
+];
+let paid = 0;
+let overtime = 0;
+for (const [clockIn, clockOut] of timesheet) {
+  const contracted = contract.between(clockIn, clockOut);
+  paid += contracted;
+  overtime += Date.parse(clockOut) - Date.parse(clockIn) - contracted;
+}
+
+paid; // 25200000 ms
+overtime; // 20700000 ms
+```
+
+</Tab>
+</Tabs>
+
+## The result
+
+The agent worked 12 hours 45 minutes: 7 hours of contracted time and 5 hours 45 minutes of overtime.
+
+| Span, `Europe/London` | On the clock | Contracted | Overtime |
+|---|---|---|---|
+| Monday 28 December, 10:00–14:00 | 4 hours | None: a holiday | 4 hours |
+| Tuesday 29 December, 08:30–12:00 | 3 hours 30 minutes | 09:00–12:00, 3 hours | 30 minutes |
+| Tuesday 29 December, 13:00–18:15 | 5 hours 15 minutes | 13:00–17:00, 4 hours | 1 hour 15 minutes |
+| **Total** | **12 hours 45 minutes** | **7 hours** | **5 hours 45 minutes** |
+
+A holiday or a weekend day has no contracted time, so every hour worked on it is overtime without a separate rule. This page has no week strip: the strip draws the instant `add` reaches, and cannot show a span's time outside working hours.
+
+## Edge cases
+
+<Callout type="warning" title="Warning">
+In Python, subtracting two datetimes with the same `tzinfo` gives the difference in wall-clock time, not elapsed time. Across a daylight saving time (DST) change, a 22:00–06:00 night in `America/New_York` then comes out as 8 hours instead of 7, and the overtime is an hour off. Convert both datetimes to UTC before subtracting, as the Python tab does.
+</Callout>
+
+- **Staying clocked in through lunch.** A span that covers the 12:00–13:00 break counts the break as overtime, because the break is not contracted time. A single span from 08:30 to 18:15 on Tuesday has 7 hours of contracted time and 2 hours 45 minutes of overtime, including the lunch hour. Record the break as a clock-out, or subtract it.
+- **Night shifts.** A contract with a 22:00–06:00 `WorkDay` counts across midnight, and the shift belongs to the weekday it starts on ([Overnight shifts](/docs/guides/overnight-shifts/)).
+- **Holidays.** Each date in `Holidays` removes 00:00 to the next 00:00 in the schedule's time zone ([Rules: Holidays](/docs/concepts/rules/#holidays)).
+- **DST.** `between` returns elapsed real time, so a night shift across a clock change is an hour shorter or longer ([Time zones and DST](/docs/concepts/time-zones-and-dst/)).
+
+Not in 0.1.0: contracts with different hours on one date, such as a half day on Christmas Eve. Working hours repeat by weekday, with no per-date overrides, and results are durations, not business days ([DESIGN.md: Scope](https://github.com/Karthik-beta/workclock/blob/main/DESIGN.md#scope)).
+
+## See also
+
+- [Measuring time](/docs/concepts/measuring-time/): what `between` counts, and its sign.
+- [Rules](/docs/concepts/rules/): `WorkDay`, `Break` and `Holidays`.
+- [Batch operations](/docs/guides/batch-operations/): `between` for many spans in one call.
+- [Inputs and precision](/docs/concepts/inputs-and-precision/): instant and duration types in each language.

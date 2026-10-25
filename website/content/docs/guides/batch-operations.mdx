@@ -1,0 +1,226 @@
+---
+title: Batch operations
+description: Run add, sub and between over many instants in one call with the Python and JavaScript batch methods, and see when batching pays off.
+---
+
+You have thousands of tickets, orders or timesheet rows, and need a due time or a working-time count for each. This guide covers the batch methods in Python and JavaScript, the Rust equivalent, and when a batch is faster than a loop.
+
+## Batch methods in each language
+
+| Language | Methods | Inputs | Results |
+|---|---|---|---|
+| Rust | None: call `add`, `sub` or `between` in a loop or iterator | `jiff::Timestamp` or `&jiff::Zoned` | One `Result<jiff::Timestamp, workclock::Error>` or `jiff::SignedDuration` per call |
+| Python | `between_many`, `add_many`, `sub_many` | Lists of aware `datetime`s, or NumPy `datetime64` arrays | A list of `datetime`s or `timedelta`s, or a NumPy array |
+| JavaScript | `betweenMany`, `addMany`, `subMany` | Arrays of `Date`s or ISO 8601 strings, or a `Float64Array` of milliseconds since the Unix epoch | An array of `Date`s or numbers, or a `Float64Array` |
+
+- `add_many` and `sub_many`, and `addMany` and `subMany`, take one amount for every item, or one amount per item.
+- `between_many` and `betweenMany` take two inputs of the same length, one start and one end per item. With NumPy arrays, the two broadcast together under NumPy's rules, so a single end works for every start.
+- A failing item raises the same error as the single call, with `item {i}:` before the message, where `{i}` is its position. Inputs of different lengths raise `ValueError` in Python and throw `RangeError` in JavaScript.
+
+## Due times for many tickets
+
+The London support desk from the README works 09:00–17:00 on weekdays in `Europe/London`, with a lunch break from 12:00 to 13:00, and is closed on 25 and 28 December 2026. Three tickets with an 8-hour SLA were opened at 16:30 and 17:30 on Thursday 24 December and at 11:00 on Tuesday 29 December 2026, London time. Each tab finds all three due times, then the working time each ticket has used by 11:00 on Tuesday 29 December.
+
+<Tabs groupId="lang" persist items={['Rust', 'Python', 'JavaScript']}>
+<Tab value="Rust">
+
+```rust
+use jiff::civil::{date, time};
+use jiff::{SignedDuration, Timestamp};
+use workclock::{Break, Holidays, Schedule, Weekdays, WorkDay};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let days = Weekdays::MON_TO_FRI;
+    let support = Schedule::builder()
+        .time_zone("Europe/London")
+        .rule(WorkDay::new(time(9, 0, 0, 0), time(17, 0, 0, 0), days))
+        .rule(Break::new(time(12, 0, 0, 0), time(13, 0, 0, 0), days))
+        .rule(Holidays::new([date(2026, 12, 25), date(2026, 12, 28)]))
+        .build()?;
+
+    let opened: Vec<Timestamp> = [
+        "2026-12-24T16:30:00Z",
+        "2026-12-24T17:30:00Z",
+        "2026-12-29T11:00:00Z",
+    ]
+    .iter()
+    .map(|s| s.parse())
+    .collect::<Result<_, _>>()?;
+
+    let sla = SignedDuration::from_hours(8);
+    let due = opened
+        .iter()
+        .map(|&t| support.add(t, sla))
+        .collect::<Result<Vec<_>, _>>()?;
+    assert_eq!(due[0].to_string(), "2026-12-30T09:30:00Z");
+    assert_eq!(due[1].to_string(), "2026-12-30T10:00:00Z");
+    assert_eq!(due[2].to_string(), "2026-12-30T12:00:00Z");
+
+    let now: Timestamp = "2026-12-29T11:00:00Z".parse()?;
+    let used: Vec<_> = opened
+        .iter()
+        .map(|&t| support.between(t, now))
+        .collect();
+    assert_eq!(used, [150, 120, 0].map(SignedDuration::from_mins));
+    Ok(())
+}
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+from datetime import date, datetime, time, timedelta
+from zoneinfo import ZoneInfo
+
+from workclock import Break, Holidays, Schedule, WorkDay
+
+london = ZoneInfo("Europe/London")
+support = Schedule(
+    [
+        WorkDay(time(9), time(17)),  # Monday to Friday by default
+        Break(time(12), time(13)),
+        Holidays([date(2026, 12, 25), date(2026, 12, 28)]),
+    ],
+    time_zone=london,
+)
+
+opened = [
+    datetime(2026, 12, 24, 16, 30, tzinfo=london),
+    datetime(2026, 12, 24, 17, 30, tzinfo=london),
+    datetime(2026, 12, 29, 11, tzinfo=london),
+]
+due = support.add_many(opened, timedelta(hours=8))
+# [2026-12-30 09:30, 2026-12-30 10:00, 2026-12-30 12:00], London time
+
+now = datetime(2026, 12, 29, 11, tzinfo=london)
+used = support.between_many(opened, [now] * len(opened))
+# [2:30:00, 2:00:00, 0:00:00]
+```
+
+</Tab>
+<Tab value="JavaScript">
+
+```js
+import { Schedule } from "workclock";
+
+const HOUR = 3_600_000; // 1 hour in milliseconds
+
+const support = new Schedule({
+  timeZone: "Europe/London",
+  rules: [
+    { type: "workday", start: "09:00", end: "17:00" },
+    { type: "break", start: "12:00", end: "13:00" },
+    { type: "holidays", dates: ["2026-12-25", "2026-12-28"] },
+  ],
+});
+
+const opened = [
+  "2026-12-24T16:30:00Z",
+  "2026-12-24T17:30:00Z",
+  "2026-12-29T11:00:00Z",
+];
+const due = support.addMany(opened, 8 * HOUR);
+// [Date 2026-12-30T09:30:00.000Z, Date 2026-12-30T10:00:00.000Z,
+//  Date 2026-12-30T12:00:00.000Z]
+
+const now = "2026-12-29T11:00:00Z";
+const used = support.betweenMany(opened, opened.map(() => now));
+// [9000000, 7200000, 0] ms
+```
+
+</Tab>
+</Tabs>
+
+London is at UTC+00:00 in December, so the UTC instants in the Rust and JavaScript tabs are also London wall-clock times. The ticket opened at 17:30 on Thursday, after the desk closed, starts counting at 09:00 on Tuesday 29 December, so it is due at 10:00 on Wednesday 30 December.
+
+## NumPy arrays in Python
+
+`between_many`, `add_many` and `sub_many` also take NumPy arrays: `datetime64` for instants and `timedelta64` for amounts. NumPy is not a dependency of workclock; install it separately.
+
+<Callout type="warning" title="Warning">
+NumPy `datetime64` values carry no zone, so `between_many`, `add_many` and `sub_many` read them as UTC and return `datetime64` results in UTC. Convert local times to UTC before putting them in an array.
+</Callout>
+
+In Python:
+
+```python
+from datetime import date, time, timedelta
+
+import numpy as np
+from workclock import Break, Holidays, Schedule, WorkDay
+
+support = Schedule(
+    [
+        WorkDay(time(9), time(17)),  # Monday to Friday by default
+        Break(time(12), time(13)),
+        Holidays([date(2026, 12, 25), date(2026, 12, 28)]),
+    ],
+    time_zone="Europe/London",
+)
+
+# datetime64 values carry no zone; workclock reads them as UTC.
+opened = np.array(
+    ["2026-12-24T16:30", "2026-12-24T17:30", "2026-12-29T11:00"],
+    dtype="datetime64[us]",
+)
+due = support.add_many(opened, timedelta(hours=8))
+# datetime64[us] array: 2026-12-30T09:30, 2026-12-30T10:00,
+# 2026-12-30T12:00, in UTC
+
+now = np.datetime64("2026-12-29T11:00")
+used = support.between_many(opened, now)  # one end for every start
+# timedelta64[us] array: 2 hours 30 minutes, 2 hours, 0
+```
+
+Results are `datetime64[us]` and `timedelta64[us]` arrays of the broadcast shape. A value with digits below a microsecond raises `ValueError` rather than being rounded ([Inputs and precision](/docs/concepts/inputs-and-precision/)).
+
+## Float64Array in JavaScript
+
+`betweenMany`, `addMany` and `subMany` also take a `Float64Array` of milliseconds since the Unix epoch, and then return a `Float64Array`: epoch milliseconds from `addMany` and `subMany`, durations in milliseconds from `betweenMany`. In JavaScript:
+
+```js
+import { Schedule } from "workclock";
+
+const HOUR = 3_600_000; // 1 hour in milliseconds
+
+const support = new Schedule({
+  timeZone: "Europe/London",
+  rules: [
+    { type: "workday", start: "09:00", end: "17:00" },
+    { type: "break", start: "12:00", end: "13:00" },
+    { type: "holidays", dates: ["2026-12-25", "2026-12-28"] },
+  ],
+});
+
+// Milliseconds since the Unix epoch, one per ticket.
+const opened = Float64Array.from(
+  ["2026-12-24T16:30:00Z", "2026-12-24T17:30:00Z", "2026-12-29T11:00:00Z"],
+  (iso) => Date.parse(iso),
+);
+const due = support.addMany(opened, 8 * HOUR);
+// Float64Array [1798623000000, 1798624800000, 1798632000000]
+
+const now = Date.parse("2026-12-29T11:00:00Z");
+const used = support.betweenMany(opened, opened.map(() => now));
+// Float64Array [9000000, 7200000, 0]
+```
+
+Instants in a `Float64Array` must be whole milliseconds, or the call throws `RangeError`.
+
+## When batching pays off
+
+A call from Python or JavaScript crosses into the Rust engine and converts its inputs and results. A batch call does that conversion once for all items, so batching pays off when the crossing costs more than the work. The benchmarks' batch case, `between` for 1,000,000 pairs of up to a week each, measures every form ([Benchmarks](/docs/benchmarks/#batch)):
+
+- **Python.** The crossing is the expensive part of a short call, so batching pays off. `between_many` on NumPy arrays converts the inputs vectorised and is the fastest form; from lists of `datetime`s the per-item conversion stays in Python, which is slower but still faster than a loop of `between` calls. A batch runs the engine with the GIL released, so other Python threads can run meanwhile.
+- **JavaScript.** The crossing is cheap, so a loop of `between` calls is close to `betweenMany`. `betweenMany` on `Float64Array`s is the fastest form; use it when your instants are already epoch milliseconds.
+- **Rust.** There is no crossing, so a loop is the batch. `workclock::Schedule` is `Send` and `Sync`, so threads can share one schedule.
+
+[DESIGN.md: Performance](https://github.com/Karthik-beta/workclock/blob/main/DESIGN.md#performance) explains where the time goes.
+
+## See also
+
+- [Adding time](/docs/concepts/adding-time/) and [Measuring time](/docs/concepts/measuring-time/): what each item's result is.
+- [Inputs and precision](/docs/concepts/inputs-and-precision/): instant and duration types, and inputs that are rejected.
+- [Errors](/docs/concepts/errors/): the error each failing item raises.
+- [Benchmarks](/docs/benchmarks/): every case, with the date and machine.

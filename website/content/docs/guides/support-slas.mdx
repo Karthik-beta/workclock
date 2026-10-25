@@ -1,0 +1,152 @@
+---
+title: Support SLAs
+description: Find when a support ticket is due, and how much of its SLA has been used and how much is left, with add and between.
+---
+
+A ticket is due 8 working hours after it is opened. When is that, and how much of the SLA is left right now? This guide answers both with `add` and `between`, in Rust, Python and JavaScript.
+
+## The schedule
+
+A support desk in London works 09:00–17:00 on weekdays with a lunch hour, and is closed on 25 and 28 December 2026. As rules, in the `Europe/London` time zone:
+
+- `WorkDay`: 09:00–17:00, Monday to Friday.
+- `Break`: 12:00–13:00, Monday to Friday.
+- `Holidays`: Friday 25 and Monday 28 December 2026.
+
+A ticket is opened at 16:30 on Thursday 24 December 2026, London time, with an 8-hour SLA. At 11:00 on Tuesday 29 December, an agent wants to know how much of the SLA has been used and how much is left.
+
+## Find the due time and the time left
+
+Each tab adds the SLA to the opening time to get the due time, then counts the working time from opening to now (used) and from now to the due time (left).
+
+<Tabs groupId="lang" persist items={['Rust', 'Python', 'JavaScript']}>
+<Tab value="Rust">
+
+```rust
+use jiff::civil::{date, time};
+use jiff::{SignedDuration, Zoned};
+use workclock::{Break, Holidays, Schedule, Weekdays, WorkDay};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let days = Weekdays::MON_TO_FRI;
+    let support = Schedule::builder()
+        .time_zone("Europe/London")
+        .rule(WorkDay::new(time(9, 0, 0, 0), time(17, 0, 0, 0), days))
+        .rule(Break::new(time(12, 0, 0, 0), time(13, 0, 0, 0), days))
+        .rule(Holidays::new([date(2026, 12, 25), date(2026, 12, 28)]))
+        .build()?;
+
+    let sla = SignedDuration::from_hours(8);
+    let opened: Zoned = "2026-12-24T16:30[Europe/London]".parse()?;
+    let due = support.add(&opened, sla)?;
+    assert_eq!(due.to_string(), "2026-12-30T09:30:00Z");
+
+    let now: Zoned = "2026-12-29T11:00[Europe/London]".parse()?;
+    let used = support.between(&opened, &now);
+    let left = support.between(&now, due);
+    assert_eq!(used, SignedDuration::from_mins(150));
+    assert_eq!(left, SignedDuration::from_mins(330));
+    assert_eq!(used.as_secs_f64() / sla.as_secs_f64(), 0.3125);
+    Ok(())
+}
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+from datetime import date, datetime, time, timedelta
+from zoneinfo import ZoneInfo
+
+from workclock import Break, Holidays, Schedule, WorkDay
+
+london = ZoneInfo("Europe/London")
+support = Schedule(
+    [
+        WorkDay(time(9), time(17)),  # Monday to Friday by default
+        Break(time(12), time(13)),
+        Holidays([date(2026, 12, 25), date(2026, 12, 28)]),
+    ],
+    time_zone=london,
+)
+
+sla = timedelta(hours=8)
+opened = datetime(2026, 12, 24, 16, 30, tzinfo=london)
+due = support.add(opened, sla)  # 2026-12-30 09:30, London time
+
+now = datetime(2026, 12, 29, 11, tzinfo=london)
+used = support.between(opened, now)  # 2:30:00
+left = support.between(now, due)  # 5:30:00
+used / sla  # 0.3125
+```
+
+</Tab>
+<Tab value="JavaScript">
+
+```js
+import { Schedule } from "workclock";
+
+const HOUR = 3_600_000; // 1 hour in milliseconds
+
+const support = new Schedule({
+  timeZone: "Europe/London",
+  rules: [
+    { type: "workday", start: "09:00", end: "17:00" },
+    { type: "break", start: "12:00", end: "13:00" },
+    { type: "holidays", dates: ["2026-12-25", "2026-12-28"] },
+  ],
+});
+
+const sla = 8 * HOUR;
+const opened = "2026-12-24T16:30:00Z";
+const due = support.add(opened, sla); // Date 2026-12-30T09:30:00.000Z
+
+const now = "2026-12-29T11:00:00Z";
+const used = support.between(opened, now); // 9000000 ms
+const left = support.between(now, due); // 19800000 ms
+used / sla; // 0.3125
+```
+
+</Tab>
+</Tabs>
+
+London is at UTC+00:00 in December, so the UTC instants in the Rust and JavaScript tabs are also London wall-clock times.
+
+## The result
+
+The ticket is due at 09:30 on Wednesday 30 December 2026, London time. By 11:00 on Tuesday 29 December it has used 2 hours 30 minutes of working time, 31.25% of the SLA, and 5 hours 30 minutes are left:
+
+| Date, `Europe/London` | Working time counted |
+|---|---|
+| Thursday 24 December, from 16:30 | 30 minutes, used |
+| Friday 25 December | None: a holiday |
+| Saturday 26 and Sunday 27 December | None: not working days |
+| Monday 28 December | None: a holiday |
+| Tuesday 29 December, 09:00–11:00 | 2 hours, used |
+| Tuesday 29 December, 11:00–12:00 and 13:00–17:00 | 5 hours, left |
+| Wednesday 30 December, 09:00–09:30 | 30 minutes, left |
+
+<WeekStrip />
+
+Used plus left is always the SLA: `between(opened, now) + between(now, due)` is `between(opened, due)`, and that is the 8 hours `add` counted ([Adding time: Round trips](/docs/concepts/adding-time/#round-trips)).
+
+## Edge cases
+
+- **Overdue tickets.** After the due time, the time left is negative: at 10:00 on Wednesday 30 December, `between(now, due)` is minus 30 minutes, so the ticket is 30 working minutes overdue. Zero means the SLA ends at `now`. [Measuring time: The sign of the result](/docs/concepts/measuring-time/#the-sign-of-the-result) explains the sign.
+- **Tickets opened outside working hours.** `add` counts from the start of the next working time. A ticket opened at 10:00 on Saturday 26 December starts counting at 09:00 on Tuesday 29 December and is due at 10:00 on Wednesday 30 December ([Adding time: Where the result lands](/docs/concepts/adding-time/#where-the-result-lands)).
+- **A due time at the end of the day.** A ticket that uses up a stretch of working time is due when that stretch ends, such as 17:00, not at 09:00 the next working day (DESIGN.md A2).
+- **Holidays.** Each date in `Holidays` removes 00:00 to the next 00:00 in the schedule's time zone, not in UTC ([Rules: Holidays](/docs/concepts/rules/#holidays)).
+- **Daylight saving time (DST).** Working hours are wall-clock times in `Europe/London`, so 09:00 stays 09:00 after the clocks change ([Time zones and DST](/docs/concepts/time-zones-and-dst/)).
+
+What 0.1.0 does not do ([DESIGN.md: Scope](https://github.com/Karthik-beta/workclock/blob/main/DESIGN.md#scope)):
+
+- **SLAs in business days**, such as "by the end of the next business day". workclock counts working time, not days, and cannot convert a duration into business days.
+- **Shorter hours on one date**, such as closing at 13:00 on Christmas Eve. Working hours repeat by weekday; there are no per-date overrides. A whole closed day is a holiday.
+
+## See also
+
+- [Adding time](/docs/concepts/adding-time/): what `add` and `sub` return, including at the edges of working time.
+- [Measuring time](/docs/concepts/measuring-time/): what `between` counts.
+- [Periods](/docs/concepts/periods/): when the current stretch of working time ends.
+- [Batch operations](/docs/guides/batch-operations/): due times for many tickets in one call.
+- [crates/workclock/examples/sla.rs](https://github.com/Karthik-beta/workclock/blob/main/crates/workclock/examples/sla.rs), [examples/python/sla.py](https://github.com/Karthik-beta/workclock/blob/main/examples/python/sla.py) and [js/examples/sla.mjs](https://github.com/Karthik-beta/workclock/blob/main/js/examples/sla.mjs): the same scenario as complete programs.
