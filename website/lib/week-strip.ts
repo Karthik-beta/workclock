@@ -1,16 +1,19 @@
-import type { Rule, Schedule } from 'workclock/web';
+import type { Rule, Schedule, Weekday } from 'workclock/web';
 
-export const zone = 'Europe/London';
-export const lunchBreak = { start: '12:00', end: '13:00' } as const;
+export const weekdays: Weekday[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
-/** What the landing demo's controls set. Dates and times are wall-clock in `zone`. */
+/** What the demo and playground controls set. Dates and times are wall-clock in `timeZone`. */
 export interface DemoInputs {
   slaHours: number;
   openedDate: string;
   openedTime: string;
   workStart: string;
   workEnd: string;
+  /** The working days; the break applies on the same days. */
+  days: Weekday[];
+  breakTime: { start: string; end: string } | null;
   holidays: string[];
+  timeZone: string;
 }
 
 /** The README scenario: due 09:30 on Wednesday 30 December 2026. */
@@ -20,7 +23,10 @@ export const readmeInputs: DemoInputs = {
   openedTime: '16:30',
   workStart: '09:00',
   workEnd: '17:00',
+  days: weekdays.slice(0, 5),
+  breakTime: { start: '12:00', end: '13:00' },
   holidays: ['2026-12-25', '2026-12-28'],
+  timeZone: 'Europe/London',
 };
 
 export const minSlaHours = 1;
@@ -56,64 +62,69 @@ export type StripResult = { ok: true; strip: Strip } | { ok: false; message: str
 type ScheduleClass = new (...args: ConstructorParameters<typeof Schedule>) => Schedule;
 
 export function rules(inputs: DemoInputs): Rule[] {
-  return [
-    { type: 'workday', start: inputs.workStart, end: inputs.workEnd },
-    { type: 'break', start: lunchBreak.start, end: lunchBreak.end },
-    { type: 'holidays', dates: inputs.holidays },
-  ];
+  const { days, breakTime } = inputs;
+  const list: Rule[] = [{ type: 'workday', start: inputs.workStart, end: inputs.workEnd, days }];
+  if (breakTime) list.push({ type: 'break', start: breakTime.start, end: breakTime.end, days });
+  list.push({ type: 'holidays', dates: inputs.holidays });
+  return list;
 }
 
 export function computeStrip(ScheduleCtor: ScheduleClass, inputs: DemoInputs): StripResult {
   if (minutes(inputs.workEnd) <= minutes(inputs.workStart)) {
     return { ok: false, message: 'The working day must end after it starts.' };
   }
+  if (inputs.breakTime && minutes(inputs.breakTime.end) <= minutes(inputs.breakTime.start)) {
+    return { ok: false, message: 'The break must end after it starts.' };
+  }
+  if (inputs.days.length === 0) {
+    return { ok: false, message: 'Choose at least one working day.' };
+  }
   let schedule: Schedule;
   try {
-    schedule = new ScheduleCtor({ timeZone: zone, rules: rules(inputs) });
+    schedule = new ScheduleCtor({ timeZone: inputs.timeZone, rules: rules(inputs) });
   } catch (e) {
-    return { ok: false, message: errorMessage(e) };
+    return { ok: false, message: errorMessage(e, inputs) };
   }
   try {
     return { ok: true, strip: build(schedule, inputs) };
   } catch (e) {
-    return { ok: false, message: errorMessage(e) };
+    return { ok: false, message: errorMessage(e, inputs) };
   } finally {
     schedule.free();
   }
 }
 
 function build(schedule: Schedule, inputs: DemoInputs): Strip {
-  const opened = instant(inputs.openedDate, inputs.openedTime);
+  const tz = inputs.timeZone;
+  const opened = instant(inputs.openedDate, inputs.openedTime, tz);
   const due = schedule.add(opened, inputs.slaHours * 3_600_000);
-  const dueLocal = local(due);
+  const dueLocal = local(due, tz);
 
   const span = daysBetween(inputs.openedDate, dueLocal.date) + 1;
   const shown = Math.min(Math.max(span, minDays), maxDays);
   const dates = Array.from({ length: shown }, (_, i) => addDays(inputs.openedDate, i));
-  const end = instant(addDays(dates[dates.length - 1], 1), '00:00');
+  const end = instant(addDays(dates[dates.length - 1], 1), '00:00', tz);
 
   const periods = new Map<string, Span[]>();
   const used = new Map<string, Span[]>();
-  let t = instant(inputs.openedDate, '00:00');
+  let t = instant(inputs.openedDate, '00:00', tz);
   // 14 days hold at most 28 periods with one break a day.
   for (let i = 0; i < 64; i++) {
     const p = schedule.nextPeriod(t);
     if (p.start >= end) break;
-    push(periods, p.start, p.end);
+    push(periods, p.start, p.end, tz);
     const from = p.start > opened ? p.start : opened;
     const to = p.end < due ? p.end : due;
-    if (from < to) push(used, from, to);
+    if (from < to) push(used, from, to, tz);
     t = p.end;
   }
 
   const rows: StripRow[] = [];
   const rowOf = new Map<string, number>();
   for (const date of dates) {
-    const day = weekday(date);
-    const weekend = day === 0 || day === 6;
     const dayPeriods = periods.get(date) ?? [];
     const last = rows[rows.length - 1];
-    if (weekend && dayPeriods.length === 0) {
+    if (!isWorkingDay(inputs, date) && dayPeriods.length === 0) {
       if (last?.kind === 'weekend') last.dates.push(date);
       else rows.push({ kind: 'weekend', dates: [date] });
     } else if (inputs.holidays.includes(date)) {
@@ -149,46 +160,66 @@ function build(schedule: Schedule, inputs: DemoInputs): Strip {
   };
 }
 
-function push(map: Map<string, Span[]>, start: Date, end: Date) {
-  const s = local(start);
-  const e = local(end);
+function push(map: Map<string, Span[]>, start: Date, end: Date, timeZone: string) {
+  const s = local(start, timeZone);
+  const e = local(end, timeZone);
   const span = { from: s.minute, to: e.date === s.date ? e.minute : 1440 };
   const list = map.get(s.date);
   if (list) list.push(span);
   else map.set(s.date, [span]);
 }
 
-function errorMessage(e: unknown): string {
+function errorMessage(e: unknown, { breakTime }: DemoInputs): string {
   if (e instanceof Error && 'kind' in e && e.kind === 'no_working_time') {
-    return `No working time: the working hours fall inside the ${lunchBreak.start}–${lunchBreak.end} break.`;
+    return breakTime
+      ? `No working time: the working hours fall inside the ${breakTime.start}–${breakTime.end} break.`
+      : 'No working time.';
   }
   return e instanceof Error ? e.message : String(e);
 }
 
-// Wall-clock helpers for `zone`.
+/** The weekday of a date, as rules name it. */
+export function weekdayKey(date: string): Weekday {
+  return weekdays[(weekday(date) + 6) % 7];
+}
 
-const partsFormat = new Intl.DateTimeFormat('en-GB', {
-  timeZone: zone,
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit',
-  hourCycle: 'h23',
-});
+export function isWorkingDay(inputs: DemoInputs, date: string): boolean {
+  return inputs.days.includes(weekdayKey(date));
+}
 
-function local(d: Date): { date: string; minute: number } {
+// Wall-clock helpers for a time zone.
+
+const formats = new Map<string, Intl.DateTimeFormat>();
+
+function partsFormat(timeZone: string): Intl.DateTimeFormat {
+  let format = formats.get(timeZone);
+  if (!format) {
+    format = new Intl.DateTimeFormat('en-GB', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    });
+    formats.set(timeZone, format);
+  }
+  return format;
+}
+
+function local(d: Date, timeZone: string): { date: string; minute: number } {
   const p: Record<string, string> = {};
-  for (const part of partsFormat.formatToParts(d)) p[part.type] = part.value;
+  for (const part of partsFormat(timeZone).formatToParts(d)) p[part.type] = part.value;
   return { date: `${p.year}-${p.month}-${p.day}`, minute: Number(p.hour) * 60 + Number(p.minute) };
 }
 
-/** The instant a wall-clock date and time in `zone` names. */
-export function instant(date: string, time: string): Date {
+/** The instant a wall-clock date and time in `timeZone` names. */
+export function instant(date: string, time: string, timeZone: string): Date {
   const [y, m, d] = date.split('-').map(Number);
   const guess = Date.UTC(y, m - 1, d) + minutes(time) * 60_000;
   const offset = (t: number) => {
-    const l = local(new Date(t));
+    const l = local(new Date(t), timeZone);
     const [ly, lm, ld] = l.date.split('-').map(Number);
     return Date.UTC(ly, lm - 1, ld) + l.minute * 60_000 - t;
   };
@@ -240,15 +271,38 @@ export function longDate(date: string, { short = false, year = true } = {}): str
 }
 
 export function dueSentence(strip: Strip): string {
-  return `Due ${strip.dueTime} on ${longDate(strip.dueDate)} (${zone})`;
+  return `Due ${strip.dueTime} on ${longDate(strip.dueDate)} (${strip.inputs.timeZone})`;
 }
 
 export function dueLabel(strip: Strip): string {
   return `Due ${longDate(strip.dueDate, { short: true, year: false })}, ${strip.dueTime}`;
 }
 
+/** "", or " on Mon, Tue and Sat" when the working days are not Monday to Friday. */
+function onDays({ days }: DemoInputs): string {
+  if (days.join() === weekdays.slice(0, 5).join()) return '';
+  const names = weekdays
+    .filter((d) => days.includes(d))
+    .map((d) => d[0].toUpperCase() + d.slice(1));
+  const list = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : names[0];
+  return ` on ${list}`;
+}
+
+function breakText({ breakTime }: DemoInputs, long = false): string {
+  if (!breakTime) return long ? 'with no break' : 'no break';
+  return long
+    ? `with a break from ${breakTime.start} to ${breakTime.end}`
+    : `break ${breakTime.start}–${breakTime.end}`;
+}
+
 export function caption(inputs: DemoInputs): string {
-  return `Working hours ${inputs.workStart}–${inputs.workEnd}, break ${lunchBreak.start}–${lunchBreak.end}. Times in ${zone}.`;
+  const hours = `${inputs.workStart}–${inputs.workEnd}${onDays(inputs)}`;
+  return `Working hours ${hours}, ${breakText(inputs)}. Times in ${inputs.timeZone}.`;
+}
+
+/** "Weekend" when every date is a Saturday or Sunday, otherwise "Day off". */
+export function offLabel(dates: string[]): string {
+  return dates.every((d) => [0, 6].includes(weekday(d))) ? 'Weekend' : 'Day off';
 }
 
 export function describe(strip: Strip): string {
@@ -259,7 +313,7 @@ export function describe(strip: Strip): string {
   const holidays = rows.flatMap((r) => (r.kind === 'holiday' ? [longDate(r.date, { year: false })] : []));
   const hours = inputs.slaHours === 1 ? '1 working hour' : `${inputs.slaHours} working hours`;
   return [
-    `Days from ${longDate(first, { year: false })} to ${longDate(lastDate)}, working ${inputs.workStart} to ${inputs.workEnd} with a break from ${lunchBreak.start} to ${lunchBreak.end}.`,
+    `Days from ${longDate(first, { year: false })} to ${longDate(lastDate)}, working ${inputs.workStart} to ${inputs.workEnd}${onDays(inputs)} ${breakText(inputs, true)}.`,
     holidays.length > 0 ? `Holidays: ${holidays.join(', ')}.` : '',
     `${hours} from ${longDate(first, { year: false })} at ${inputs.openedTime} end on ${longDate(strip.dueDate)} at ${strip.dueTime}.`,
   ]

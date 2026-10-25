@@ -9,6 +9,7 @@ import {
   dueLabel,
   hhmm,
   minutes,
+  offLabel,
 } from '@/lib/week-strip';
 import { DueMarker } from './due-marker';
 
@@ -138,7 +139,7 @@ function RowTrack({
         className="absolute inset-y-0 flex items-center text-caption text-text-2"
         style={{ left: `${weekendX}%` }}
       >
-        Weekend
+        {offLabel(row.dates)}
       </span>
     );
   }
