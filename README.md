@@ -5,7 +5,7 @@ Python and JavaScript — a maintained replacement for
 [businesstimedelta](https://github.com/seppemans/businesstimedelta), with a
 compatibility layer for existing code.
 
-> **Status:** in development. No release has been published yet.
+> **Status:** pre-1.0; the API may still change in a minor release.
 
 ## Install
 
