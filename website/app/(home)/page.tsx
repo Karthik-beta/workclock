@@ -1,4 +1,3 @@
-import { Callout } from 'fumadocs-ui/components/callout';
 import { Schedule } from 'workclock/web';
 import { CheckIt } from '@/components/landing/check-it';
 import { InstallCommands } from '@/components/landing/install-commands';
@@ -42,9 +41,6 @@ export default async function HomePage() {
             Fast, correct business-time arithmetic for Rust, Python and JavaScript.
           </p>
           <div className="flex max-w-[600px] flex-col gap-3">
-            <Callout type="warning" title="Warning" className="my-0">
-              In development. No release has been published yet.
-            </Callout>
             <InstallCommands />
             <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2 text-ui text-text-2">
               <p>
