@@ -164,7 +164,10 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm test
-      - run: npm publish --dry-run
+      # npm rejects a version that is already published, which stops a release
+      # early but fails every pull request until the version is bumped.
+      - if: github.event_name != 'pull_request'
+        run: npm publish --dry-run
       - run: npm pack
       - run: ../.github/scripts/npm-install-check.sh workclock-*.tgz
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
