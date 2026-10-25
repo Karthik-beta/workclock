@@ -1,0 +1,783 @@
+---
+title: JavaScript
+description: Every export of the workclock npm package, with TypeScript signatures, parameters, return values and errors.
+---
+
+This page lists the public API of the `workclock` npm package for JavaScript and TypeScript: `Schedule`, its option and rule types, the operations, the batch methods, the error classes and the WebAssembly setup of `workclock/web`. The package needs Node.js 22 or later. In Node.js and with a bundler, import from `"workclock"`; in a browser without a bundler, import from `"workclock/web"` and call [`init`](#init) first. Instants are `Date`s or ISO 8601 strings with a UTC offset, and durations are numbers of milliseconds. The signatures are copied from the package's TypeScript declarations.
+
+## `Schedule`
+
+```ts
+new Schedule(options: ScheduleOptions)
+```
+
+`Schedule` is working time defined by rules: the time inside `"workday"` rules and outside `"break"` and `"holidays"` rules. The order of the rules does not matter. [Schedules](/docs/concepts/schedules/) explains how rules combine.
+
+| Parameter | Type | Description |
+|---|---|---|
+| `options` | `ScheduleOptions` | The default time zone and the rules. |
+
+Returns a `Schedule`.
+
+| Throws | When |
+|---|---|
+| `UnknownZoneError` | A time zone is not in the IANA database (E6). |
+| `NoWorkingTimeError` | The working hours minus the breaks are empty over a 14-day reference window, including when there is no `"workday"` rule (E1–E3). |
+| `TypeError` | `options` or a rule has the wrong shape. The message names the rule, such as `rules[1]`. |
+| `RangeError` | A time, day or date cannot be read. |
+
+In JavaScript:
+
+```js
+import { Schedule } from "workclock";
+
+const support = new Schedule({
+  timeZone: "Europe/London",
+  rules: [
+    { type: "workday", start: "09:00", end: "17:00" },
+    { type: "break", start: "12:00", end: "13:00" },
+    { type: "holidays", dates: ["2026-12-25", "2026-12-28"] },
+  ],
+});
+```
+
+## `ScheduleOptions`
+
+```ts
+interface ScheduleOptions {
+  timeZone?: string;
+  rules: readonly Rule[];
+}
+```
+
+What `new Schedule` takes.
+
+| Property | Type | Default | Description |
+|---|---|---|---|
+| `timeZone` | `string` | `"UTC"` | IANA time zone of rules without their own `timeZone`. |
+| `rules` | `readonly Rule[]` | Required | The rules, in any order. |
+
+In TypeScript:
+
+```ts
+import { Schedule, type ScheduleOptions } from "workclock";
+
+const options: ScheduleOptions = {
+  timeZone: "Europe/London",
+  rules: [{ type: "workday", start: "09:00", end: "17:00" }],
+};
+const support = new Schedule(options);
+```
+
+## `HoursRule`
+
+```ts
+interface HoursRule {
+  type: "workday" | "break";
+  start: string;
+  end: string;
+  days?: readonly Weekday[];
+  timeZone?: string;
+}
+```
+
+Working hours (`"workday"`) or time off within them (`"break"`) on some days of the week. A shift belongs to the date it starts on. A break outside working time has no effect. [Rules](/docs/concepts/rules/) covers overnight and 24-hour shifts.
+
+| Property | Type | Default | Description |
+|---|---|---|---|
+| `type` | `"workday"` or `"break"` | Required | Working hours or time off. |
+| `start` | `string` | Required | Wall-clock start in the rule's time zone, written `HH:MM`, `HH:MM:SS` or `HH:MM:SS.fff` on a 24-hour clock, such as `"09:00"`. |
+| `end` | `string` | Required | Wall-clock end, in the same form. At or before `start`, the hours end on the next day, so `start` equal to `end` is a 24-hour shift. |
+| `days` | `readonly Weekday[]` | Monday to Friday | Days on which the hours start. The default applies to breaks too, so a break on a weekend workday needs its own `days`. |
+| `timeZone` | `string` | The schedule's | IANA time zone of the rule. |
+
+A time with digits below a millisecond throws `RangeError`.
+
+In JavaScript, a 22:00–06:00 night shift in UTC (DESIGN.md O2):
+
+```js
+import { Schedule } from "workclock";
+
+const nights = new Schedule({
+  rules: [{ type: "workday", start: "22:00", end: "06:00" }],
+});
+nights.add("2026-01-05T22:00:00Z", 4 * 3_600_000);
+// Date 2026-01-06T02:00:00.000Z
+```
+
+## `HolidaysRule`
+
+```ts
+interface HolidaysRule {
+  type: "holidays";
+  dates: readonly string[];
+  timeZone?: string;
+}
+```
+
+Dates that are not worked. Each date removes the time from 00:00 to the next 00:00 in the rule's time zone. Searching past the last date is not an error.
+
+| Property | Type | Default | Description |
+|---|---|---|---|
+| `type` | `"holidays"` | Required | Marks the rule as holidays. |
+| `dates` | `readonly string[]` | Required | Dates such as `"2026-12-25"`. |
+| `timeZone` | `string` | The schedule's | IANA time zone of the rule. |
+
+In JavaScript:
+
+```js
+import { Schedule } from "workclock";
+
+const support = new Schedule({
+  timeZone: "Europe/London",
+  rules: [
+    { type: "workday", start: "09:00", end: "17:00" },
+    { type: "holidays", dates: ["2026-12-25", "2026-12-28"] },
+  ],
+});
+support.nextPeriod("2026-12-24T17:00:00Z").start;
+// Date 2026-12-29T09:00:00.000Z
+```
+
+## `Rule`
+
+```ts
+type Rule = HoursRule | HolidaysRule;
+```
+
+One rule of a schedule, as `ScheduleOptions.rules` takes it.
+
+In TypeScript:
+
+```ts
+import { type Rule, Schedule } from "workclock";
+
+const rules: Rule[] = [
+  { type: "workday", start: "09:00", end: "17:00" },
+  { type: "break", start: "12:00", end: "13:00" },
+  { type: "holidays", dates: ["2026-12-25", "2026-12-28"] },
+];
+const support = new Schedule({ timeZone: "Europe/London", rules });
+```
+
+## `Weekday`
+
+```ts
+type Weekday = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
+```
+
+A day of the week, as `HoursRule.days` takes it. Any other value throws `RangeError`.
+
+In JavaScript, weekend working hours:
+
+```js
+import { Schedule } from "workclock";
+
+const weekend = new Schedule({
+  timeZone: "Europe/London",
+  rules: [
+    {
+      type: "workday",
+      start: "10:00",
+      end: "16:00",
+      days: ["sat", "sun"],
+    },
+  ],
+});
+weekend.between("2026-12-26T00:00:00Z", "2026-12-28T00:00:00Z");
+// 43200000 ms
+```
+
+## `Instant`
+
+```ts
+type Instant = Date | string;
+```
+
+An instant: a `Date`, or an ISO 8601 string with a UTC offset, such as `"2026-01-05T09:00:00Z"` or `"2026-01-05T10:00:00+01:00"`. Instants run from `-009999-01-02T01:59:59Z` to `9999-12-30T22:00:00Z`. [Inputs and precision](/docs/concepts/inputs-and-precision/) lists what is rejected.
+
+| Throws | When |
+|---|---|
+| `TypeError` | The value is neither a `Date` nor a string. |
+| `RangeError` | The `Date` is invalid, or the string has no UTC offset, is malformed or has digits below a millisecond (N2). |
+| `OutOfRangeError` | The instant is outside the supported range. |
+
+In JavaScript, a `Date` and a string with an offset:
+
+```js
+import { Schedule } from "workclock";
+
+const support = new Schedule({
+  timeZone: "Europe/London",
+  rules: [
+    { type: "workday", start: "09:00", end: "17:00" },
+    { type: "break", start: "12:00", end: "13:00" },
+    { type: "holidays", dates: ["2026-12-25", "2026-12-28"] },
+  ],
+});
+const opened = new Date("2026-12-24T16:30:00Z");
+const now = "2026-12-29T06:00:00-05:00"; // 06:00 in New York
+support.between(opened, now); // 9000000 ms
+```
+
+## `Period`
+
+```ts
+interface Period {
+  start: Date;
+  end: Date;
+}
+```
+
+A period: a maximal stretch of working time, from `start` up to but not including `end`. `Schedule.nextPeriod` and `Schedule.previousPeriod` return one.
+
+In JavaScript:
+
+```js
+import { Schedule } from "workclock";
+
+const support = new Schedule({
+  timeZone: "Europe/London",
+  rules: [
+    { type: "workday", start: "09:00", end: "17:00" },
+    { type: "break", start: "12:00", end: "13:00" },
+  ],
+});
+const { start, end } = support.nextPeriod("2026-12-24T12:30:00Z");
+start; // Date 2026-12-24T13:00:00.000Z
+end; // Date 2026-12-24T17:00:00.000Z
+```
+
+## `Schedule.add`
+
+```ts
+add(t: Instant, ms: number): Date
+```
+
+Finds the instant a given amount of working time after another. [Adding time](/docs/concepts/adding-time/) explains where results land.
+
+| Parameter | Type | Description |
+|---|---|---|
+| `t` | `Instant` | The instant to count from. |
+| `ms` | `number` | Working time in milliseconds; a negative amount counts back. |
+
+Returns the earliest `Date` with exactly `ms` of working time between `t` and it, or `t` itself when `ms` is zero.
+
+| Throws | When |
+|---|---|
+| `NoWorkingTimeError` | No working time is found within 366 days, plus seven days per holiday date. |
+| `OutOfRangeError` | `t` or the result is outside the supported range. |
+| `TypeError` | `t` is neither a `Date` nor a string, or `ms` is not a number. A string or `BigInt` is not converted. |
+| `RangeError` | `t` is malformed, or `ms` is not a whole number within ±`Number.MAX_SAFE_INTEGER`. |
+
+In JavaScript:
+
+```js
+import { Schedule } from "workclock";
+
+const support = new Schedule({
+  timeZone: "Europe/London",
+  rules: [
+    { type: "workday", start: "09:00", end: "17:00" },
+    { type: "break", start: "12:00", end: "13:00" },
+    { type: "holidays", dates: ["2026-12-25", "2026-12-28"] },
+  ],
+});
+support.add("2026-12-24T16:30:00Z", 8 * 3_600_000);
+// Date 2026-12-30T09:30:00.000Z
+```
+
+## `Schedule.sub`
+
+```ts
+sub(t: Instant, ms: number): Date
+```
+
+Finds the instant a given amount of working time before another. It takes the same parameters as `Schedule.add` and throws the same errors.
+
+| Parameter | Type | Description |
+|---|---|---|
+| `t` | `Instant` | The instant to count back from. |
+| `ms` | `number` | Working time in milliseconds; a negative amount counts forward. |
+
+Returns the latest `Date` with exactly `ms` of working time between it and `t`, or `t` itself when `ms` is zero.
+
+In JavaScript:
+
+```js
+import { Schedule } from "workclock";
+
+const support = new Schedule({
+  timeZone: "Europe/London",
+  rules: [
+    { type: "workday", start: "09:00", end: "17:00" },
+    { type: "break", start: "12:00", end: "13:00" },
+    { type: "holidays", dates: ["2026-12-25", "2026-12-28"] },
+  ],
+});
+support.sub("2026-12-30T09:30:00Z", 8 * 3_600_000);
+// Date 2026-12-24T16:30:00.000Z
+```
+
+## `Schedule.between`
+
+```ts
+between(a: Instant, b: Instant): number
+```
+
+Measures the working time between two instants. [Measuring time](/docs/concepts/measuring-time/) explains what is counted.
+
+| Parameter | Type | Description |
+|---|---|---|
+| `a` | `Instant` | The start. |
+| `b` | `Instant` | The end. |
+
+Returns the working time in milliseconds, negative when `b` is before `a`. `between` never searches, so it never throws `NoWorkingTimeError`.
+
+| Throws | When |
+|---|---|
+| `OutOfRangeError` | An instant is outside the supported range. |
+| `TypeError` | An instant is neither a `Date` nor a string. |
+| `RangeError` | An instant is an invalid `Date` or a string without a UTC offset. |
+
+In JavaScript:
+
+```js
+import { Schedule } from "workclock";
+
+const support = new Schedule({
+  timeZone: "Europe/London",
+  rules: [
+    { type: "workday", start: "09:00", end: "17:00" },
+    { type: "break", start: "12:00", end: "13:00" },
+    { type: "holidays", dates: ["2026-12-25", "2026-12-28"] },
+  ],
+});
+support.between("2026-12-24T16:30:00Z", "2026-12-29T11:00:00Z");
+// 9000000 ms
+```
+
+## `Schedule.nextPeriod`
+
+```ts
+nextPeriod(t: Instant): Period
+```
+
+Finds the period of working time that contains an instant, or else the first one after it. [Periods](/docs/concepts/periods/) explains which period is returned.
+
+| Parameter | Type | Description |
+|---|---|---|
+| `t` | `Instant` | The instant to search from. |
+
+Returns a `Period`. If `t` is inside a period, its `start` is `t`.
+
+| Throws | When |
+|---|---|
+| `NoWorkingTimeError` | No working time is found within 366 days, plus seven days per holiday date. |
+| `OutOfRangeError` | `t` is outside the supported range, or the search reaches its end. |
+| `TypeError` | `t` is neither a `Date` nor a string. |
+| `RangeError` | `t` is malformed. |
+
+In JavaScript:
+
+```js
+import { Schedule } from "workclock";
+
+const support = new Schedule({
+  timeZone: "Europe/London",
+  rules: [
+    { type: "workday", start: "09:00", end: "17:00" },
+    { type: "break", start: "12:00", end: "13:00" },
+    { type: "holidays", dates: ["2026-12-25", "2026-12-28"] },
+  ],
+});
+support.nextPeriod("2026-12-29T11:00:00Z").end;
+// Date 2026-12-29T12:00:00.000Z
+```
+
+## `Schedule.previousPeriod`
+
+```ts
+previousPeriod(t: Instant): Period
+```
+
+Finds the period of working time that contains an instant, or else the last one before it. It takes the same parameter as `Schedule.nextPeriod` and throws the same errors, except that `OutOfRangeError` is thrown when the search reaches the start of the supported range.
+
+Returns a `Period`. If `t` is inside a period, its `end` is `t`.
+
+In JavaScript:
+
+```js
+import { Schedule } from "workclock";
+
+const support = new Schedule({
+  timeZone: "Europe/London",
+  rules: [
+    { type: "workday", start: "09:00", end: "17:00" },
+    { type: "break", start: "12:00", end: "13:00" },
+    { type: "holidays", dates: ["2026-12-25", "2026-12-28"] },
+  ],
+});
+support.previousPeriod("2026-12-29T11:00:00Z").start;
+// Date 2026-12-29T09:00:00.000Z
+```
+
+## `Schedule.betweenMany`
+
+```ts
+betweenMany(a: Float64Array, b: Float64Array): Float64Array;
+betweenMany(a: readonly Instant[], b: readonly Instant[]): number[];
+betweenMany(
+  a: Float64Array | readonly Instant[],
+  b: Float64Array | readonly Instant[],
+): Float64Array | number[];
+```
+
+Runs `Schedule.between` for each pair of `a` and `b` in one call. A `Float64Array` of milliseconds since the epoch is the fastest input.
+
+| Parameter | Type | Description |
+|---|---|---|
+| `a` | `Float64Array` or `readonly Instant[]` | The starts: instants, or whole milliseconds since the epoch. |
+| `b` | `Float64Array` or `readonly Instant[]` | The ends, as many as `a`. |
+
+Returns the working times in milliseconds: a `Float64Array` when `a` is a `Float64Array`, and a `number[]` otherwise.
+
+| Throws | When |
+|---|---|
+| What `Schedule.between` throws | An item fails. The message starts with `item {i}: `, where `i` is the item's zero-based index. |
+| `RangeError` | `a` and `b` differ in length, or a `Float64Array` holds a value that is not a whole number of milliseconds. |
+| `TypeError` | `a` or `b` is neither an array nor a `Float64Array`. |
+
+In JavaScript:
+
+```js
+import { Schedule } from "workclock";
+
+const support = new Schedule({
+  timeZone: "Europe/London",
+  rules: [
+    { type: "workday", start: "09:00", end: "17:00" },
+    { type: "break", start: "12:00", end: "13:00" },
+    { type: "holidays", dates: ["2026-12-25", "2026-12-28"] },
+  ],
+});
+const opened = ["2026-12-24T16:30:00Z", "2026-12-29T09:00:00Z"];
+const now = "2026-12-29T11:00:00Z";
+support.betweenMany(opened, [now, now]); // [9000000, 7200000] ms
+```
+
+## `Schedule.addMany`
+
+```ts
+addMany(
+  t: Float64Array,
+  ms: number | readonly number[] | Float64Array,
+): Float64Array;
+addMany(
+  t: readonly Instant[],
+  ms: number | readonly number[] | Float64Array,
+): Date[];
+addMany(
+  t: Float64Array | readonly Instant[],
+  ms: number | readonly number[] | Float64Array,
+): Float64Array | Date[];
+```
+
+Runs `Schedule.add` for each instant in one call.
+
+| Parameter | Type | Description |
+|---|---|---|
+| `t` | `Float64Array` or `readonly Instant[]` | The instants to count from, or whole milliseconds since the epoch. |
+| `ms` | `number`, `readonly number[]` or `Float64Array` | Working time in milliseconds: one number for every item, or one per item. |
+
+Returns a `Float64Array` of milliseconds since the epoch when `t` is a `Float64Array`, and a `Date[]` otherwise.
+
+| Throws | When |
+|---|---|
+| What `Schedule.add` throws | An item fails. The message starts with `item {i}: `, where `i` is the item's zero-based index. |
+| `RangeError` | `t` and `ms` differ in length, or a `Float64Array` in `t` holds a value that is not a whole number of milliseconds. |
+| `TypeError` | `t` is neither an array nor a `Float64Array`, or `ms` is not a number, an array of numbers or a `Float64Array`. |
+
+In JavaScript, with a `Float64Array`:
+
+```js
+import { Schedule } from "workclock";
+
+const support = new Schedule({
+  timeZone: "Europe/London",
+  rules: [
+    { type: "workday", start: "09:00", end: "17:00" },
+    { type: "break", start: "12:00", end: "13:00" },
+    { type: "holidays", dates: ["2026-12-25", "2026-12-28"] },
+  ],
+});
+const opened = new Float64Array([
+  Date.parse("2026-12-24T16:30:00Z"),
+  Date.parse("2026-12-29T11:00:00Z"),
+]);
+const due = support.addMany(opened, 8 * 3_600_000);
+new Date(due[0]); // Date 2026-12-30T09:30:00.000Z
+```
+
+## `Schedule.subMany`
+
+```ts
+subMany(
+  t: Float64Array,
+  ms: number | readonly number[] | Float64Array,
+): Float64Array;
+subMany(
+  t: readonly Instant[],
+  ms: number | readonly number[] | Float64Array,
+): Date[];
+subMany(
+  t: Float64Array | readonly Instant[],
+  ms: number | readonly number[] | Float64Array,
+): Float64Array | Date[];
+```
+
+Runs `Schedule.sub` for each instant in one call. It takes the same parameters as `Schedule.addMany`, returns the same types and throws the same errors, with those of `Schedule.sub` for a failing item.
+
+In JavaScript:
+
+```js
+import { Schedule } from "workclock";
+
+const support = new Schedule({
+  timeZone: "Europe/London",
+  rules: [
+    { type: "workday", start: "09:00", end: "17:00" },
+    { type: "break", start: "12:00", end: "13:00" },
+    { type: "holidays", dates: ["2026-12-25", "2026-12-28"] },
+  ],
+});
+const due = ["2026-12-30T09:30:00Z", "2026-12-30T12:00:00Z"];
+support.subMany(due, [8 * 3_600_000, 3_600_000]);
+// [Date 2026-12-24T16:30:00.000Z, Date 2026-12-30T11:00:00.000Z]
+```
+
+## `Schedule.free`
+
+```ts
+free(): void;
+[Symbol.dispose](): void;
+```
+
+Releases the schedule's WebAssembly memory now, instead of when the schedule is garbage collected. `[Symbol.dispose]` is the same method, so a `using` declaration frees the schedule at the end of its block. After `free`, calling a method of the schedule throws an `Error`.
+
+In JavaScript:
+
+```js
+import { Schedule } from "workclock";
+
+const support = new Schedule({
+  timeZone: "Europe/London",
+  rules: [{ type: "workday", start: "09:00", end: "17:00" }],
+});
+support.between("2026-12-24T09:00:00Z", "2026-12-24T17:00:00Z");
+// 28800000 ms
+support.free();
+```
+
+## `WorkclockError`
+
+```ts
+class WorkclockError extends Error {
+  readonly kind: string;
+}
+```
+
+The base class of the three errors below; check with `instanceof`. The values a schedule throws are `Error` objects whose `name` is the class name and that carry a `kind`. `instanceof` checks the `kind`, so it works across the node, bundler and web builds. A kind added in a later version arrives as a `WorkclockError` with `kind` `"unknown"`. Malformed input throws a built-in `TypeError` or `RangeError` instead, which is not a `WorkclockError`. [Errors](/docs/concepts/errors/) explains when each error is thrown.
+
+| Property | Type | Description |
+|---|---|---|
+| `kind` | `string` | `"no_working_time"`, `"out_of_range"`, `"unknown_zone"` or `"unknown"`. |
+
+In JavaScript:
+
+```js
+import { Schedule, WorkclockError } from "workclock";
+
+try {
+  new Schedule({
+    timeZone: "Mars/Olympus_Mons",
+    rules: [{ type: "workday", start: "09:00", end: "17:00" }],
+  });
+} catch (error) {
+  if (!(error instanceof WorkclockError)) throw error;
+  error.kind; // "unknown_zone"
+}
+```
+
+## `NoWorkingTimeError`
+
+```ts
+class NoWorkingTimeError extends WorkclockError {
+  readonly kind: "no_working_time";
+}
+```
+
+Thrown when the rules have no working time, or a search finds none within 366 days, plus seven days per holiday date. `new Schedule` throws it when building; `add`, `sub`, `nextPeriod`, `previousPeriod`, `addMany` and `subMany` throw it when a search fails. The message names the cause:
+
+- Building: `schedule has no working time: its working hours minus its breaks are empty`.
+- A failed search: `no working time within 366 days, plus seven days per holiday date, of {t}`, where `t` is the instant the search began from.
+
+In JavaScript, a `"workday"` rule with no days (E2):
+
+```js
+import { NoWorkingTimeError, Schedule } from "workclock";
+
+try {
+  new Schedule({
+    timeZone: "Europe/London",
+    rules: [{ type: "workday", start: "09:00", end: "17:00", days: [] }],
+  });
+} catch (error) {
+  if (!(error instanceof NoWorkingTimeError)) throw error;
+  error.kind; // "no_working_time"
+}
+```
+
+## `OutOfRangeError`
+
+```ts
+class OutOfRangeError extends WorkclockError {
+  readonly kind: "out_of_range";
+}
+```
+
+Thrown when an instant or a result falls outside the supported range, `-009999-01-02T01:59:59Z` to `9999-12-30T22:00:00Z`.
+
+In JavaScript, a result past the end of the range (E5):
+
+```js
+import { OutOfRangeError, Schedule } from "workclock";
+
+const office = new Schedule({
+  rules: [{ type: "workday", start: "09:00", end: "17:00" }],
+});
+try {
+  office.add("9999-12-30T16:00:00Z", 2 * 3_600_000);
+} catch (error) {
+  if (!(error instanceof OutOfRangeError)) throw error;
+  error.message;
+  // "result is outside the supported range -009999-01-02T01:59:59Z to
+  // 9999-12-30T22:00:00Z"
+}
+```
+
+## `UnknownZoneError`
+
+```ts
+class UnknownZoneError extends WorkclockError {
+  readonly kind: "unknown_zone";
+}
+```
+
+Thrown by `new Schedule` when a time zone name, of the schedule or of a rule, is not in the IANA database. The npm package always uses its bundled copy of the database.
+
+In JavaScript (E6):
+
+```js
+import { Schedule, UnknownZoneError } from "workclock";
+
+try {
+  new Schedule({
+    timeZone: "Mars/Olympus_Mons",
+    rules: [{ type: "workday", start: "09:00", end: "17:00" }],
+  });
+} catch (error) {
+  if (!(error instanceof UnknownZoneError)) throw error;
+  error.message; // "unknown time zone `Mars/Olympus_Mons`"
+}
+```
+
+## `version`
+
+```ts
+function version(): string;
+```
+
+Returns the version of workclock the module was built from, such as `"0.1.0"`.
+
+In JavaScript:
+
+```js
+import { version } from "workclock";
+
+version(); // "0.1.0"
+```
+
+## `init`
+
+```ts
+export default function __wbg_init(
+  module_or_path?:
+    | { module_or_path: InitInput | Promise<InitInput> }
+    | InitInput
+    | Promise<InitInput>,
+): Promise<InitOutput>;
+```
+
+The default export of `workclock/web`, the entry point for browsers without a bundler, imported here as `init`. Call it once, and wait for it, before using anything else from `workclock/web`. `workclock` itself, for Node.js and bundlers, does not export it. [Install: Browsers without a bundler](/docs/install/#browsers-without-a-bundler) covers serving the files.
+
+| Parameter | Type | Description |
+|---|---|---|
+| `module_or_path` | `object` | Optional. Where to load the WebAssembly module from, as `{ module_or_path }`, where `module_or_path` is an `InitInput` or a promise of one. An `InitInput` is a `RequestInfo`, `URL`, `Response`, `BufferSource` or `WebAssembly.Module`. Without it, `init` fetches `workclock_bg.wasm` from the package's `pkg/web/` directory. Passing an `InitInput` directly is deprecated. |
+
+Returns a promise of the module's internal exports, `InitOutput`, which you do not need. Calling it again returns the same exports.
+
+In JavaScript, in a browser:
+
+```js
+import init, { Schedule } from "workclock/web";
+
+await init();
+
+const support = new Schedule({
+  timeZone: "Europe/London",
+  rules: [
+    { type: "workday", start: "09:00", end: "17:00" },
+    { type: "break", start: "12:00", end: "13:00" },
+    { type: "holidays", dates: ["2026-12-25", "2026-12-28"] },
+  ],
+});
+support.add("2026-12-24T16:30:00Z", 8 * 3_600_000);
+// Date 2026-12-30T09:30:00.000Z
+```
+
+## `initSync`
+
+```ts
+export function initSync(
+  module: { module: SyncInitInput } | SyncInitInput,
+): InitOutput;
+```
+
+The synchronous form of `init`, exported by `workclock/web`, for when the WebAssembly module or its bytes are already at hand, such as in a worker.
+
+| Parameter | Type | Description |
+|---|---|---|
+| `module` | `object` | The compiled module or its bytes, as `{ module }`, where `module` is a `SyncInitInput`: a `BufferSource` or `WebAssembly.Module`. Passing a `SyncInitInput` directly is deprecated. |
+
+Returns the module's internal exports, `InitOutput`, which you do not need.
+
+In JavaScript, in a browser, with the bytes of `workclock_bg.wasm` fetched from where the page serves the package's `pkg/web/` directory:
+
+```js
+import { initSync, Schedule } from "workclock/web";
+
+const response = await fetch("/workclock/pkg/web/workclock_bg.wasm");
+initSync({ module: await response.arrayBuffer() });
+
+const support = new Schedule({
+  rules: [{ type: "workday", start: "09:00", end: "17:00" }],
+});
+```
+
+## See also
+
+- [Quickstart: JavaScript](/docs/quickstart/javascript/): a complete program.
+- [Inputs and precision](/docs/concepts/inputs-and-precision/): which instants and durations are accepted.
+- [js/README.md](https://github.com/Karthik-beta/workclock/blob/main/js/README.md), the package's README.
+- [`crates/workclock-wasm/src/lib.rs`](https://github.com/Karthik-beta/workclock/blob/main/crates/workclock-wasm/src/lib.rs), the source of the TypeScript declarations on this page.

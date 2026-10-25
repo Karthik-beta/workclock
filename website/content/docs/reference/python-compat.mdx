@@ -1,0 +1,425 @@
+---
+title: Python compat
+description: Every public class and function of workclock.compat, the businesstimedelta 1.0.1 API on the workclock engine, with parameters and errors.
+---
+
+This page lists the public API of `workclock.compat`, the Python module that runs code written for businesstimedelta 1.0.1 on workclock's engine. `import workclock.compat as businesstimedelta` keeps that code working: the classes take the same arguments and defaults and support the same operators. Naive datetimes are read as UTC. Where compat differs from businesstimedelta is on [Migrating from businesstimedelta](/docs/guides/migrating-from-businesstimedelta/); new code can use the typed API on [Python](/docs/reference/python/).
+
+Rules are checked when they are used, not when they are created. Any method or operator that computes with a rule raises `TypeError` or `ValueError` for an invalid attribute, such as a `working_days` entry outside 0 to 6, and `TypeError` for a rule type that compat does not run.
+
+## `Rule`
+
+```python
+Rule(tz: str | tzinfo = timezone.utc, time_off: bool = False)
+```
+
+`workclock.compat.Rule` is the base class of the rules: blocks of either working time or time off. Its methods are `Rule.next`, `Rule.previous` and `Rule.difference`. A subclass that computes its own blocks is not supported: using it raises `TypeError`, because rules run on the engine rather than as Python code.
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `tz` | `str` or `tzinfo` | `datetime.timezone.utc` | The rule's time zone: an IANA name, a `zoneinfo.ZoneInfo`, a pytz zone or `datetime.timezone.utc`. Stored as `tz`. |
+| `time_off` | `bool` | `False` | Whether the rule's blocks are time off. Stored as `time_off`. |
+
+In Python:
+
+```python
+import workclock.compat as businesstimedelta
+
+rule = businesstimedelta.WorkDayRule(tz="Europe/London")
+isinstance(rule, businesstimedelta.Rule)  # True
+rule.time_off  # False
+```
+
+## `WorkDayRule`
+
+```python
+WorkDayRule(
+    start_time: time = time(9),
+    end_time: time = time(18),
+    working_days: Collection[int] | None = None,
+    tz: str | tzinfo = timezone.utc,
+    time_off: bool = False,
+)
+```
+
+`workclock.compat.WorkDayRule` is working hours on some days of the week, like the typed API's `workclock.WorkDay`.
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `start_time` | `datetime.time` | `time(9)` | Wall-clock start, 09:00. |
+| `end_time` | `datetime.time` | `time(18)` | Wall-clock end, 18:00. Before `start_time`, the shift is overnight. Equal to `start_time`, the rule is empty, as in businesstimedelta. |
+| `working_days` | `Collection[int]` or `None` | `None` | Weekdays from 0 (Monday) to 6 (Sunday). `None` means `[0, 1, 2, 3, 4]`, Monday to Friday. |
+| `tz` | `str` or `tzinfo` | `datetime.timezone.utc` | The rule's time zone, as for `Rule`. |
+| `time_off` | `bool` | `False` | Whether the rule is time off. |
+
+The parameters are stored as attributes of the same names. They can be changed after the rule is created; the next call uses the new values. They are checked when the rule is used:
+
+| Raises | When |
+|---|---|
+| `ValueError` | A `working_days` entry is not an integer from 0 to 6. |
+| `TypeError` | `start_time` or `end_time` is not a `datetime.time`, or `tz` has no IANA name. |
+| `workclock.UnknownZoneError` | `tz` is not in the IANA database. |
+
+In Python, a naive datetime is read as UTC:
+
+```python
+from datetime import datetime, time
+
+import workclock.compat as businesstimedelta
+
+workday = businesstimedelta.WorkDayRule(time(9), time(17))
+friday = datetime(2026, 1, 9, 16)
+friday + businesstimedelta.BusinessTimeDelta(workday, hours=2)
+# 2026-01-12 10:00, UTC
+```
+
+## `LunchTimeRule`
+
+```python
+LunchTimeRule(
+    start_time: time = time(12),
+    end_time: time = time(13),
+    working_days: Collection[int] | None = None,
+    tz: str | tzinfo = timezone.utc,
+)
+```
+
+`workclock.compat.LunchTimeRule` is a `WorkDayRule` that is time off, like the typed API's `workclock.Break`. Its `time_off` is always `True`. It raises the same errors as `WorkDayRule`.
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `start_time` | `datetime.time` | `time(12)` | Wall-clock start, 12:00. |
+| `end_time` | `datetime.time` | `time(13)` | Wall-clock end, 13:00. |
+| `working_days` | `Collection[int]` or `None` | `None` | Weekdays from 0 (Monday) to 6 (Sunday). `None` means Monday to Friday. |
+| `tz` | `str` or `tzinfo` | `datetime.timezone.utc` | The rule's time zone, as for `Rule`. |
+
+In Python:
+
+```python
+from datetime import datetime, time
+
+import workclock.compat as businesstimedelta
+
+london = "Europe/London"
+workday = businesstimedelta.WorkDayRule(time(9), time(17), tz=london)
+lunch = businesstimedelta.LunchTimeRule(tz=london)  # 12:00–13:00
+support = businesstimedelta.Rules([workday, lunch])
+morning = datetime(2026, 12, 24, 11, 30)  # naive: read as UTC
+morning + businesstimedelta.BusinessTimeDelta(support, hours=1)
+# 2026-12-24 13:30, UTC
+```
+
+## `HolidayRule`
+
+```python
+HolidayRule(
+    holidays: Iterable[date],
+    tz: str | tzinfo = timezone.utc,
+    time_off: bool = True,
+)
+```
+
+`workclock.compat.HolidayRule` is dates that are not worked, like the typed API's `workclock.Holidays`. Each date is a block from 00:00 to the next 00:00 in `tz`.
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `holidays` | `Iterable[date]` | Required | `datetime.date` objects, or a python-holidays object. Read once, when the rule is created. A python-holidays object is first filled in for every year from 1970 to 2100; dates outside those years are not holidays. Stored as `holidays`. |
+| `tz` | `str` or `tzinfo` | `datetime.timezone.utc` | The rule's time zone, as for `Rule`. |
+| `time_off` | `bool` | `True` | Whether the rule is time off. A `HolidayRule` used as working time in `Rules` raises `TypeError`. |
+
+Dates added to `holidays` after the rule is created are not seen.
+
+| Raises | When |
+|---|---|
+| `TypeError` | `holidays` holds anything but `datetime.date` objects, including `datetime.datetime` objects. |
+
+On its own, a `HolidayRule`'s blocks are the holidays: `HolidayRule.next` and `HolidayRule.previous` return a holiday, and raise `workclock.NoWorkingTimeError` if there is no holiday after or before `dt`. `HolidayRule.difference` returns the holiday time between two datetimes.
+
+In Python:
+
+```python
+from datetime import date, datetime
+
+import workclock.compat as businesstimedelta
+
+holidays = businesstimedelta.HolidayRule(
+    [date(2026, 12, 25), date(2026, 12, 28)], tz="Europe/London"
+)
+holidays.next(datetime(2026, 12, 24, 10))
+# (2026-12-25 00:00, 2026-12-26 00:00), UTC
+```
+
+## `Rules`
+
+```python
+Rules(
+    rules: Iterable[Rule],
+    tz: str | tzinfo = timezone.utc,
+    time_off: bool = False,
+)
+```
+
+`workclock.compat.Rules` combines rules into working time: the union of the working-time rules minus the union of the time-off rules, like the typed API's `workclock.Schedule`.
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `rules` | `Iterable[Rule]` | Required | The rules. Split by their `time_off` into the attributes `available_rules` and `unavailable_rules`. |
+| `tz` | `str` or `tzinfo` | `datetime.timezone.utc` | Stored as `tz`. Each rule uses its own `tz`. |
+| `time_off` | `bool` | `False` | Stored as `time_off`. |
+
+`Rules` accepts `WorkDayRule` and `LunchTimeRule` as working time, and `WorkDayRule`, `LunchTimeRule` and `HolidayRule` as time off. The rules are checked when `Rules` is used:
+
+| Raises | When |
+|---|---|
+| `TypeError` | A rule is of another type, such as a nested `Rules` or a `HolidayRule` used as working time, or is invalid. |
+| `ValueError` | A rule is invalid, as for `WorkDayRule`. |
+| `workclock.NoWorkingTimeError` | The working hours minus the time off are empty, such as when the only `WorkDayRule` has `start_time == end_time`. `Rules.difference` returns zero instead. |
+
+In Python:
+
+```python
+from datetime import date, datetime, time
+
+import workclock.compat as businesstimedelta
+
+london = "Europe/London"
+workday = businesstimedelta.WorkDayRule(time(9), time(17), tz=london)
+lunch = businesstimedelta.LunchTimeRule(tz=london)  # 12:00–13:00
+holidays = businesstimedelta.HolidayRule(
+    [date(2026, 12, 25), date(2026, 12, 28)], tz=london
+)
+support = businesstimedelta.Rules([workday, lunch, holidays])
+
+opened = datetime(2026, 12, 24, 16, 30)  # naive: read as UTC
+opened + businesstimedelta.BusinessTimeDelta(support, hours=8)
+# 2026-12-30 09:30, UTC
+```
+
+## `Rule.next`
+
+```python
+Rule.next(dt: datetime) -> tuple[datetime, datetime]
+```
+
+Finds the block that contains `dt`, or else the first one after it. For `Rules`, a block is a whole period of working time, so overlapping working-hour rules form one block.
+
+| Parameter | Type | Description |
+|---|---|---|
+| `dt` | `datetime` | The datetime to search from. A naive one is read as UTC. |
+
+Returns the block as `(start, end)`, in the `tzinfo` of `dt`, or UTC if it is naive. If `dt` is inside a block, `start` is `dt`.
+
+| Raises | When |
+|---|---|
+| `workclock.NoWorkingTimeError` | No block starts within 366 days, plus seven days per holiday date, or the rule has no working time. |
+| `workclock.OutOfRangeError` | `dt` or the block is outside the supported range. |
+
+In Python:
+
+```python
+from datetime import date, datetime, time
+
+import workclock.compat as businesstimedelta
+
+london = "Europe/London"
+workday = businesstimedelta.WorkDayRule(time(9), time(17), tz=london)
+lunch = businesstimedelta.LunchTimeRule(tz=london)  # 12:00–13:00
+holidays = businesstimedelta.HolidayRule(
+    [date(2026, 12, 25), date(2026, 12, 28)], tz=london
+)
+support = businesstimedelta.Rules([workday, lunch, holidays])
+
+support.next(datetime(2026, 12, 26, 10))  # naive: read as UTC
+# (2026-12-29 09:00, 2026-12-29 12:00), UTC
+```
+
+## `Rule.previous`
+
+```python
+Rule.previous(dt: datetime) -> tuple[datetime, datetime]
+```
+
+Finds the block that contains `dt`, or else the last one before it. It takes the same parameter as `Rule.next` and raises the same errors.
+
+Returns the block as `(start, end)`, in the `tzinfo` of `dt`, or UTC if it is naive. If `dt` is inside a block, `end` is `dt`.
+
+In Python:
+
+```python
+from datetime import date, datetime, time
+
+import workclock.compat as businesstimedelta
+
+london = "Europe/London"
+workday = businesstimedelta.WorkDayRule(time(9), time(17), tz=london)
+lunch = businesstimedelta.LunchTimeRule(tz=london)  # 12:00–13:00
+holidays = businesstimedelta.HolidayRule(
+    [date(2026, 12, 25), date(2026, 12, 28)], tz=london
+)
+support = businesstimedelta.Rules([workday, lunch, holidays])
+
+support.previous(datetime(2026, 12, 26, 10))  # naive: read as UTC
+# (2026-12-24 13:00, 2026-12-24 17:00), UTC
+```
+
+## `Rule.difference`
+
+```python
+Rule.difference(dt1: datetime, dt2: datetime) -> BusinessTimeDelta
+```
+
+Measures the business time between two datetimes, in either order. Unlike the typed API's `Schedule.between`, the result is never negative.
+
+| Parameter | Type | Description |
+|---|---|---|
+| `dt1` | `datetime` | One end. A naive one is read as UTC. |
+| `dt2` | `datetime` | The other end. A naive one is read as UTC. |
+
+Returns a `BusinessTimeDelta` under this rule. A rule with no working time returns zero.
+
+| Raises | When |
+|---|---|
+| `workclock.OutOfRangeError` | `dt1` or `dt2` is outside the supported range. |
+
+In Python:
+
+```python
+from datetime import date, datetime, time
+
+import workclock.compat as businesstimedelta
+
+london = "Europe/London"
+workday = businesstimedelta.WorkDayRule(time(9), time(17), tz=london)
+lunch = businesstimedelta.LunchTimeRule(tz=london)  # 12:00–13:00
+holidays = businesstimedelta.HolidayRule(
+    [date(2026, 12, 25), date(2026, 12, 28)], tz=london
+)
+support = businesstimedelta.Rules([workday, lunch, holidays])
+
+opened = datetime(2026, 12, 24, 16, 30)  # naive: read as UTC
+support.difference(opened, datetime(2026, 12, 29, 11))
+# <BusinessTimeDelta 2 hours 1800 seconds>
+```
+
+## `BusinessTimeDelta`
+
+```python
+BusinessTimeDelta(
+    rule: Rule,
+    hours: float = 0,
+    seconds: float = 0,
+    timedelta: timedelta | None = None,
+)
+```
+
+`workclock.compat.BusinessTimeDelta` is an amount of business time under a rule. Add it to or subtract it from a datetime to move by that much business time.
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `rule` | `Rule` | Required | The rule that defines business time. Stored as `rule`. |
+| `hours` | `float` | `0` | Hours of business time. |
+| `seconds` | `float` | `0` | Seconds of business time, added to `hours`. |
+| `timedelta` | `datetime.timedelta` or `None` | `None` | The amount as a `timedelta`. If it is given and not zero, `hours` and `seconds` are ignored. |
+
+The amount is stored as the attribute `timedelta`, a `datetime.timedelta`. Two other attributes read it:
+
+| Attribute | Type | Description |
+|---|---|---|
+| `hours` | `int` | Whole hours in the amount, rounded down. |
+| `seconds` | `int` | Seconds in the amount beyond its whole hours. |
+
+In Python:
+
+```python
+import workclock.compat as businesstimedelta
+
+workday = businesstimedelta.WorkDayRule()
+delta = businesstimedelta.BusinessTimeDelta(workday, seconds=5400)
+delta.hours, delta.seconds  # (1, 1800)
+delta  # <BusinessTimeDelta 1 hours 1800 seconds>
+```
+
+## `BusinessTimeDelta` operators
+
+| Expression | Result |
+|---|---|
+| `dt + delta`, `delta + dt` | `dt` moved forward by the amount, in the `tzinfo` of `dt`, or UTC if it is naive. A negative amount moves back. Zero moves to the start of the next block, `rule.next(dt)[0]`. |
+| `dt - delta` | `dt` moved back by the amount. A negative amount moves forward. Zero moves to the end of the previous block, `rule.previous(dt)[1]`. |
+| `delta + other` | A `BusinessTimeDelta` of the sum, when `other` is a `BusinessTimeDelta` with the same `rule` object. |
+| `delta - other` | A `BusinessTimeDelta` of the difference, when `other` is a `BusinessTimeDelta` with the same `rule` object. |
+| `delta == other` | Whether `other` is a `BusinessTimeDelta` with the same amount. |
+
+| Raises | When |
+|---|---|
+| `NotImplementedError` | `delta + x` where `x` is neither a datetime nor a `BusinessTimeDelta` with the same rule, as businesstimedelta does. |
+| `TypeError` | `delta - x` where `x` is neither a datetime nor a `BusinessTimeDelta` with the same rule. |
+| The errors of `Rule.next` | Moving a datetime forward. |
+| The errors of `Rule.previous` | Moving a datetime back. |
+
+In Python:
+
+```python
+from datetime import datetime, time
+
+import workclock.compat as businesstimedelta
+
+workday = businesstimedelta.WorkDayRule(time(9), time(17))
+two_hours = businesstimedelta.BusinessTimeDelta(workday, hours=2)
+monday = datetime(2026, 1, 12, 10)  # naive: read as UTC
+monday - two_hours  # 2026-01-09 16:00, UTC
+monday + (two_hours + two_hours)  # 2026-01-12 14:00, UTC
+```
+
+## `localize_unlocalized_dt`
+
+```python
+localize_unlocalized_dt(dt: datetime) -> datetime
+```
+
+Reads a naive datetime as UTC, as every compat method does.
+
+| Parameter | Type | Description |
+|---|---|---|
+| `dt` | `datetime` | Any datetime. |
+
+Returns `dt` unchanged if it is aware, and `dt` with `tzinfo=datetime.timezone.utc` if it is naive.
+
+In Python:
+
+```python
+from datetime import datetime
+
+from workclock.compat import localize_unlocalized_dt
+
+localize_unlocalized_dt(datetime(2026, 12, 24, 16, 30))
+# 2026-12-24 16:30, UTC
+```
+
+## Errors
+
+`workclock.compat` raises the typed API's exceptions: `workclock.NoWorkingTimeError`, `workclock.OutOfRangeError` and `workclock.UnknownZoneError`, all subclasses of `workclock.WorkclockError`. They also inherit from `ValueError` or `OverflowError`, so `except` clauses written for businesstimedelta keep working. [Python: errors](/docs/reference/python/#workclockerror) lists each class.
+
+In Python, an empty `WorkDayRule` has no working time:
+
+```python
+from datetime import datetime, time
+
+import workclock
+import workclock.compat as businesstimedelta
+
+empty = businesstimedelta.WorkDayRule(time(9), time(9))
+one_hour = businesstimedelta.BusinessTimeDelta(empty, hours=1)
+try:
+    datetime(2026, 1, 5) + one_hour
+except workclock.NoWorkingTimeError as error:
+    print(error)
+    # schedule has no working time: its working hours minus its breaks
+    # are empty
+```
+
+## See also
+
+- [Migrating from businesstimedelta](/docs/guides/migrating-from-businesstimedelta/): what changes, and how to move to the typed API.
+- [Python](/docs/reference/python/): the typed API, `workclock.Schedule`.
+- [MIGRATING.md](https://github.com/Karthik-beta/workclock/blob/main/MIGRATING.md), the list of intentional differences.
+- [`python/workclock/compat.py`](https://github.com/Karthik-beta/workclock/blob/main/python/workclock/compat.py), the docstrings this page is written from.
