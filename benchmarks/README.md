@@ -34,16 +34,19 @@ The JavaScript suite runs the batch case three ways: `between` in a loop, and
 
 ## Instruction counts
 
-A second Rust suite counts the instructions each case executes, with
-[gungraun](https://crates.io/crates/gungraun) running it under Valgrind's
-Callgrind. Unlike a time, the count repeats exactly from run to run of the same
+The Rust and Python suites can also count the instructions each case executes,
+under Valgrind. Unlike a time, the count repeats from run to run of the same
 build, so it can catch a small slowdown in a pull request. `batch` uses 10,000
 pairs here instead of 1,000,000: code under Valgrind runs far slower, and the
-cost per pair is what matters.
+cost per pair is what matters. More than 3% extra instructions in `single` or
+`year` counts as a regression; a change in `batch` is only reported. Valgrind
+does not run on Windows; WSL works.
 
-Valgrind does not run on Windows; WSL works. gungraun needs Rust 1.88 or
-later. Install `gungraun-runner` at the version of `gungraun` in `Cargo.lock`;
-the runner refuses any other version.
+### Rust
+
+[gungraun](https://crates.io/crates/gungraun) runs the Rust suite under
+Callgrind. It needs Rust 1.88 or later. Install `gungraun-runner` at the
+version of `gungraun` in `Cargo.lock`; the runner refuses any other version.
 
 ```sh
 cargo install --locked --version <gungraun version in Cargo.lock> gungraun-runner
@@ -52,9 +55,31 @@ cargo bench -p workclock --bench instructions
 
 Each run compares itself with the previous one. To compare two commits, run
 the first with `-- --save-baseline=base` and the second with
-`-- --baseline=base`. If `single` or `year` uses more than 3% more
-instructions, the run fails with exit status 3; `batch` only reports the
-change.
+`-- --baseline=base`; a regression makes the run exit with status 3.
+
+### Python
+
+The Python suite runs under cachegrind. Each case runs twice, once with a
+warm-up call only and once with N more calls, and the difference divided by N
+is the count per call. That leaves out start-up, imports and building the
+inputs, but keeps the cost of crossing from Python into Rust. It covers
+`workclock` and `workclock.compat` on `single` (N = 1,000) and `year`
+(N = 100), and `between_many` for `batch`. businesstimedelta is too slow under
+Valgrind.
+
+To compare two commits, count on each and compare the two files. `uv run`
+rebuilds the extension after a checkout that changes the Rust sources.
+
+```sh
+git checkout main
+uv run python benchmarks/python/count.py base.json
+git checkout my-branch
+uv run python benchmarks/python/count.py head.json
+uv run python benchmarks/compare_instructions.py base.json head.json
+```
+
+`compare_instructions.py` prints a table and exits with status 1 on a
+regression.
 
 ## Results
 
