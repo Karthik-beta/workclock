@@ -1,4 +1,9 @@
-# workclock
+<h1>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/Karthik-beta/workclock/main/docs/assets/lockup-dark.svg">
+  <img alt="workclock" src="https://raw.githubusercontent.com/Karthik-beta/workclock/main/docs/assets/lockup-light.svg" height="42">
+</picture>
+</h1>
 
 Fast, correct business-time arithmetic (working hours, SLAs, shifts) for Rust,
 Python and JavaScript — a maintained replacement for
@@ -55,6 +60,11 @@ or enable jiff's `tzdb-bundle-always` feature to bundle the database.
 A support desk in London works 09:00–17:00 on weekdays with a lunch hour,
 and is closed on 25 and 28 December 2026. A ticket opened at 16:30 on
 Christmas Eve with an 8-hour SLA is due at 09:30 on 30 December.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/Karthik-beta/workclock/main/docs/assets/week-strip-dark.svg">
+  <img alt="Week strip of the scenario: the 8 hours count from 16:30 on Thursday 24, all of Tuesday 29 and Wednesday 30 until 09:30, skipping the holidays on 25 and 28 December and the weekend." src="https://raw.githubusercontent.com/Karthik-beta/workclock/main/docs/assets/week-strip-light.svg">
+</picture>
 
 ### Rust
 
@@ -144,6 +154,11 @@ The errors each binding raises are listed in
 ## Why workclock
 
 ### Correct
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/Karthik-beta/workclock/main/docs/assets/overnight-shift-dark.svg">
+  <img alt="A 22:00–06:00 shift measured from Monday 22:00 to Tuesday 06:00: businesstimedelta 1.0.1 counts 0 hours, workclock counts 8." src="https://raw.githubusercontent.com/Karthik-beta/workclock/main/docs/assets/overnight-shift-light.svg">
+</picture>
 
 businesstimedelta 1.0.1 has had no release since 2019. workclock fixes:
 
