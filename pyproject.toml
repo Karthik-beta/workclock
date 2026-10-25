@@ -99,5 +99,5 @@ disallow_untyped_calls = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests/python"]
-pythonpath = ["tests/python"]
+pythonpath = ["tests/python", "benchmarks/python"]
 addopts = ["--import-mode=importlib", "-m", "not slow"]
