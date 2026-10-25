@@ -28,30 +28,6 @@ npm i workclock
 The Rust API takes and returns [jiff](https://docs.rs/jiff) 0.2 types, so
 Rust code depends on jiff too.
 
-## Requirements
-
-- **Rust:** 1.85 or later.
-- **Python:** CPython 3.9 or later. The wheels use the stable ABI (abi3), one
-  per platform: Linux x86_64 and aarch64 (manylinux and musllinux), macOS
-  x86_64 and arm64, and Windows x64. Free-threaded CPython cannot load abi3
-  wheels. Other platforms build from the sdist, which needs a Rust toolchain.
-- **JavaScript:** Node.js 22 or later. Browsers load the package through a
-  bundler, or without one from `workclock/web`.
-
-### Time zone data
-
-The Python wheels and the npm package bundle the IANA time zone database, so
-they need no system tzdata. The npm package always uses its bundled copy,
-whose zone rules are as current as the workclock release. The Python wheels
-use the system database when there is one, and the bundled copy otherwise.
-
-The Rust crate uses jiff's defaults: the system database
-(`/usr/share/zoneinfo`, or the directory in `TZDIR`) on Linux and macOS, and
-a bundled copy on Windows. On a Linux image without tzdata, as some slim and
-distroless images are, every named zone, even `"UTC"`, is an unknown-zone
-error. Install the `tzdata` package, point `TZDIR` at a zoneinfo directory,
-or enable jiff's `tzdb-bundle-always` feature to bundle the database.
-
 ## Use cases
 
 - [Support-ticket SLAs](https://karthik-beta.github.io/workclock/docs/guides/support-slas/): when is a ticket
@@ -205,6 +181,30 @@ businesstimedelta's mutable rules until their attributes change.
 has every case with p95s, and
 [DESIGN.md](https://github.com/Karthik-beta/workclock/blob/main/DESIGN.md#performance)
 explains where the time goes.
+
+## Requirements
+
+- **Rust:** 1.85 or later.
+- **Python:** CPython 3.9 or later. The wheels use the stable ABI (abi3), one
+  per platform: Linux x86_64 and aarch64 (manylinux and musllinux), macOS
+  x86_64 and arm64, and Windows x64. Free-threaded CPython cannot load abi3
+  wheels. Other platforms build from the sdist, which needs a Rust toolchain.
+- **JavaScript:** Node.js 22 or later. Browsers load the package through a
+  bundler, or without one from `workclock/web`.
+
+### Time zone data
+
+The Python wheels and the npm package bundle the IANA time zone database, so
+they need no system tzdata. The npm package always uses its bundled copy,
+whose zone rules are as current as the workclock release. The Python wheels
+use the system database when there is one, and the bundled copy otherwise.
+
+The Rust crate uses jiff's defaults: the system database
+(`/usr/share/zoneinfo`, or the directory in `TZDIR`) on Linux and macOS, and
+a bundled copy on Windows. On a Linux image without tzdata, as some slim and
+distroless images are, every named zone, even `"UTC"`, is an unknown-zone
+error. Install the `tzdata` package, point `TZDIR` at a zoneinfo directory,
+or enable jiff's `tzdb-bundle-always` feature to bundle the database.
 
 ## Prior art & credits
 
