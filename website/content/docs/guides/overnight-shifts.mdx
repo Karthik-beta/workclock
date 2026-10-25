@@ -148,7 +148,7 @@ businesstimedelta 1.0.1 does not count across midnight: for the same rule it giv
 - **Daylight saving time (DST).** A night shift that spans a clock change is an hour shorter or longer. London's clocks change at 01:00 UTC on a Sunday, so a Monday-to-Friday rota never spans one; with shifts every night, the night of Saturday 28 March 2026 has 7 hours and the night of Saturday 24 October 2026 has 9 hours ([Time zones and DST: A night shift across a DST change](/docs/concepts/time-zones-and-dst/#a-night-shift-across-a-dst-change)).
 - **24-hour shifts.** A `WorkDay` whose start equals its end, such as 09:00–09:00, is a 24-hour shift (DESIGN.md O7–O9).
 
-Not in 0.1.0: a different shift on one date, such as a short night on New Year's Eve. Shifts repeat by weekday, with no per-date overrides ([DESIGN.md: Scope](https://github.com/Karthik-beta/workclock/blob/main/DESIGN.md#scope)).
+Not in 0.1.1: a different shift on one date, such as a short night on New Year's Eve. Shifts repeat by weekday, with no per-date overrides ([DESIGN.md: Scope](https://github.com/Karthik-beta/workclock/blob/main/DESIGN.md#scope)).
 
 ## See also
 
