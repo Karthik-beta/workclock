@@ -22,6 +22,8 @@ from typing import NamedTuple
 
 ROOT = Path(__file__).parents[1]
 CASES = ["single", "year", "batch"]
+# Absolute, because the report is also shown on a workflow run's summary page.
+README = "https://github.com/Karthik-beta/workclock/blob/main/benchmarks/README.md"
 
 
 class Row(NamedTuple):
@@ -144,8 +146,18 @@ def memory() -> str:
 
 
 def machine() -> list[tuple[str, str]]:
+    rows = [("Date", date.today().isoformat())]
+    # Set on GitHub Actions; a local run has neither row.
+    if run_id := os.environ.get("GITHUB_RUN_ID"):
+        server = os.environ["GITHUB_SERVER_URL"]
+        repository = os.environ["GITHUB_REPOSITORY"]
+        url = f"{server}/{repository}/actions/runs/{run_id}"
+        rows.append(("Run", f"[{run_id}]({url})"))
+    if image := os.environ.get("ImageOS"):
+        version = os.environ.get("ImageVersion", "unknown")
+        rows.append(("Runner", f"GitHub-hosted {image}, image {version}"))
     return [
-        ("Date", date.today().isoformat()),
+        *rows,
         ("CPU", f"{cpu()}, {os.cpu_count()} logical cores"),
         ("Memory", memory()),
         ("OS", platform.platform()),
@@ -157,7 +169,7 @@ def machine() -> list[tuple[str, str]]:
 
 def report(rows: list[Row]) -> str:
     lines = ["# Benchmark results", ""]
-    lines += ["Cases and commands are in [README.md](README.md).", ""]
+    lines += [f"Cases and commands are in [README.md]({README}).", ""]
     lines += ["| Machine | |", "|---|---|"]
     lines += [f"| {k} | {v} |" for k, v in machine()]
     for case in CASES:
