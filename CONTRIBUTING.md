@@ -144,6 +144,15 @@ npm pack
 ../.github/scripts/npm-install-check.sh workclock-*.tgz
 ```
 
+### Instruction counts
+
+The `instructions` CI job counts the instructions the benchmark cases execute,
+under Valgrind, on both the base and the head of a pull request. It fails if
+`single` or `year` executes over 3% more instructions in Rust or in Python.
+The counts are on the job's summary page. To count locally on Linux or WSL, see
+[Instruction counts](benchmarks/README.md#instruction-counts) in
+`benchmarks/README.md`.
+
 ### Workflows
 
 CI checks `.github/` with [zizmor](https://docs.zizmor.sh) for security
