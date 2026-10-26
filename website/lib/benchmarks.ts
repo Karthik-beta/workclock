@@ -4,6 +4,8 @@ import path from 'node:path';
 export interface SingleBenchmark {
   /** ISO 8601 date, as written in the Machine table. */
   date: string;
+  /** The GitHub Actions run the numbers come from; absent when RESULTS.md was made locally. */
+  runUrl?: string;
   cpu: string;
   medians: {
     rust: string;
@@ -58,6 +60,13 @@ export function readSingleBenchmark(): SingleBenchmark {
 
   const date = machine.get('Date');
   if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) fail('no Date in YYYY-MM-DD form in the Machine table');
+  const run = machine.get('Run');
+  let runUrl: string | undefined;
+  if (run !== undefined) {
+    const link = /^\[(\d+)\]\((https:\/\/github\.com\/[\w-]+\/[\w.-]+\/actions\/runs\/\1)\)$/.exec(run);
+    if (!link) fail(`Run "${run}" in the Machine table is not a link to a GitHub Actions run`);
+    runUrl = link[2];
+  }
   const cpu = machine.get('CPU');
   if (!cpu) fail('no CPU in the Machine table');
 
@@ -76,6 +85,7 @@ export function readSingleBenchmark(): SingleBenchmark {
 
   return {
     date,
+    runUrl,
     cpu,
     medians: {
       rust: median(rowNames.rust),
