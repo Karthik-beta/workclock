@@ -1,7 +1,8 @@
 """The three cases from `benchmarks/README.md`.
 
-Each runs against workclock's typed API, its businesstimedelta-compatible API
-and businesstimedelta 1.0.1 itself.
+Each runs against workclock's typed API, its businesstimedelta-compatible API,
+businesstimedelta 1.0.1 itself and `stdlib.py`, a hand-written loop over
+datetime and zoneinfo.
 """
 
 from collections.abc import Callable
@@ -12,6 +13,7 @@ import businesstimedelta
 import holidays
 import numpy as np
 import pytest
+import stdlib
 from cases import Between, office, pairs, rules
 from pytest_benchmark.fixture import BenchmarkFixture
 from workclock import compat
@@ -20,6 +22,7 @@ IMPLEMENTATIONS: dict[str, Callable[[], Between]] = {
     "workclock": lambda: office().between,
     "workclock.compat": lambda: rules(compat),
     "businesstimedelta": lambda: rules(businesstimedelta),
+    "stdlib": lambda: stdlib.between,
 }
 
 
