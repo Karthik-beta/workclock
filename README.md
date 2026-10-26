@@ -166,17 +166,21 @@ each binding is checked against a brute-force oracle with property-based tests.
 
 ### Fast
 
-Medians on a 2017 laptop (Intel i5-8250U, Windows 11), from Python:
+Medians from Python, in a
+[GitHub Actions run](https://github.com/Karthik-beta/workclock/actions/runs/40265875573)
+on a GitHub-hosted Ubuntu runner (AMD EPYC 7763, 4 cores):
 
 | Case | businesstimedelta 1.0.1 | workclock | Speed-up |
 |---|---|---|---|
-| One call, a 5½-hour span | 385 µs | 8.5 µs | 45× |
-| One call, a year with bank holidays | 134 ms | 163 µs | 820× |
-| 1,000,000 pairs | 22.5 min | 2.92 s (`between_many` on NumPy arrays) | 460× |
+| One call, a 5½-hour span | 167 µs | 3.89 µs | 43× |
+| One call, a year with bank holidays | 50.8 ms | 85 µs | 600× |
+| 1,000,000 pairs | 9.86 min | 2.11 s (`between_many` on NumPy arrays) | 280× |
 
-The same single call takes 1.7 µs from Rust and 2.2 µs from JavaScript, and
-16 µs through `workclock.compat`, which keeps the schedule it builds from
-businesstimedelta's mutable rules until their attributes change.
+The same single call takes 1.2 µs from Rust and 1.78 µs from JavaScript, and
+6.78 µs through `workclock.compat`, which keeps the schedule it builds from
+businesstimedelta's mutable rules until their attributes change. Runner CPUs
+vary, so the times move from run to run; the speed-ups, measured within one
+run, carry over better.
 [benchmarks/RESULTS.md](https://github.com/Karthik-beta/workclock/blob/main/benchmarks/RESULTS.md)
 has every case with p95s, and
 [DESIGN.md](https://github.com/Karthik-beta/workclock/blob/main/DESIGN.md#performance)

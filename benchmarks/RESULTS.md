@@ -1,49 +1,51 @@
 # Benchmark results
 
-Cases and commands are in [README.md](README.md).
+Cases and commands are in [README.md](https://github.com/Karthik-beta/workclock/blob/main/benchmarks/README.md).
 
 | Machine | |
 |---|---|
-| Date | 2026-10-24 |
-| CPU | Intel(R) Core(TM) i5-8250U CPU @ 1.60GHz, 8 logical cores |
-| Memory | 24 GiB |
-| OS | Windows-11-10.0.26300-SP0 |
+| Date | 2026-10-26 |
+| Run | [40265875573](https://github.com/Karthik-beta/workclock/actions/runs/40265875573) |
+| Runner | GitHub-hosted ubuntu24, image 20261023.334.3 |
+| CPU | AMD EPYC 7763 64-Core Processor, 4 logical cores |
+| Memory | 16 GiB |
+| OS | Linux-6.17.0-1022-azure-x86_64-with-glibc2.39 |
 | Rust | rustc 1.99.1 (58cf8f9c3 2026-10-13) |
-| Python | 3.13.16 |
-| Node.js | v26.12.0 |
+| Python | 3.15.1 |
+| Node.js | v24.21.0 |
 
 ## single
 
-| Implementation | Median | p95 | Samples |
-|---|---|---|---|
-| Rust | 1.67 µs | 1.99 µs | 100 |
-| JavaScript | 2.2 µs | 2.3 µs | 900773 |
-| Python, workclock | 8.5 µs | 17.7 µs | 17986 |
-| Python, workclock.compat | 16.1 µs | 36 µs | 6065 |
-| Python, workclock.compat, python-holidays | 16.8 µs | 28.5 µs | 970 |
-| Python, businesstimedelta | 385 µs | 592 µs | 1907 |
-| Python, businesstimedelta, python-holidays | 475 µs | 1.25 ms | 1355 |
+| Implementation | Median | p95 | Samples | vs businesstimedelta |
+|---|---|---|---|---|
+| Rust | 1.2 µs | 1.22 µs | 100 | 140× |
+| JavaScript | 1.78 µs | 1.82 µs | 1104052 | 94× |
+| Python, workclock | 3.89 µs | 4.16 µs | 47304 | 43× |
+| Python, workclock.compat | 6.78 µs | 7.17 µs | 8981 | 25× |
+| Python, workclock.compat, python-holidays | 6.78 µs | 7.3 µs | 1921 | 25× |
+| Python, businesstimedelta | 167 µs | 181 µs | 3492 | 1× |
+| Python, businesstimedelta, python-holidays | 193 µs | 206 µs | 2815 | 0.87× |
 
 ## year
 
-| Implementation | Median | p95 | Samples |
-|---|---|---|---|
-| JavaScript | 137 µs | 147 µs | 14318 |
-| Rust | 152 µs | 194 µs | 100 |
-| Python, workclock.compat | 160 µs | 246 µs | 3265 |
-| Python, workclock | 163 µs | 231 µs | 4491 |
-| Python, businesstimedelta | 134 ms | 155 ms | 8 |
+| Implementation | Median | p95 | Samples | vs businesstimedelta |
+|---|---|---|---|---|
+| Rust | 84.9 µs | 85.5 µs | 100 | 600× |
+| Python, workclock | 85 µs | 95.4 µs | 8616 | 600× |
+| Python, workclock.compat | 88.1 µs | 99.4 µs | 5834 | 580× |
+| JavaScript | 107 µs | 116 µs | 18733 | 480× |
+| Python, businesstimedelta | 50.8 ms | 52.2 ms | 20 | 1× |
 
 ## batch
 
-| Implementation | Median | p95 | Samples |
-|---|---|---|---|
-| Python, workclock between_many, NumPy | 2.92 s | 3.01 s | 5 |
-| JavaScript, betweenMany, Float64Array | 3.04 s | 3.07 s | 5 |
-| JavaScript, between in a loop | 3.19 s | 3.36 s | 5 |
-| JavaScript, betweenMany, Dates | 3.24 s | 3.43 s | 5 |
-| Rust | 3.65 s | 4.12 s | 10 |
-| Python, workclock between_many | 5.31 s | 5.57 s | 5 |
-| Python, workclock | 10.3 s | 10.9 s | 3 |
-| Python, workclock.compat | 16.3 s | 16.5 s | 3 |
-| Python, businesstimedelta | 22.5 min | 22.5 min | 1 |
+| Implementation | Median | p95 | Samples | vs businesstimedelta |
+|---|---|---|---|---|
+| Rust | 1.95 s | 1.97 s | 10 | 300× |
+| Python, workclock between_many, NumPy | 2.11 s | 2.13 s | 5 | 280× |
+| JavaScript, betweenMany, Float64Array | 2.55 s | 2.6 s | 5 | 230× |
+| JavaScript, between in a loop | 2.62 s | 2.64 s | 5 | 230× |
+| JavaScript, betweenMany, Dates | 2.68 s | 2.7 s | 5 | 220× |
+| Python, workclock between_many | 3.4 s | 3.43 s | 5 | 170× |
+| Python, workclock | 4.51 s | 4.53 s | 3 | 130× |
+| Python, workclock.compat | 7.91 s | 8.07 s | 3 | 75× |
+| Python, businesstimedelta | 9.86 min | 9.86 min | 1 | 1× |

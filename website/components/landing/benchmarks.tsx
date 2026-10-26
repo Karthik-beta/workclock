@@ -9,7 +9,7 @@ const longDate = new Intl.DateTimeFormat('en-GB', {
 });
 
 export function Benchmarks() {
-  const { date, cpu, medians } = readSingleBenchmark();
+  const { date, runUrl, cpu, medians } = readSingleBenchmark();
   const rows = [
     ['Rust', medians.rust],
     ['JavaScript', medians.javascript],
@@ -46,7 +46,14 @@ export function Benchmarks() {
         </tbody>
       </table>
       <p className="mt-3 text-caption text-text-2 tabular-nums">
-        Measured on <time dateTime={date}>{longDate.format(new Date(date))}</time> on {cpu}.{' '}
+        Measured on <time dateTime={date}>{longDate.format(new Date(date))}</time>
+        {runUrl && (
+          <>
+            {' '}
+            in a <A href={runUrl}>GitHub Actions run</A>,
+          </>
+        )}{' '}
+        on {cpu}.{' '}
         <A href={repoFile('benchmarks/RESULTS.md')}>benchmarks/RESULTS.md</A> has every case
         with p95s.
       </p>
