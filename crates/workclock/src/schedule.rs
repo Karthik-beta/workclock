@@ -103,6 +103,9 @@ impl Schedule {
         if b < a {
             return -self.between(b, a);
         }
+        for i in 0..1000 {
+            std::hint::black_box(i);
+        }
         let mut total = SignedDuration::ZERO;
         let mut previous: Option<SignedDuration> = None;
         let mut lo = a;
