@@ -1,4 +1,5 @@
-// The three cases from `benchmarks/README.md`, against the Node build.
+// The three cases from `benchmarks/README.md`, against the Node build and
+// against `stdlib.ts`, a hand-written loop over Temporal. Needs Node.js 26.
 //
 //   npm run build:node && node bench/bench.ts [results.json]
 
@@ -6,6 +7,7 @@ import { writeFileSync } from "node:fs";
 import { Bench } from "tinybench";
 
 import { office as schedule, pairs } from "./cases.ts";
+import * as stdlib from "./stdlib.ts";
 
 const office = schedule();
 const PAIRS = 1_000_000;
@@ -17,7 +19,9 @@ const calls = new Bench({ retainSamples: true, time: 2000 });
 const single = [new Date("2026-03-10T10:15:00Z"), new Date("2026-03-10T15:45:00Z")] as const;
 const year = [new Date("2026-01-01T00:00:00Z"), new Date("2027-01-01T00:00:00Z")] as const;
 calls.add("single", () => office.between(...single));
+calls.add("single: stdlib", () => stdlib.between(...single));
 calls.add("year", () => office.between(...year));
+calls.add("year: stdlib", () => stdlib.between(...year));
 
 const batches = new Bench({ retainSamples: true, iterations: 5, time: 0 });
 batches.add("batch: between in a loop", () => {
@@ -27,6 +31,11 @@ batches.add("batch: between in a loop", () => {
 });
 batches.add("batch: betweenMany, Dates", () => office.betweenMany(startDates, endDates));
 batches.add("batch: betweenMany, Float64Array", () => office.betweenMany(starts, ends));
+batches.add("batch: stdlib", () => {
+  for (let i = 0; i < PAIRS; i++) {
+    stdlib.between(startDates[i], endDates[i]);
+  }
+});
 
 const results = [];
 for (const bench of [calls, batches]) {
