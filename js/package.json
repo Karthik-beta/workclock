@@ -76,7 +76,7 @@
     "prepack": "node --eval \"for (const f of ['LICENSE', 'NOTICE']) require('node:fs').copyFileSync('../' + f, f)\"",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "bench": "node bench/bench.js"
+    "bench": "node bench/bench.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
