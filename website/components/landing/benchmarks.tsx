@@ -14,6 +14,8 @@ export function Benchmarks() {
     ['Rust', medians.rust],
     ['JavaScript', medians.javascript],
     ['Python', medians.python],
+    ['JavaScript, standard library (Temporal)', medians.javascriptStdlib],
+    ['Python, standard library (zoneinfo)', medians.pythonStdlib],
     ['Python, businesstimedelta 1.0.1', medians.businesstimedelta],
   ];
 
@@ -53,7 +55,7 @@ export function Benchmarks() {
             in a <A href={runUrl}>GitHub Actions run</A>,
           </>
         )}{' '}
-        on {cpu}.{' '}
+        on {cpu}. The standard-library rows are a loop written by hand for this one schedule.{' '}
         <A href={repoFile('benchmarks/RESULTS.md')}>benchmarks/RESULTS.md</A> has every case
         with p95s.
       </p>

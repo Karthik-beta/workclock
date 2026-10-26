@@ -11,6 +11,8 @@ export interface SingleBenchmark {
     rust: string;
     javascript: string;
     python: string;
+    javascriptStdlib: string;
+    pythonStdlib: string;
     businesstimedelta: string;
   };
 }
@@ -19,6 +21,8 @@ const rowNames = {
   rust: 'Rust',
   javascript: 'JavaScript',
   python: 'Python, workclock',
+  javascriptStdlib: 'JavaScript, stdlib',
+  pythonStdlib: 'Python, stdlib',
   businesstimedelta: 'Python, businesstimedelta',
 } as const;
 
@@ -91,6 +95,8 @@ export function readSingleBenchmark(): SingleBenchmark {
       rust: median(rowNames.rust),
       javascript: median(rowNames.javascript),
       python: median(rowNames.python),
+      javascriptStdlib: median(rowNames.javascriptStdlib),
+      pythonStdlib: median(rowNames.pythonStdlib),
       businesstimedelta: median(rowNames.businesstimedelta),
     },
   };
