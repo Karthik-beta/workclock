@@ -107,6 +107,6 @@ combine them:
 ```sh
 cargo bench -p workclock --bench workclock
 uv run pytest benchmarks/python --benchmark-json=python.json
-cd js && npm run build:node && node bench/bench.js ../js.json && cd ..
+cd js && npm run build:node && node bench/bench.ts ../js.json && cd ..
 uv run python benchmarks/report.py python.json js.json > benchmarks/RESULTS.md
 ```

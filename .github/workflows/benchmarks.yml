@@ -67,7 +67,7 @@ jobs:
         run: |
           npm ci
           npm run build:node
-          node bench/bench.js ../js.json
+          node bench/bench.ts ../js.json
       - run: uv run python benchmarks/report.py python.json js.json > RESULTS.md
       - run: cat RESULTS.md >> "$GITHUB_STEP_SUMMARY"
 
