@@ -444,18 +444,21 @@ Every difference is listed in `MIGRATING.md`.
 `between`, one `between` across a year with bank holidays, and `between` for
 1,000,000 pairs of up to a week each. Medians from
 [benchmarks/RESULTS.md](benchmarks/RESULTS.md), which comes from a
-[GitHub Actions run](https://github.com/Karthik-beta/workclock/actions/runs/40265875573)
+[GitHub Actions run](https://github.com/Karthik-beta/workclock/actions/runs/40285792116)
 on a GitHub-hosted Ubuntu runner:
 
-| Case | Rust | JavaScript | Python | compat | businesstimedelta 1.0.1 |
-|---|---|---|---|---|---|
-| single | 1.2 µs | 1.78 µs | 3.89 µs | 6.78 µs | 167 µs |
-| year | 84.9 µs | 107 µs | 85 µs | 88.1 µs | 50.8 ms |
-| batch, 1M pairs | 1.95 s | 2.55 s | 2.11 s | 7.91 s | 9.86 min |
+| Case | Rust | JavaScript | Python | compat | Python stdlib | JavaScript stdlib | businesstimedelta 1.0.1 |
+|---|---|---|---|---|---|---|---|
+| single | 1.19 µs | 1.77 µs | 3.96 µs | 7.24 µs | 4.01 µs | 9.06 µs | 169 µs |
+| year | 84.5 µs | 106 µs | 85.4 µs | 88.7 µs | 719 µs | 1.71 ms | 53 ms |
+| batch, 1M pairs | 1.96 s | 2.54 s | 2.13 s | 7.99 s | 9.95 s | 38.3 s | 9.9 min |
 
+The stdlib columns are a loop written by hand for this one schedule, with
+`datetime` and `zoneinfo` or with `Temporal`
+([benchmarks/README.md](benchmarks/README.md#standard-library-baselines)).
 The batch row uses the fastest form each binding offers: `betweenMany` on
-`Float64Array`s and `between_many` on NumPy arrays. compat and
-businesstimedelta loop over the pairs in Python. In the year case the engine's
+`Float64Array`s and `between_many` on NumPy arrays. compat, businesstimedelta
+and the stdlib loops loop over the pairs. In the year case the engine's
 work dominates, so Rust and Python are level, and JavaScript, running the
 engine as WebAssembly, takes about a quarter longer. Runner CPUs vary between
 runs: three runs on 2026-10-26 differed by about 20% in time, but the
@@ -469,11 +472,20 @@ it. The cost of a span therefore depends on how many of its weeks hold
 holidays or DST changes, not on its length. businesstimedelta walks the span
 one period at a time in Python.
 
+**Against the standard library.** The hand-written loop builds two intervals
+for every local date, so its cost grows with the number of days in a span. For
+one short span that is about as much work as crossing into the engine: from
+Python the loop takes 4.01 µs and workclock 3.96 µs, and compat, with its
+extra checks, is slower than the loop. Over a year workclock is 8.4× faster
+in Python and 16× in JavaScript. `Temporal`, new in Node.js 26, costs more
+per date than Python's `datetime`, so the JavaScript loop is the slower of the
+two in every case.
+
 **Crossing the boundary.** The engine needs about 1.2 µs for the single case.
 A call from JavaScript costs about 0.6 µs more. A call from the typed Python
-API costs about 2.7 µs more, spent converting aware datetimes to epoch
+API costs about 2.8 µs more, spent converting aware datetimes to epoch
 microseconds and the result back to a `timedelta`, and in the call itself.
-compat adds about 3 µs on top. It keeps the engine schedule it built from its
+compat adds about 3.3 µs on top. It keeps the engine schedule it built from its
 rule objects, but because businesstimedelta's rules are mutable, every call
 compares the attributes the schedule was built from with their current
 values, and builds it again only when they differ.
@@ -481,9 +493,9 @@ values, and builds it again only when they differ.
 **Batches.** A batch call converts its inputs once and then runs the engine
 on every pair with the GIL released. With NumPy arrays the conversion is
 vectorized, and 1M pairs take about as long as from Rust. From lists of
-datetimes the per-item conversion stays in Python (3.4 s), and a loop of
-`between` calls pays the whole crossing every time (4.51 s). In JavaScript the
-crossing is cheap: a loop is only 3% slower than `betweenMany` on
+datetimes the per-item conversion stays in Python (3.42 s), and a loop of
+`between` calls pays the whole crossing every time (4.6 s). In JavaScript the
+crossing is cheap: a loop is only about 5% slower than `betweenMany` on
 `Float64Array`s.
 
 ## Decisions

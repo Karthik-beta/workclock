@@ -121,16 +121,23 @@ tests.
 ### Fast
 
 Medians from a
-[GitHub Actions run](https://github.com/Karthik-beta/workclock/actions/runs/40265875573)
-on a GitHub-hosted Ubuntu runner (AMD EPYC 7763, 4 cores):
+[GitHub Actions run](https://github.com/Karthik-beta/workclock/actions/runs/40285792116)
+on a GitHub-hosted Ubuntu runner (AMD EPYC 7763, 4 cores), against
+businesstimedelta 1.0.1 and against a loop written by hand for this one
+schedule with `datetime` and `zoneinfo`:
 
-| Case | businesstimedelta 1.0.1 | workclock | Speed-up |
-|---|---|---|---|
-| One call, a 5½-hour span | 167 µs | 3.89 µs | 43× |
-| One call, a year with bank holidays | 50.8 ms | 85 µs | 600× |
-| 1,000,000 pairs | 9.86 min | 2.11 s (`between_many` on NumPy arrays) | 280× |
+| Case | businesstimedelta 1.0.1 | Standard library | workclock | vs businesstimedelta | vs standard library |
+|---|---|---|---|---|---|
+| One call, a 5½-hour span | 169 µs | 4.01 µs | 3.96 µs | 43× | 1× |
+| One call, a year with bank holidays | 53 ms | 719 µs | 85.4 µs | 620× | 8.4× |
+| 1,000,000 pairs | 9.9 min | 9.95 s | 2.13 s (`between_many` on NumPy arrays) | 280× | 4.7× |
 
-The same single call takes 6.78 µs through `workclock.compat`. Runner CPUs
+For one short span the hand-written loop keeps up: most of workclock's call
+goes on converting datetimes into and out of Rust. workclock pulls ahead as
+spans get longer or calls are batched. The loop also handles only this one
+schedule, without overnight shifts or per-rule time zones.
+
+The same single call takes 7.24 µs through `workclock.compat`. Runner CPUs
 vary, so the times move from run to run; the speed-ups, measured within one
 run, carry over better.
 [benchmarks/RESULTS.md](https://github.com/Karthik-beta/workclock/blob/main/benchmarks/RESULTS.md)
