@@ -17,7 +17,7 @@
     "url": "git+https://github.com/Karthik-beta/workclock.git",
     "directory": "js"
   },
-  "homepage": "https://github.com/Karthik-beta/workclock#readme",
+  "homepage": "https://karthik-beta.github.io/workclock/",
   "bugs": "https://github.com/Karthik-beta/workclock/issues",
   "type": "module",
   "exports": {

@@ -33,7 +33,8 @@ classifiers = [
 dynamic = ["version"]
 
 [project.urls]
-Documentation = "https://github.com/Karthik-beta/workclock#readme"
+Homepage = "https://karthik-beta.github.io/workclock/"
+Documentation = "https://karthik-beta.github.io/workclock/docs/"
 Repository = "https://github.com/Karthik-beta/workclock"
 Issues = "https://github.com/Karthik-beta/workclock/issues"
 Changelog = "https://github.com/Karthik-beta/workclock/blob/main/CHANGELOG.md"

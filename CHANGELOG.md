@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   language's standard library (`datetime` and `zoneinfo`, or `Temporal`) and
   checked against workclock. The numbers in the READMEs, DESIGN.md and the
   documentation site come from a new GitHub Actions run.
+- The crates.io, PyPI and npm pages link to the documentation site.
 
 ## [0.1.2] - 2026-10-26
 
