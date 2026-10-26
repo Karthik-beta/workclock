@@ -14,6 +14,25 @@ its last holiday (upstream issue 8).
 
 Building the schedule and the pairs is not timed.
 
+## Standard-library baselines
+
+Neither Python nor JavaScript can compute working time out of the box, so each
+suite also times `stdlib`: the loop a developer would write for this one
+schedule with the standard library alone. It walks the local dates from the
+first instant to the second, skips weekends and holidays, and adds the
+overlap with 09:00–12:00 and 13:00–17:00 London time.
+
+| Language | Baseline | Built on |
+|---|---|---|
+| Python | `benchmarks/python/stdlib.py` | `datetime` and `zoneinfo` |
+| JavaScript | `js/bench/stdlib.ts` | `Temporal`, on by default from Node.js 26 |
+
+Tests check both against workclock on the `single` and `year` cases, both
+daylight saving changes, Easter, a reversed pair and 10,000 `batch` pairs, so
+every speed-up compares code that gives the same answers. RESULTS.md divides
+each language's `stdlib` median by every row's median in its "vs stdlib"
+column. Rust's standard library has no time zones, so Rust has no baseline.
+
 ## Running
 
 ```sh
@@ -21,6 +40,8 @@ cargo bench -p workclock --bench workclock
 uv run pytest benchmarks/python
 cd js && npm run build:node && npm run bench
 ```
+
+The JavaScript suite needs Node.js 26, for `Temporal`.
 
 The Python suite also measures workclock's `compat` API, `between_many` on
 lists and on NumPy arrays, and businesstimedelta 1.0.1. It runs the single case

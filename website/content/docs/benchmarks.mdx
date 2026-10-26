@@ -1,11 +1,11 @@
 ---
 title: Benchmarks
-description: How fast each binding is, measured against businesstimedelta 1.0.1.
+description: How fast each binding is, measured against businesstimedelta 1.0.1 and a hand-written standard-library loop.
 ---
 
-The Rust, Python and JavaScript bindings are timed on the same three cases, and the Python suite also times `workclock.compat` and businesstimedelta 1.0.1. The cases and the commands come from [benchmarks/README.md](https://github.com/Karthik-beta/workclock/blob/main/benchmarks/README.md). The numbers in [benchmarks/RESULTS.md](https://github.com/Karthik-beta/workclock/blob/main/benchmarks/RESULTS.md) come from the Benchmarks workflow on a GitHub-hosted Ubuntu runner, and RESULTS.md links the run, so anyone can open it.
+The Rust, Python and JavaScript bindings are timed on the same three cases, against businesstimedelta 1.0.1 and against the loop you would write with each language's standard library. The Python suite also times `workclock.compat`. The cases and the commands come from [benchmarks/README.md](https://github.com/Karthik-beta/workclock/blob/main/benchmarks/README.md). The numbers in [benchmarks/RESULTS.md](https://github.com/Karthik-beta/workclock/blob/main/benchmarks/RESULTS.md) come from the Benchmarks workflow on a GitHub-hosted Ubuntu runner, and RESULTS.md links the run, so anyone can open it.
 
-Runner CPUs vary from run to run. On 2026-10-26, three runs on AMD EPYC 7763 and Intel Xeon 8573C runners moved the times by up to about 20%, while the speed-ups over businesstimedelta, measured in the same run, stayed within about 6%. Compare the "vs businesstimedelta" column rather than raw times.
+Runner CPUs vary from run to run. On 2026-10-26, three runs on AMD EPYC 7763 and Intel Xeon 8573C runners moved the times by up to about 20%, while the speed-ups over businesstimedelta, measured in the same run, stayed within about 6%. Compare the "vs businesstimedelta" and "vs stdlib" columns rather than raw times.
 
 CI also counts instructions under Valgrind for Rust and Python, and fails a pull request whose `single` or `year` case executes more than 3% more instructions. [Instruction counts](https://github.com/Karthik-beta/workclock/blob/main/benchmarks/README.md#instruction-counts) has the details.
 
@@ -13,6 +13,10 @@ CI also counts instructions under Valgrind for Rust and Python, and fails a pull
 
 <RepoFile path="benchmarks/README.md">
 <include>../../../benchmarks/README.md#benchmarks</include>
+</RepoFile>
+
+<RepoFile path="benchmarks/README.md">
+<include>../../../benchmarks/README.md#standard-library-baselines</include>
 </RepoFile>
 
 <RepoFile path="benchmarks/README.md">
