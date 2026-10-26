@@ -22,6 +22,7 @@ from typing import NamedTuple
 
 ROOT = Path(__file__).parents[1]
 CASES = ["single", "year", "batch"]
+BASELINE = "Python, businesstimedelta"
 # Absolute, because the report is also shown on a workflow run's summary page.
 README = "https://github.com/Karthik-beta/workclock/blob/main/benchmarks/README.md"
 
@@ -96,6 +97,13 @@ def duration(seconds: float) -> str:
         if seconds >= scale:
             return f"{seconds / scale:.3g} {unit}"
     return f"{seconds / 1e-9:.3g} ns"
+
+
+def speedup(ratio: float) -> str:
+    """Two significant figures, without the exponent `.2g` uses from 100."""
+    rounded = float(f"{ratio:.2g}")
+    number = f"{rounded:,.0f}" if rounded >= 10 else f"{rounded:g}"
+    return number + "\N{MULTIPLICATION SIGN}"
 
 
 def command(*args: str) -> str:
@@ -173,13 +181,22 @@ def report(rows: list[Row]) -> str:
     lines += ["| Machine | |", "|---|---|"]
     lines += [f"| {k} | {v} |" for k, v in machine()]
     for case in CASES:
-        lines += ["", f"## {case}", ""]
-        lines += ["| Implementation | Median | p95 | Samples |", "|---|---|---|---|"]
-        for r in sorted((r for r in rows if r.case == case), key=lambda r: r.median):
-            lines.append(
+        case_rows = sorted((r for r in rows if r.case == case), key=lambda r: r.median)
+        baseline = next((r for r in case_rows if r.implementation == BASELINE), None)
+        header = "| Implementation | Median | p95 | Samples |"
+        rule = "|---|---|---|---|"
+        if baseline:
+            header += " vs businesstimedelta |"
+            rule += "---|"
+        lines += ["", f"## {case}", "", header, rule]
+        for r in case_rows:
+            line = (
                 f"| {r.implementation} | {duration(r.median)} "
                 f"| {duration(r.p95)} | {r.samples} |"
             )
+            if baseline:
+                line += f" {speedup(baseline.median / r.median)} |"
+            lines.append(line)
     return "\n".join(lines) + "\n"
 
 
