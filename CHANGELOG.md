@@ -7,10 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-10-26
+
 ### Changed
 
 - Python: PyPI shows a Python-only README, `python/README.md`, which links
   to businesstimedelta on PyPI.
+- Benchmark numbers in the READMEs, DESIGN.md and the documentation site come
+  from a public GitHub Actions run instead of a laptop, with each binding's
+  speed-up over businesstimedelta 1.0.1 measured in the same run.
 
 ## [0.1.1] - 2026-10-25
 
@@ -62,6 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Examples in Rust, Python and JavaScript: when a support ticket is due and
   how much of its SLA has been used.
 
-[Unreleased]: https://github.com/Karthik-beta/workclock/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/Karthik-beta/workclock/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/Karthik-beta/workclock/releases/tag/v0.1.2
 [0.1.1]: https://github.com/Karthik-beta/workclock/releases/tag/v0.1.1
 [0.1.0]: https://github.com/Karthik-beta/workclock/releases/tag/v0.1.0
