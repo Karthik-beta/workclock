@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- JavaScript: CI also tests the npm package on Node.js 26, and builds the
+  website and publishes the package with it.
+
 ## [0.1.2] - 2026-10-26
 
 ### Changed

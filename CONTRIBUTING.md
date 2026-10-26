@@ -58,7 +58,7 @@ Rust crate also follows Cargo's
 
 The commands below are the ones CI runs, except that CI runs `cargo fmt` with
 `--check`. CI runs the Rust and Python tests on Linux, macOS and Windows, with
-Python 3.9 and 3.15, and the JavaScript tests on Node.js 22 and 24.
+Python 3.9 and 3.15, and the JavaScript tests on Node.js 22, 24 and 26.
 
 ### Rust
 
