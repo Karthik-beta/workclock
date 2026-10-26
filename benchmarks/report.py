@@ -22,7 +22,7 @@ from typing import NamedTuple
 
 ROOT = Path(__file__).parents[1]
 CASES = ["single", "year", "batch"]
-BASELINE = "Python, businesstimedelta"
+SPEEDUPS = ["businesstimedelta", "stdlib"]
 # Absolute, because the report is also shown on a workflow run's summary page.
 README = "https://github.com/Karthik-beta/workclock/blob/main/benchmarks/README.md"
 
@@ -175,6 +175,17 @@ def machine() -> list[tuple[str, str]]:
     ]
 
 
+def baseline(implementation: str, against: str) -> str:
+    """The row a "vs businesstimedelta" or "vs stdlib" cell divides by.
+
+    "vs stdlib" compares with the hand-written loop in the same language. Rust's
+    standard library has no time zones, so Rust has no such row.
+    """
+    if against == "businesstimedelta":
+        return "Python, businesstimedelta"
+    return implementation.partition(",")[0] + ", stdlib"
+
+
 def report(rows: list[Row]) -> str:
     lines = ["# Benchmark results", ""]
     lines += [f"Cases and commands are in [README.md]({README}).", ""]
@@ -182,20 +193,24 @@ def report(rows: list[Row]) -> str:
     lines += [f"| {k} | {v} |" for k, v in machine()]
     for case in CASES:
         case_rows = sorted((r for r in rows if r.case == case), key=lambda r: r.median)
-        baseline = next((r for r in case_rows if r.implementation == BASELINE), None)
+        medians = {r.implementation: r.median for r in case_rows}
+        columns = [
+            against
+            for against in SPEEDUPS
+            if any(baseline(r.implementation, against) in medians for r in case_rows)
+        ]
         header = "| Implementation | Median | p95 | Samples |"
-        rule = "|---|---|---|---|"
-        if baseline:
-            header += " vs businesstimedelta |"
-            rule += "---|"
+        header += "".join(f" vs {against} |" for against in columns)
+        rule = "|---|---|---|---|" + "---|" * len(columns)
         lines += ["", f"## {case}", "", header, rule]
         for r in case_rows:
             line = (
                 f"| {r.implementation} | {duration(r.median)} "
                 f"| {duration(r.p95)} | {r.samples} |"
             )
-            if baseline:
-                line += f" {speedup(baseline.median / r.median)} |"
+            for against in columns:
+                base = medians.get(baseline(r.implementation, against))
+                line += f" {speedup(base / r.median)} |" if base else " |"
             lines.append(line)
     return "\n".join(lines) + "\n"
 
