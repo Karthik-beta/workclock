@@ -95,6 +95,111 @@ jobs:
       # The gate runs last so the summary and artifact exist when it fails.
       - run: cargo llvm-cov report -p workclock --fail-under-lines 90
 
+  # Counts instructions under Valgrind (benchmarks/README.md). On a pull
+  # request, base and head run in this one job with one toolchain, and more
+  # than 3% extra instructions in `single` or `year` fails it.
+  instructions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GUNGRAUN_COLOR: never
+    # An explicit shell adds pipefail, so `| tee` keeps a failing exit status.
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - run: sudo apt-get update && sudo apt-get install -y valgrind
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      # The runner refuses a gungraun of any other version than its own, and
+      # a pull request may change that version, so base and head each get the
+      # runner their Cargo.lock asks for.
+      - name: Install gungraun-runner
+        id: runner
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          for side in head ${BASE:+base}; do
+            if [ "$side" = base ]; then rev="$BASE"; else rev="$GITHUB_SHA"; fi
+            version="$(git show "$rev:Cargo.lock" | awk '/^name = "gungraun"$/ {getline; gsub(/"/, "", $3); v = $3} END {print v}')"
+            if [ -z "$version" ]; then continue; fi
+            root="$RUNNER_TEMP/gungraun-runner-$version"
+            cargo install --locked --version "$version" --root "$root" gungraun-runner
+            echo "$side=$root/bin/gungraun-runner" >> "$GITHUB_OUTPUT"
+          done
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          python-version: "3.15"
+          save-cache: ${{ github.ref == 'refs/heads/main' }}
+      - name: Count the base
+        id: base
+        if: github.event_name == 'pull_request'
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          GUNGRAUN_RUNNER: ${{ steps.runner.outputs.base }}
+        run: |
+          trap 'git checkout --quiet "$GITHUB_SHA"' EXIT
+          git checkout --quiet "$BASE"
+          if [ -f crates/workclock/benches/instructions.rs ] && [ -f benchmarks/python/count.py ]; then
+            cargo bench -p workclock --locked --bench instructions -- --save-baseline=base
+            uv sync --locked
+            uv run python benchmarks/python/count.py "$RUNNER_TEMP/base.json"
+            echo "compare=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "The base has no instruction counts, so only the head is counted."
+          fi
+      - name: Count the head in Rust
+        env:
+          COMPARE: ${{ steps.base.outputs.compare }}
+          GUNGRAUN_RUNNER: ${{ steps.runner.outputs.head }}
+        run: |
+          if [ "$COMPARE" = true ]; then
+            cargo bench -p workclock --locked --bench instructions -- --baseline=base | tee "$RUNNER_TEMP/rust.txt"
+          else
+            cargo bench -p workclock --locked --bench instructions | tee "$RUNNER_TEMP/rust.txt"
+          fi
+      - name: Count the head in Python
+        if: ${{ !cancelled() }}
+        env:
+          COMPARE: ${{ steps.base.outputs.compare }}
+        run: |
+          uv sync --locked
+          uv run python benchmarks/python/count.py "$RUNNER_TEMP/head.json" | tee "$RUNNER_TEMP/python.txt"
+          if [ "$COMPARE" = true ]; then
+            uv run python benchmarks/compare_instructions.py "$RUNNER_TEMP/base.json" "$RUNNER_TEMP/head.json" | tee "$RUNNER_TEMP/python.md"
+          fi
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Rust"
+            if [ -s "$RUNNER_TEMP/rust.txt" ]; then
+              echo '```text'
+              cat "$RUNNER_TEMP/rust.txt"
+              echo '```'
+            else
+              echo "Not counted."
+            fi
+            echo "### Python"
+            if [ -s "$RUNNER_TEMP/python.md" ]; then
+              cat "$RUNNER_TEMP/python.md"
+            elif [ -s "$RUNNER_TEMP/python.txt" ]; then
+              echo '```text'
+              cat "$RUNNER_TEMP/python.txt"
+              echo '```'
+            else
+              echo "Not counted."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
   docs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -358,7 +463,7 @@ jobs:
   # requires editing the protection rule.
   ci-ok:
     if: ${{ !cancelled() }}
-    needs: [fmt, clippy, test, coverage, docs, msrv, deny, python-lint, python-test, wasm, website, commits, workflows]
+    needs: [fmt, clippy, test, coverage, instructions, docs, msrv, deny, python-lint, python-test, wasm, website, commits, workflows]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
