@@ -15,7 +15,7 @@ const item =
  */
 export function PageActions({ markdownPath }: { markdownPath: string }) {
   const [state, setState] = useState<'idle' | 'copying' | 'copied' | 'failed'>('idle');
-  const local = `${process.env.NEXT_PUBLIC_BASE_PATH ?? ''}/${markdownPath}`;
+  const local = `/${markdownPath}`;
   const absolute = `${siteUrl}${markdownPath}`;
   const prompt = `Read ${absolute}, a page of the workclock documentation, so I can ask you questions about it. For anything it does not cover, use ${siteUrl}llms.txt.`;
 

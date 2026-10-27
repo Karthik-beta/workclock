@@ -8,7 +8,7 @@ body:
     attributes:
       label: Page
       description: The address of the page.
-      placeholder: https://karthik-beta.github.io/workclock/docs/install/
+      placeholder: https://workclock.karthik.nz/docs/install/
     validations:
       required: true
   - type: textarea

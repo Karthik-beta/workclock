@@ -10,7 +10,7 @@ export default defineConfig({
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
     command: `node scripts/serve-out.mjs ${port}`,
-    url: `http://localhost:${port}/workclock/`,
+    url: `http://localhost:${port}/`,
     reuseExistingServer: !process.env.CI,
   },
 });

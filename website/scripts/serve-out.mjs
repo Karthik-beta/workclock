@@ -1,11 +1,10 @@
-// Serves out/ under /workclock/, as GitHub Pages will. Node built-ins only.
+// Serves out/ at the site root, as GitHub Pages will. Node built-ins only.
 // Usage: node scripts/serve-out.mjs [port]
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import { createServer } from 'node:http';
 import path from 'node:path';
 
 const root = path.resolve('out');
-const base = '/workclock';
 const port = Number(process.argv[2] ?? 4173);
 const types = {
   '.html': 'text/html; charset=utf-8',
@@ -35,16 +34,10 @@ createServer((req, res) => {
     res.writeHead(400).end();
     return;
   }
-  if (pathname === '/' || pathname === base) {
-    res.writeHead(302, { Location: `${base}/` }).end();
-    return;
-  }
-  const file = pathname.startsWith(`${base}/`)
-    ? path.join(root, pathname.slice(base.length))
-    : undefined;
-  if (file?.startsWith(root + path.sep) && existsSync(file)) {
+  const file = path.join(root, pathname);
+  if (file.startsWith(root + path.sep) && existsSync(file)) {
     const target = statSync(file).isDirectory() ? path.join(file, 'index.html') : file;
     if (existsSync(target)) return send(res, 200, target);
   }
   send(res, 404, path.join(root, '404.html'));
-}).listen(port, () => console.log(`http://localhost:${port}${base}/`));
+}).listen(port, () => console.log(`http://localhost:${port}/`));

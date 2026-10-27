@@ -10,8 +10,8 @@ Python and JavaScript — a maintained replacement for
 [businesstimedelta](https://github.com/seppemans/businesstimedelta), with a
 compatibility layer for existing code.
 
-[Documentation](https://karthik-beta.github.io/workclock/docs/) ·
-[Playground](https://karthik-beta.github.io/workclock/playground/) ·
+[Documentation](https://workclock.karthik.nz/docs/) ·
+[Playground](https://workclock.karthik.nz/playground/) ·
 [Migrating from businesstimedelta](https://github.com/Karthik-beta/workclock/blob/main/MIGRATING.md)
 
 > **Status:** pre-1.0; the API may still change in a minor release.
@@ -30,12 +30,12 @@ Rust code depends on jiff too.
 
 ## Use cases
 
-- [Support-ticket SLAs](https://karthik-beta.github.io/workclock/docs/guides/support-slas/): when is a ticket
+- [Support-ticket SLAs](https://workclock.karthik.nz/docs/guides/support-slas/): when is a ticket
   due, and how much of its SLA has elapsed?
-- [Payroll and overtime](https://karthik-beta.github.io/workclock/docs/guides/payroll-and-overtime/): how many
+- [Payroll and overtime](https://workclock.karthik.nz/docs/guides/payroll-and-overtime/): how many
   hours of a shift fell inside contracted time?
-- Staff rosters, including [overnight shifts](https://karthik-beta.github.io/workclock/docs/guides/overnight-shifts/).
-- [Delivery ETAs](https://karthik-beta.github.io/workclock/docs/guides/delivery-etas/) that only count operating hours.
+- Staff rosters, including [overnight shifts](https://workclock.karthik.nz/docs/guides/overnight-shifts/).
+- [Delivery ETAs](https://workclock.karthik.nz/docs/guides/delivery-etas/) that only count operating hours.
 
 ## Quickstart
 

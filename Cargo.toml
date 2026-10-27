@@ -8,7 +8,7 @@ edition = "2021"
 rust-version = "1.85"
 license = "MIT"
 repository = "https://github.com/Karthik-beta/workclock"
-homepage = "https://karthik-beta.github.io/workclock/"
+homepage = "https://workclock.karthik.nz/"
 
 [workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }
