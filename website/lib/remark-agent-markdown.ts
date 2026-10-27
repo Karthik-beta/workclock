@@ -15,7 +15,7 @@ export function attribute(el: JsxElement, name: string): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
 
-/** `/docs/install/#x` becomes `https://…/workclock/docs/install.md#x`, the page's Markdown version. */
+/** `/docs/install/#x` becomes `https://…/docs/install.md#x`, the page's Markdown version. */
 export function markdownUrl(url: string): string {
   const [path, hash] = url.split('#');
   const md = path === '/docs/' || path === '/docs' ? 'docs.md' : `${path.replace(/^\/|\/$/g, '')}.md`;

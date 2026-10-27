@@ -9,9 +9,9 @@ const paths = readdirSync('out', { recursive: true, withFileTypes: true })
   .filter((entry) => entry.isFile() && entry.name === 'index.html')
   .map((entry) => path.relative('out', entry.parentPath).split(path.sep).join('/'))
   .filter((dir) => !dir.startsWith('_') && dir !== '404')
-  .map((dir) => `/workclock/${dir ? `${dir}/` : ''}`)
+  .map((dir) => `/${dir ? `${dir}/` : ''}`)
   .sort()
-  .concat('/workclock/no-such-page/');
+  .concat('/no-such-page/');
 
 test('the export has pages to check', () => {
   expect(paths.length).toBeGreaterThan(1);

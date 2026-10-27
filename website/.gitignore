@@ -2,7 +2,6 @@
 /.next/
 /out/
 /.source/
-/.preview/
 /test-results/
 /playwright-report/
 *.tsbuildinfo

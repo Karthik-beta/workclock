@@ -4,7 +4,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 
 const out = 'out';
-const site = 'https://karthik-beta.github.io/workclock/';
+const site = 'https://workclock.karthik.nz/';
 const problems = [];
 const fail = (message) => problems.push(message);
 

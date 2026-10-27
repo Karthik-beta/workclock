@@ -15,8 +15,8 @@ function status(baseURL: string | undefined, path: string): Promise<number> {
 }
 
 test('a malformed percent escape is a bad request', async ({ baseURL }) => {
-  expect(await status(baseURL, '/workclock/%')).toBe(400);
-  expect(await status(baseURL, '/workclock/')).toBe(200);
+  expect(await status(baseURL, '/%')).toBe(400);
+  expect(await status(baseURL, '/')).toBe(200);
 });
 
 test('a path into a sibling of out/ is not served', async ({ baseURL }) => {
@@ -24,7 +24,7 @@ test('a path into a sibling of out/ is not served', async ({ baseURL }) => {
   mkdirSync(sibling, { recursive: true });
   writeFileSync(`${sibling}/secret.txt`, 'secret');
   try {
-    expect(await status(baseURL, `/workclock/..%2f${sibling}/secret.txt`)).toBe(404);
+    expect(await status(baseURL, `/..%2f${sibling}/secret.txt`)).toBe(404);
   } finally {
     rmSync(sibling, { recursive: true, force: true });
   }
