@@ -1,5 +1,15 @@
 # workclock
 
+[![CI](https://github.com/Karthik-beta/workclock/actions/workflows/ci.yml/badge.svg)](https://github.com/Karthik-beta/workclock/actions/workflows/ci.yml)
+[![Crates.io](https://img.shields.io/crates/v/workclock.svg)](https://crates.io/crates/workclock)
+[![Documentation](https://docs.rs/workclock/badge.svg)](https://docs.rs/workclock)
+[![PyPI](https://img.shields.io/pypi/v/workclock.svg)](https://pypi.org/project/workclock/)
+[![npm](https://img.shields.io/npm/v/workclock.svg)](https://www.npmjs.com/package/workclock)
+[![License: MIT](https://img.shields.io/crates/l/workclock.svg)](https://github.com/Karthik-beta/workclock/blob/main/LICENSE)
+[![MSRV 1.85](https://img.shields.io/badge/MSRV-1.85-blue.svg)](https://github.com/Karthik-beta/workclock/blob/main/Cargo.toml)
+[![unsafe forbidden](https://img.shields.io/badge/unsafe-forbidden-success.svg)](https://github.com/Karthik-beta/workclock/blob/main/crates/workclock/src/lib.rs)
+[![Conventional Commits](https://img.shields.io/badge/commits-conventional-fe5196.svg?logo=conventionalcommits&logoColor=white)](https://www.conventionalcommits.org/)
+
 Fast, correct business-time arithmetic (working hours, SLAs, shifts) for Rust,
 with Python and JavaScript bindings.
 
@@ -32,6 +42,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 ```
+
+## Other crates
+
+[ule-hours](https://crates.io/crates/ule-hours) also does working-time
+arithmetic on jiff, and adds paused SLA clocks, Easter-based holiday rules,
+special days and holiday presets for several countries. If you need those, use
+it. workclock is for the same engine in Rust, Python and JavaScript, and for
+replacing businesstimedelta.
 
 API documentation is on [docs.rs](https://docs.rs/workclock), and the
 [repository](https://github.com/Karthik-beta/workclock) has the

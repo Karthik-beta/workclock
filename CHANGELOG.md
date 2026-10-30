@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Rust: the crates.io and docs.rs pages show status badges and point to
+  ule-hours for paused SLA clocks and holiday presets.
+
 ## [0.1.3] - 2026-10-30
 
 ### Changed
