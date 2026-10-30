@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-10-30
+
 ### Changed
 
 - JavaScript: CI also tests the npm package on Node.js 26, and builds the
@@ -80,7 +82,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Examples in Rust, Python and JavaScript: when a support ticket is due and
   how much of its SLA has been used.
 
-[Unreleased]: https://github.com/Karthik-beta/workclock/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/Karthik-beta/workclock/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/Karthik-beta/workclock/releases/tag/v0.1.3
 [0.1.2]: https://github.com/Karthik-beta/workclock/releases/tag/v0.1.2
 [0.1.1]: https://github.com/Karthik-beta/workclock/releases/tag/v0.1.1
 [0.1.0]: https://github.com/Karthik-beta/workclock/releases/tag/v0.1.0
