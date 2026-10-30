@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-10-30
+
 ### Changed
 
 - The crates.io, docs.rs, PyPI and npm pages show status badges, and the PyPI
@@ -90,7 +92,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Examples in Rust, Python and JavaScript: when a support ticket is due and
   how much of its SLA has been used.
 
-[Unreleased]: https://github.com/Karthik-beta/workclock/compare/v0.1.3...HEAD
+[Unreleased]: https://github.com/Karthik-beta/workclock/compare/v0.1.4...HEAD
+[0.1.4]: https://github.com/Karthik-beta/workclock/releases/tag/v0.1.4
 [0.1.3]: https://github.com/Karthik-beta/workclock/releases/tag/v0.1.3
 [0.1.2]: https://github.com/Karthik-beta/workclock/releases/tag/v0.1.2
 [0.1.1]: https://github.com/Karthik-beta/workclock/releases/tag/v0.1.1
