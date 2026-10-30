@@ -9,8 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Rust: the crates.io and docs.rs pages show status badges and point to
+- The crates.io, docs.rs, PyPI and npm pages show status badges, and the PyPI
+  and npm pages link to the documentation site. The crates.io page points to
   ule-hours for paused SLA clocks and holiday presets.
+- npm: the README explains why to use workclock and notes that the package is
+  pre-1.0.
 
 ## [0.1.3] - 2026-10-30
 
