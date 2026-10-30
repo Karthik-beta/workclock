@@ -9,7 +9,7 @@ readme = "python/README.md"
 requires-python = ">=3.9"
 license = "MIT"
 license-files = ["LICENSE", "NOTICE"]
-authors = [{ name = "Karthik P" }]
+authors = [{ name = "Karthik Parameshwara" }]
 keywords = ["business-hours", "working-hours", "sla", "timezone", "shift"]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -38,6 +38,7 @@ Documentation = "https://workclock.karthik.nz/docs/"
 Repository = "https://github.com/Karthik-beta/workclock"
 Issues = "https://github.com/Karthik-beta/workclock/issues"
 Changelog = "https://github.com/Karthik-beta/workclock/blob/main/CHANGELOG.md"
+Author = "https://karthik.nz/"
 
 [dependency-groups]
 dev = [

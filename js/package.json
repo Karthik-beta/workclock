@@ -11,7 +11,10 @@
     "business-time"
   ],
   "license": "MIT",
-  "author": "Karthik P",
+  "author": {
+    "name": "Karthik Parameshwara",
+    "url": "https://karthik.nz/"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Karthik-beta/workclock.git",

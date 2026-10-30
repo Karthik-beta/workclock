@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   documentation site come from a new GitHub Actions run.
 - The documentation site moved to https://workclock.karthik.nz, served from
   the domain root. The crates.io, PyPI and npm pages link to it.
+- The PyPI and npm pages name the author in full, Karthik Parameshwara, and
+  link to https://karthik.nz.
 
 ## [0.1.2] - 2026-10-26
 
