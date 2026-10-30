@@ -1,9 +1,20 @@
 # workclock
 
+[![CI](https://github.com/Karthik-beta/workclock/actions/workflows/ci.yml/badge.svg)](https://github.com/Karthik-beta/workclock/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/workclock.svg)](https://pypi.org/project/workclock/)
+[![Python versions](https://img.shields.io/pypi/pyversions/workclock.svg)](https://pypi.org/project/workclock/)
+[![Typed](https://img.shields.io/badge/typing-typed-blue.svg)](https://workclock.karthik.nz/docs/reference/python/)
+[![License: MIT](https://img.shields.io/pypi/l/workclock.svg)](https://github.com/Karthik-beta/workclock/blob/main/LICENSE)
+
 Fast, correct business-time arithmetic (working hours, SLAs, shifts) for
 Python, with a Rust core — a maintained replacement for
 [businesstimedelta](https://pypi.org/project/businesstimedelta/), with a
 compatibility layer for existing code.
+
+[Documentation](https://workclock.karthik.nz/docs/) ·
+[Python reference](https://workclock.karthik.nz/docs/reference/python/) ·
+[Playground](https://workclock.karthik.nz/playground/) ·
+[Migrating from businesstimedelta](https://workclock.karthik.nz/docs/guides/migrating-from-businesstimedelta/)
 
 > **Status:** pre-1.0; the API may still change in a minor release.
 
