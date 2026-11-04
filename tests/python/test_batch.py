@@ -1,0 +1,192 @@
+from __future__ import annotations
+
+from datetime import datetime, time, timedelta, timezone
+from zoneinfo import ZoneInfo
+
+import numpy as np
+import pytest
+from workclock import OutOfRangeError, Schedule, WorkDay
+
+UTC = timezone.utc
+
+
+@pytest.fixture
+def nights() -> Schedule:
+    return Schedule([WorkDay(time(22), time(6))])
+
+
+def utc(day: int, hour: int) -> datetime:
+    return datetime(2026, 1, day, hour, tzinfo=UTC)
+
+
+def test_lists_match_single_calls(nights: Schedule) -> None:
+    starts = [utc(5, 20), utc(5, 23), utc(10, 12)]
+    ends = [utc(6, 6), utc(5, 20), utc(12, 23)]
+    hours = [timedelta(hours=h) for h in (4, -3, 0)]
+    assert nights.between_many(starts, ends) == [
+        nights.between(a, b) for a, b in zip(starts, ends)
+    ]
+    assert nights.add_many(starts, hours) == [
+        nights.add(t, d) for t, d in zip(starts, hours)
+    ]
+    assert nights.sub_many(starts, hours) == [
+        nights.sub(t, d) for t, d in zip(starts, hours)
+    ]
+
+
+def test_a_single_amount_applies_to_every_datetime(nights: Schedule) -> None:
+    starts = [utc(5, 22), utc(6, 22)]
+    assert nights.add_many(starts, timedelta(hours=4)) == [utc(6, 2), utc(7, 2)]
+
+
+def test_results_keep_each_input_tzinfo(nights: Schedule) -> None:
+    kolkata = datetime(2026, 1, 6, 3, 30, tzinfo=ZoneInfo("Asia/Kolkata"))
+    results = nights.add_many([utc(5, 22), kolkata], timedelta(hours=1))
+    assert [r.tzinfo for r in results] == [UTC, ZoneInfo("Asia/Kolkata")]
+    assert results == [utc(5, 23), utc(5, 23)]
+
+
+def test_numpy_arrays_are_read_and_returned_as_utc(nights: Schedule) -> None:
+    starts = np.array(["2026-01-05T22:00", "2026-01-06T22:00"], dtype="datetime64[us]")
+    ends = np.array(["2026-01-06T06:00", "2026-01-07T06:00"], dtype="datetime64[us]")
+    assert nights.between_many(starts, ends).tolist() == [timedelta(hours=8)] * 2
+    added = nights.add_many(starts, np.array([4, 5], dtype="timedelta64[h]"))
+    assert added.dtype == np.dtype("datetime64[us]")
+    assert added.tolist() == [datetime(2026, 1, 6, 2), datetime(2026, 1, 7, 3)]
+    subtracted = nights.sub_many(ends, timedelta(hours=4))
+    assert subtracted.tolist() == [datetime(2026, 1, 6, 2), datetime(2026, 1, 7, 2)]
+
+
+def test_numpy_results_keep_the_input_shape(nights: Schedule) -> None:
+    grid = np.array(
+        [
+            ["2026-01-05T22:00", "2026-01-05T23:00", "2026-01-06T05:00"],
+            ["2026-01-06T22:00", "2026-01-07T05:30", "2026-01-09T05:00"],
+        ],
+        dtype="datetime64[us]",
+    )
+    added = nights.add_many(grid, timedelta(hours=1))
+    assert added.shape == (2, 3)
+    assert added.tolist() == [
+        [
+            datetime(2026, 1, 5, 23),
+            datetime(2026, 1, 6, 0),
+            datetime(2026, 1, 6, 6),
+        ],
+        [
+            datetime(2026, 1, 6, 23),
+            datetime(2026, 1, 7, 22, 30),
+            datetime(2026, 1, 9, 6),
+        ],
+    ]
+    worked = nights.between_many(grid, added)
+    assert worked.shape == (2, 3)
+    assert (worked == np.timedelta64(1, "h")).all()
+
+
+def test_numpy_arguments_broadcast_together(nights: Schedule) -> None:
+    start = np.array(["2026-01-05T22:00"], dtype="datetime64[us]")
+    ends = np.array(
+        ["2026-01-06T00:00", "2026-01-06T02:00", "2026-01-06T04:00"],
+        dtype="datetime64[us]",
+    )
+    worked = nights.between_many(start, ends)
+    assert worked.shape == (3,)
+    assert worked.tolist() == [timedelta(hours=h) for h in (2, 4, 6)]
+    column = np.array([["2026-01-05T22:00"], ["2026-01-06T22:00"]], dtype="M8[us]")
+    added = nights.add_many(column, np.array([1, 2, 3], dtype="timedelta64[h]"))
+    assert added.shape == (2, 3)
+    assert added.tolist() == [
+        [datetime(2026, 1, day, 22) + timedelta(hours=h) for h in (1, 2, 3)]
+        for day in (5, 6)
+    ]
+
+
+def test_numpy_digits_below_a_microsecond_are_rejected(nights: Schedule) -> None:
+    starts = np.array(
+        ["2026-01-05T22:00", "2026-01-05T22:00:00.000000001"], dtype="datetime64[ns]"
+    )
+    ends = np.array(["2026-01-06T06:00"] * 2, dtype="datetime64[ns]")
+    with pytest.raises(ValueError, match=r"item 1: .* has digits below a microsecond"):
+        nights.between_many(starts, ends)
+    with pytest.raises(ValueError, match=r"item 0: .* has digits below a microsecond"):
+        nights.add_many(starts[:1], np.array([1500], dtype="timedelta64[ns]"))
+
+
+def test_numpy_nanosecond_arrays_of_whole_microseconds_work(nights: Schedule) -> None:
+    starts = np.array(["2026-01-05T22:00:00.000001"], dtype="datetime64[ns]")
+    ends = np.array(["2026-01-06T06:00"], dtype="datetime64[ns]")
+    assert nights.between_many(starts, ends).tolist() == [
+        timedelta(hours=8, microseconds=-1)
+    ]
+    added = nights.add_many(starts, np.array([2000], dtype="timedelta64[ns]"))
+    assert added.tolist() == [datetime(2026, 1, 5, 22, 0, 0, 3)]
+
+
+def test_bad_batches_are_rejected(nights: Schedule) -> None:
+    with pytest.raises(ValueError, match="differ in length"):
+        nights.between_many([utc(5, 22)], [])
+    with pytest.raises(ValueError, match="differ in length: 2 and 1"):
+        nights.add_many([utc(5, 22)] * 2, [timedelta(hours=1)])
+    with pytest.raises(ValueError, match="differ in length: 1 and 2"):
+        nights.sub_many([utc(5, 22)], [timedelta(hours=1)] * 2)
+    with pytest.raises(
+        ValueError, match=r"shapes \(2,\) and \(3,\) do not broadcast together"
+    ):
+        nights.add_many(
+            np.array(["2026-01-05T22:00"] * 2, dtype="datetime64[us]"),
+            np.array([1, 2, 3], dtype="timedelta64[h]"),
+        )
+    with pytest.raises(ValueError, match="naive"):
+        nights.between_many([datetime(2026, 1, 5)], [utc(5, 22)])
+    with pytest.raises(ValueError, match="NaT"):
+        nights.between_many(
+            np.array(["NaT"], dtype="datetime64[us]"),
+            np.array(["2026-01-05"], dtype="datetime64[us]"),
+        )
+
+
+def test_numbers_are_not_read_as_instants_or_durations(nights: Schedule) -> None:
+    starts = np.array(["2026-01-05T22:00"], dtype="datetime64[us]")
+    with pytest.raises(TypeError, match=r"^expected timedelta64 values, got int"):
+        nights.add_many(starts, 3600)  # type: ignore[call-overload]
+    with pytest.raises(TypeError, match=r"^expected timedelta64 values, got float"):
+        nights.sub_many(starts, np.array([1.5]))
+    with pytest.raises(TypeError, match=r"^expected datetime64 values, got int"):
+        nights.between_many(np.array([0]), starts)
+    with pytest.raises(
+        TypeError,
+        match=r"^deltas must be a timedelta or a sequence of timedeltas, got 3600$",
+    ):
+        nights.add_many([utc(5, 22)], 3600)  # type: ignore[call-overload]
+
+
+def test_conversion_errors_name_the_failing_item(nights: Schedule) -> None:
+    with pytest.raises(ValueError, match=r"item 1: .* is naive"):
+        nights.between_many([utc(5, 22), datetime(2026, 1, 5)], [utc(5, 22)] * 2)
+    with pytest.raises(TypeError, match="item 1: expected a datetime"):
+        nights.add_many([utc(5, 22), 3], timedelta(hours=1))  # type: ignore[list-item]
+    with pytest.raises(TypeError, match="item 1: "):
+        nights.sub_many([utc(5, 22)] * 2, [timedelta(hours=1), 3])  # type: ignore[list-item]
+    early = datetime(1, 1, 1, 1, tzinfo=UTC)
+    with pytest.raises(OutOfRangeError, match="item 1: "):
+        nights.sub_many([utc(5, 22), early], timedelta(hours=8))
+    starts = np.array(
+        ["2026-01-05", "2026-01-06", "NaT", "NaT"], dtype="datetime64[us]"
+    )
+    with pytest.raises(ValueError, match="item 2: batch inputs must not contain NaT"):
+        nights.between_many(starts, np.array(["2026-01-05"], dtype="datetime64[us]"))
+
+
+def test_errors_name_the_failing_item(nights: Schedule) -> None:
+    near_end = datetime(9999, 12, 30, 21, tzinfo=UTC)
+    with pytest.raises(OutOfRangeError, match="item 1"):
+        nights.add_many([utc(5, 22), near_end], timedelta(hours=8))
+
+
+def test_amounts_past_the_engine_range_name_the_item(nights: Schedule) -> None:
+    huge = timedelta(days=999_999_999)
+    with pytest.raises(OutOfRangeError, match=r"item 0: amount .* is outside"):
+        nights.add_many([utc(5, 22)], huge)
+    with pytest.raises(OutOfRangeError, match=r"item 1: amount .* is outside"):
+        nights.sub_many([utc(5, 22), utc(5, 22)], [timedelta(hours=1), huge])

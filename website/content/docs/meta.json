@@ -1,0 +1,19 @@
+{
+  "title": "Docs",
+  "pages": [
+    "index",
+    "---Start---",
+    "...(start)",
+    "---Concepts---",
+    "...concepts",
+    "---Guides---",
+    "...guides",
+    "---Reference---",
+    "...reference",
+    "---More---",
+    "[Playground](/playground/)",
+    "benchmarks",
+    "changelog",
+    "faq"
+  ]
+}

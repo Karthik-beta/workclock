@@ -1,0 +1,195 @@
+---
+title: Errors
+description: The three errors workclock raises in Rust, Python and JavaScript, when each is raised, and how to handle them.
+---
+
+workclock reports a failure as one of three errors: no working time, out of range, or unknown zone. Every search is bounded, so a call returns or fails and never hangs, and library code does not panic. This page covers the error types in Rust, Python and JavaScript.
+
+## Error types
+
+| Error | Rust | Python | JavaScript |
+|---|---|---|---|
+| No working time | `workclock::Error::NoWorkingTime` | `workclock.NoWorkingTimeError`, a `WorkclockError` and a `ValueError` | `NoWorkingTimeError`, `kind` `"no_working_time"` |
+| Out of range | `workclock::Error::OutOfRange` | `workclock.OutOfRangeError`, a `WorkclockError` and an `OverflowError` | `OutOfRangeError`, `kind` `"out_of_range"` |
+| Unknown zone | `workclock::Error::UnknownZone { name }` | `workclock.UnknownZoneError`, a `WorkclockError` and a `ValueError` | `UnknownZoneError`, `kind` `"unknown_zone"` |
+
+- **Rust.** `workclock::Error` is `#[non_exhaustive]`, so a `match` on it needs a wildcard arm. It implements `std::error::Error`, and is `Send`, `Sync`, `Clone` and `PartialEq`.
+- **Python.** All three classes subclass `workclock.WorkclockError`. A kind added in a later version reaches Python as a plain `WorkclockError`.
+- **JavaScript.** All three classes extend `WorkclockError` and are exported from `"workclock"`. The values thrown are `Error` objects whose `name` is the class name. `instanceof` checks their `kind`, so it works across the node, bundler and web builds. A kind added later arrives as a `WorkclockError` with `kind` `"unknown"`.
+
+## When each error is raised
+
+- **No working time, when building.** Building a schedule fails if it has no `WorkDay` rule, or if its working hours minus its breaks are empty over a 14-day reference window from Monday 1 January 2001, UTC (E1–E3). Holidays are left out of this check because there are finitely many of them.
+- **No working time, when searching.** `add`, `sub`, `next_period` and `previous_period` fail with the same error if they cross the search bound without finding working time. The bound is 366 days, plus seven days per holiday date. `between` never searches, so it never raises this error.
+- **Out of range.** A result outside the supported range, `-009999-01-02T01:59:59Z` to `9999-12-30T22:00:00Z`, is an error (E5). Python and JavaScript also raise it for an input instant outside that range, and Python for a result outside `datetime`'s years 1 to 9999 or an amount that does not fit in 64-bit microseconds.
+- **Unknown zone.** A time zone name that is not in the IANA database is an error when the schedule is built (E6).
+
+Searching past the last holiday is not an error: holidays are a finite set, and after the last date there is no more time off.
+
+### Why the search bound rarely trips
+
+Without holidays, a schedule whose rules share one zone repeats every week, except that a DST change can skip one week's working time (D8), at most twice a year. A holiday removes one day of calendar time, which can hide one week's working time (E7, E8), so each date lengthens the bound by a week. After a schedule builds, the bound can trip only when its rules use different zones whose DST changes keep them apart for over a year (P22), or, in theory, for decades of holidays that all fall on the only working day.
+
+## Catch an error when building
+
+A `WorkDay` with no working days leaves the schedule with no working time, so building it fails (E2):
+
+<Tabs groupId="lang" persist items={['Rust', 'Python', 'JavaScript']}>
+<Tab value="Rust">
+
+```rust
+use jiff::civil::time;
+use workclock::{Error, Schedule, Weekdays, WorkDay};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let result = Schedule::builder()
+        .time_zone("Europe/London")
+        .rule(WorkDay::new(time(9, 0, 0, 0), time(17, 0, 0, 0), Weekdays::EMPTY))
+        .build();
+    assert_eq!(result.unwrap_err(), Error::NoWorkingTime);
+    Ok(())
+}
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+from datetime import time
+
+from workclock import NoWorkingTimeError, Schedule, WorkDay
+
+try:
+    Schedule([WorkDay(time(9), time(17), days=[])], time_zone="Europe/London")
+except NoWorkingTimeError as error:
+    print(error)
+    # schedule has no working time: its working hours minus its breaks are empty
+```
+
+</Tab>
+<Tab value="JavaScript">
+
+```js
+import { NoWorkingTimeError, Schedule } from "workclock";
+
+try {
+  new Schedule({
+    timeZone: "Europe/London",
+    rules: [{ type: "workday", start: "09:00", end: "17:00", days: [] }],
+  });
+} catch (error) {
+  if (!(error instanceof NoWorkingTimeError)) throw error;
+  error.kind; // "no_working_time"
+}
+```
+
+</Tab>
+</Tabs>
+
+## Handle each kind
+
+A schedule in a zone that does not exist fails with the unknown-zone error (E6). Each language branches on the kind:
+
+<Tabs groupId="lang" persist items={['Rust', 'Python', 'JavaScript']}>
+<Tab value="Rust">
+
+```rust
+use jiff::civil::time;
+use workclock::{Error, Schedule, Weekdays, WorkDay};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let result = Schedule::builder()
+        .time_zone("Mars/Olympus_Mons")
+        .rule(WorkDay::new(time(9, 0, 0, 0), time(17, 0, 0, 0), Weekdays::MON_TO_FRI))
+        .build();
+    match result {
+        Ok(_) => println!("built"),
+        Err(Error::UnknownZone { name }) => assert_eq!(name, "Mars/Olympus_Mons"),
+        Err(Error::NoWorkingTime) => println!("add working hours"),
+        // workclock::Error is #[non_exhaustive].
+        Err(error) => return Err(error.into()),
+    }
+    Ok(())
+}
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+from datetime import time
+
+from workclock import NoWorkingTimeError, Schedule, UnknownZoneError, WorkDay
+
+try:
+    Schedule([WorkDay(time(9), time(17))], time_zone="Mars/Olympus_Mons")
+except UnknownZoneError as error:
+    print(error)  # unknown time zone `Mars/Olympus_Mons`
+except NoWorkingTimeError:
+    print("add working hours")
+```
+
+</Tab>
+<Tab value="JavaScript">
+
+```js
+import { NoWorkingTimeError, Schedule, UnknownZoneError } from "workclock";
+
+try {
+  new Schedule({
+    timeZone: "Mars/Olympus_Mons",
+    rules: [{ type: "workday", start: "09:00", end: "17:00" }],
+  });
+} catch (error) {
+  if (error instanceof UnknownZoneError) {
+    error.message; // "unknown time zone `Mars/Olympus_Mons`"
+  } else if (error instanceof NoWorkingTimeError) {
+    console.log("add working hours");
+  } else {
+    throw error;
+  }
+}
+```
+
+</Tab>
+</Tabs>
+
+## Messages
+
+- The Python and JavaScript no-working-time errors name their cause. Building says `schedule has no working time: its working hours minus its breaks are empty`. A failed search names the bound and the instant it started from, such as `no working time within 366 days, plus seven days per holiday date, of 2021-01-01T00:00:00Z`.
+- Rust's `Error::NoWorkingTime` has one message for both causes: `no working time found`.
+- In the batch methods (`between_many`, `add_many`, `sub_many`; `betweenMany`, `addMany`, `subMany`), the message of an error caused by one item starts with `item {i}: `, where `i` is the item's zero-based index.
+
+## Malformed input
+
+Malformed input is not a `WorkclockError`; it raises the language's built-in error instead.
+
+- **Python** raises `TypeError` for a value of the wrong type and `ValueError` for a bad value, such as a naive `datetime`.
+- **JavaScript** throws `TypeError` and `RangeError` in the same way, such as `RangeError` for an ISO 8601 string without a UTC offset. `add` and `sub` take only numbers, so a string or `BigInt` duration is a `TypeError` rather than being converted.
+- **Rust** checks types at compile time.
+
+[Inputs and precision](/docs/concepts/inputs-and-precision/) lists what each language accepts.
+
+## Edge cases
+
+These are the examples from [DESIGN.md: Errors and termination](https://github.com/Karthik-beta/workclock/blob/main/DESIGN.md#errors-and-termination). Each ID is a case in [tests/fixtures/design_examples.json](https://github.com/Karthik-beta/workclock/blob/main/tests/fixtures/design_examples.json), which the Rust, Python and JavaScript test suites all run. Times are UTC, and `9–17 Mon–Fri` is a `WorkDay` from 09:00 to 17:00, Monday to Friday.
+
+| ID | Schedule | Query | Result | Shows |
+|---|---|---|---|---|
+| E1 | No rules | Build | No-working-time error | A schedule needs a `WorkDay` |
+| E2 | 9–17 with no working days | Build | No-working-time error | A `WorkDay` with no days adds no working time |
+| E3 | 9–17 Mon–Fri, break 9–17 Mon–Fri | Build | No-working-time error | Breaks are subtracted before the check |
+| E4 | 9–17 Mon–Fri, holidays every date from 2026-01-01 to 2035-12-29 | `add(2026-01-01 00:00, 1h)` | Mon 2035-12-31 10:00 | Each holiday date extends the search bound, so the search succeeds |
+| E5 | 9–17 Mon–Fri | `add(Thu 9999-12-30 16:00, 2h)` | Out-of-range error | A result past the end of the supported range |
+| E6 | Zone `Mars/Olympus_Mons` | Build | Unknown-zone error | Zone names are checked when the schedule is built |
+| E7 | 9–17 Mondays only, holidays every Monday from 2026-01-12 to 2027-03-15 (62 dates) | `add(Tue 2026-01-06 00:00, 1h)` | Mon 2027-03-22 10:00 | Each holiday can hide a week, and the bound grows to match |
+| E8 | same | `sub(Mon 2027-03-22 09:00, 1h)` | Mon 2026-01-05 16:00 | The same, searching back |
+
+The period searches have their own error examples, P22–P24, on [Periods](/docs/concepts/periods/).
+
+## See also
+
+- [Inputs and precision](/docs/concepts/inputs-and-precision/): the supported range, and which inputs raise `TypeError`, `ValueError` or `RangeError`.
+- [Periods](/docs/concepts/periods/): when `next_period` and `previous_period` fail.
+- [Time zones and DST](/docs/concepts/time-zones-and-dst/): time zone data, and why a Linux image without tzdata gives the unknown-zone error.
+- [js/README.md: Errors](https://github.com/Karthik-beta/workclock/blob/main/js/README.md#errors), the JavaScript error classes.

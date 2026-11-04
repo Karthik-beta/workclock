@@ -1,0 +1,14 @@
+/target
+.venv/
+__pycache__/
+*.pyd
+*.so
+node_modules/
+/js/pkg/
+/dist/
+/js/LICENSE
+/js/NOTICE
+/js/*.tgz
+/python.json
+/js.json
+lcov.info

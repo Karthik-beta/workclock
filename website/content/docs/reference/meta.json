@@ -1,0 +1,8 @@
+{
+  "pages": [
+    "external:[Rust (docs.rs)](https://docs.rs/workclock)",
+    "python",
+    "python-compat",
+    "javascript"
+  ]
+}
