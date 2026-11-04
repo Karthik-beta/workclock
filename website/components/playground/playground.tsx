@@ -4,7 +4,7 @@ import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 import { CircleX, Minus, Plus, X } from 'lucide-react';
 import { useEffect, useId, useMemo, useState } from 'react';
 import { codeThemes } from '@/components/landing/parts';
-import { CommitInput, TimeInput, field, stepper } from '@/components/week-strip/fields';
+import { CommitInput, TimeInput, field, stepper, useInvalidFields } from '@/components/week-strip/fields';
 import { Strip } from '@/components/week-strip/strip';
 import { useWorkclock } from '@/components/week-strip/use-workclock';
 import { playgroundCode } from '@/lib/playground-code';
@@ -44,7 +44,7 @@ export function Playground({ initial }: { initial: StripData }) {
   const { workclock, error: loadError } = useWorkclock();
   const [inputs, setInputs] = useState<DemoInputs>(initial.inputs);
   const [shown, setShown] = useState<StripData>(initial);
-  const [timeError, setTimeError] = useState(false);
+  const [timeError, onInvalidChange] = useInvalidFields();
   const [newHoliday, setNewHoliday] = useState('');
   const errorId = useId();
 
@@ -60,10 +60,7 @@ export function Playground({ initial }: { initial: StripData }) {
   const ready = workclock !== null;
   const inputError = result && !result.ok ? result.message : null;
   const error = timeError ? 'Write times as HH:MM on a 24-hour clock, such as 09:30.' : inputError;
-  const set = (patch: Partial<DemoInputs>) => {
-    setTimeError(false);
-    setInputs((prev) => ({ ...prev, ...patch }));
-  };
+  const set = (patch: Partial<DemoInputs>) => setInputs((prev) => ({ ...prev, ...patch }));
   const setSla = (hours: number) =>
     set({ slaHours: Math.min(maxSlaHours, Math.max(minSlaHours, Math.round(hours))) });
   const setHoliday = (date: string, on: boolean) =>
@@ -72,7 +69,7 @@ export function Playground({ initial }: { initial: StripData }) {
         ? [...new Set([...inputs.holidays, date])].sort()
         : inputs.holidays.filter((d) => d !== date),
     });
-  const timeProps = { errorId, onInvalid: () => setTimeError(true) };
+  const timeProps = { errorId, onInvalidChange };
 
   const toggle = (row: StripRow) => {
     if (row.kind === 'weekend' || !isWorkingDay(inputs, row.date)) return null;

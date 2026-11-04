@@ -14,7 +14,7 @@ import {
   maxSlaHours,
   minSlaHours,
 } from '@/lib/week-strip';
-import { CommitInput, TimeInput, field, stepper } from './fields';
+import { CommitInput, TimeInput, field, stepper, useInvalidFields } from './fields';
 import { Strip } from './strip';
 import { useWorkclock } from './use-workclock';
 
@@ -26,7 +26,7 @@ export function WeekStripDemo({ initial }: { initial: StripData }) {
   const { workclock, error: loadError } = useWorkclock();
   const [inputs, setInputs] = useState<DemoInputs>(initial.inputs);
   const [shown, setShown] = useState<StripData>(initial);
-  const [timeError, setTimeError] = useState(false);
+  const [timeError, onInvalidChange] = useInvalidFields();
   const errorId = useId();
 
   const result = useMemo(
@@ -40,10 +40,7 @@ export function WeekStripDemo({ initial }: { initial: StripData }) {
   const ready = workclock !== null;
   const hoursError = result && !result.ok ? result.message : null;
   const error = timeError ? 'Write times as HH:MM on a 24-hour clock, such as 09:30.' : hoursError;
-  const set = (patch: Partial<DemoInputs>) => {
-    setTimeError(false);
-    setInputs((prev) => ({ ...prev, ...patch }));
-  };
+  const set = (patch: Partial<DemoInputs>) => setInputs((prev) => ({ ...prev, ...patch }));
   const setSla = (hours: number) =>
     set({ slaHours: Math.min(maxSlaHours, Math.max(minSlaHours, Math.round(hours))) });
 
@@ -138,7 +135,7 @@ export function WeekStripDemo({ initial }: { initial: StripData }) {
             <TimeInput
               aria-label="Opened at"
               errorId={errorId}
-              onInvalid={() => setTimeError(true)}
+              onInvalidChange={onInvalidChange}
               value={inputs.openedTime}
               onCommit={(v) => set({ openedTime: v })}
             />
@@ -153,7 +150,7 @@ export function WeekStripDemo({ initial }: { initial: StripData }) {
             <TimeInput
               aria-label="Start"
               errorId={errorId}
-              onInvalid={() => setTimeError(true)}
+              onInvalidChange={onInvalidChange}
               aria-invalid={hoursError ? true : undefined}
               value={inputs.workStart}
               onCommit={(v) => set({ workStart: v })}
@@ -162,7 +159,7 @@ export function WeekStripDemo({ initial }: { initial: StripData }) {
             <TimeInput
               aria-label="End"
               errorId={errorId}
-              onInvalid={() => setTimeError(true)}
+              onInvalidChange={onInvalidChange}
               aria-invalid={hoursError ? true : undefined}
               value={inputs.workEnd}
               onCommit={(v) => set({ workEnd: v })}
