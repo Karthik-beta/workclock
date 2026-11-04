@@ -45,3 +45,20 @@ test('the time error clears when the invalid field is removed', async ({ page })
   await page.getByRole('checkbox', { name: 'Break' }).uncheck();
   await expect(page.getByText(timeError)).toBeHidden();
 });
+
+test('the time error stays until every invalid field is fixed', async ({ page }) => {
+  await page.goto('/playground/');
+  const start = page.getByRole('textbox', { name: 'Working hours start', exact: true });
+  const end = page.getByRole('textbox', { name: 'Working hours end', exact: true });
+  const storedStart = await start.inputValue();
+  await start.fill('9');
+  await start.press('Enter');
+  await end.fill('5');
+  await end.press('Enter');
+  await expect(page.getByText(timeError)).toBeVisible();
+
+  await start.fill(storedStart);
+  await start.press('Enter');
+  await expect(start).not.toHaveAttribute('aria-invalid');
+  await expect(page.getByText(timeError)).toBeVisible();
+});
