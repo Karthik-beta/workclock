@@ -105,8 +105,11 @@ brute-force oracle with property-based tests.
 
 Import from `workclock/web`, and call its default export once before using
 anything else: `await init()` fetches `workclock_bg.wasm` from the package's
-`pkg/web/` directory, so serve that directory with your page. With a bundler,
-or in Node.js, import from `workclock` as above.
+`pkg/web/` directory, so serve the package folder with your page. A browser
+cannot resolve `workclock/web` on its own, so map it to the package's `web.js`
+with an import map, as the
+[install guide](https://workclock.karthik.nz/docs/install/#browsers-without-a-bundler)
+shows. With a bundler, or in Node.js, import from `workclock` as above.
 
 ## Links
 

@@ -48,17 +48,24 @@ npm i workclock
 
 ### Browsers without a bundler
 
-In JavaScript, import from `workclock/web` and call its default export once before using anything else. `init()` fetches `workclock_bg.wasm` from the package's `pkg/web/` directory, so serve that directory with your page. With a bundler, or in Node.js, import from `workclock` instead.
+In JavaScript, import from `workclock/web` and call its default export once before using anything else. With a bundler, or in Node.js, import from `workclock` instead.
 
-```js
-import init, { Schedule } from "workclock/web";
+A browser cannot resolve `workclock/web` on its own, so map it to the package's `web.js` with an import map, and serve the package folder with your page. `web.js` loads `errors.js` and `pkg/web/workclock.js`, and `init()` fetches `pkg/web/workclock_bg.wasm`. Here the server serves the installed package at `/node_modules/workclock/`:
 
-await init();
+```html
+<script type="importmap">
+  { "imports": { "workclock/web": "/node_modules/workclock/web.js" } }
+</script>
+<script type="module">
+  import init, { Schedule } from "workclock/web";
 
-const support = new Schedule({
-  timeZone: "Europe/London",
-  rules: [{ type: "workday", start: "09:00", end: "17:00" }],
-});
+  await init();
+
+  const support = new Schedule({
+    timeZone: "Europe/London",
+    rules: [{ type: "workday", start: "09:00", end: "17:00" }],
+  });
+</script>
 ```
 
 ## Time zone data

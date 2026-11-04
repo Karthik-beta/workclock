@@ -719,7 +719,7 @@ export default function __wbg_init(
 ): Promise<InitOutput>;
 ```
 
-The default export of `workclock/web`, the entry point for browsers without a bundler, imported here as `init`. Call it once, and wait for it, before using anything else from `workclock/web`. `workclock` itself, for Node.js and bundlers, does not export it. [Install: Browsers without a bundler](/docs/install/#browsers-without-a-bundler) covers serving the files.
+The default export of `workclock/web`, the entry point for browsers without a bundler, imported here as `init`. Call it once, and wait for it, before using anything else from `workclock/web`. `workclock` itself, for Node.js and bundlers, does not export it. [Install: Browsers without a bundler](/docs/install/#browsers-without-a-bundler) covers the import map that resolves `workclock/web` and the files to serve.
 
 | Parameter | Type | Description |
 |---|---|---|
@@ -727,7 +727,7 @@ The default export of `workclock/web`, the entry point for browsers without a bu
 
 Returns a promise of the module's internal exports, `InitOutput`, which you do not need. Calling it again returns the same exports.
 
-In JavaScript, in a browser:
+In JavaScript, in a browser module script with that import map:
 
 ```js
 import init, { Schedule } from "workclock/web";
