@@ -12,9 +12,9 @@ import { allDates, type ErrorKind, type RuleSpec, type ScheduleSpec } from "./fi
 const MINUTE = 60_000;
 const DAY = 86_400_000;
 const WEEKDAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
-// The engine's range: jiff's first and last instants.
+// The supported range, -009999-01-02T01:59:59Z to 9999-12-30T22:00:00Z.
 const FIRST = -377_705_023_201_000;
-const LAST = 253_402_207_200_999;
+const LAST = 253_402_207_200_000;
 
 type Block = [start: number, end: number];
 
