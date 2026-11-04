@@ -144,6 +144,26 @@ npm pack
 ../.github/scripts/npm-install-check.sh workclock-*.tgz
 ```
 
+### Website
+
+The website in `website/` uses the package in `js/`, so it needs that
+package's web build first, with the JavaScript requirements above. Without it,
+`npm run dev` and `npm run build` fail to resolve `js/pkg/web`.
+
+```sh
+cd js
+npm run build:web
+cd ../website
+npm ci
+npm run types:check
+npm run build
+npm run check:agents
+npm run test:a11y
+```
+
+`npm run dev` serves the site while you edit, and `test:a11y` needs
+`npx playwright install chromium` once.
+
 ### Instruction counts
 
 The `instructions` CI job counts the instructions the benchmark cases execute,
