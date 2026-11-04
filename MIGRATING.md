@@ -70,8 +70,8 @@ businesstimedelta's absolute value, so existing code sees no change there.
   off. Subclasses of `Rule` that compute their own blocks, subclasses of
   these classes that override `next`, `previous` or `difference`, a
   `HolidayRule` used as working time, and nested `Rules` raise `TypeError`
-  when they are used, because rules run on the engine rather than as Python
-  code.
+  when workclock computes with them, because rules run on the engine rather
+  than as Python code. An override you call directly still runs.
 - **Default zone.** `tz` defaults to `datetime.timezone.utc` instead of
   `pytz.utc`; workclock does not depend on pytz. Zones may be IANA names,
   `zoneinfo.ZoneInfo`, pytz zones or `datetime.timezone.utc`. Fixed-offset
