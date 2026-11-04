@@ -162,7 +162,7 @@ npm run test:a11y
 ```
 
 `npm run dev` serves the site while you edit, and `test:a11y` needs
-`npx playwright install chromium` once.
+`npx playwright install chromium` once; on Linux, add `--with-deps` to install its system libraries too.
 
 ### Instruction counts
 
