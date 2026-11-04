@@ -202,8 +202,9 @@ class HolidayRule(Rule):
     """Dates that are not worked: a list of dates or a python-holidays object.
 
     The dates are read once. A python-holidays object is filled in for every
-    year from 1970 to 2100 first; later or earlier dates are not holidays.
-    One created with ``expand=False`` is read as it is.
+    year from 1970 to 2100 first; outside that window, only the dates it
+    already holds are holidays. One created with ``expand=False`` is read as
+    it is.
     """
 
     def __init__(

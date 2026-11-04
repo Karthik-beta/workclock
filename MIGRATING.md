@@ -48,8 +48,8 @@ businesstimedelta's absolute value, so existing code sees no change there.
 - **Holiday dates** are read once, when the `HolidayRule` is created. Dates
   added to the list or object later, or a new `holidays` attribute, are not
   seen; businesstimedelta reads `holidays` on every call. A python-holidays
-  object is filled in for every year from 1970 to 2100 first, and dates
-  outside that window are not holidays. An object created with
+  object is filled in for every year from 1970 to 2100 first; outside that
+  window, only the dates it already holds are holidays. An object created with
   `expand=False` is not filled in, so it must already hold every year you
   need, for example through `years=range(2026, 2031)`. Lists of `datetime`
   objects raise `TypeError`; pass `date` objects.
