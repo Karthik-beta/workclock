@@ -1,0 +1,151 @@
+---
+title: Schedules
+description: What a schedule is, how its rules combine into working time, and how to build one in Rust, Python and JavaScript.
+---
+
+A schedule is a set of rules with a default time zone: `workclock::Schedule` in Rust, `workclock.Schedule` in Python and `Schedule` from `workclock` in JavaScript. Its working time is every available block merged, minus every block of time off, and every operation (`between`, `add`, `sub`, `next_period`, `previous_period`) is defined on that working time. This page covers Rust, Python and JavaScript.
+
+## How rules combine
+
+workclock's model, from [DESIGN.md](https://github.com/Karthik-beta/workclock/blob/main/DESIGN.md#model):
+
+- An **instant** is an absolute point in time. Every input is converted to an instant before any calculation.
+- A **duration** is elapsed real time, not wall-clock time. It can be negative.
+- A **block** is a half-open interval of instants, `[start, end)`.
+- A **rule** produces blocks. It is either available (`WorkDay`) or time off (`Break` and `Holidays`).
+- A **schedule** combines rules. Its working time is the union of all available blocks minus the union of all time-off blocks.
+- A **period** is a maximal block of working time.
+
+For the London support desk on Tuesday 29 December 2026, times in `Europe/London`:
+
+| Rule | Kind | Blocks on Tuesday 29 December 2026 |
+|---|---|---|
+| `WorkDay` 09:00–17:00, Monday to Friday | Available | 09:00–17:00 |
+| `Break` 12:00–13:00, Monday to Friday | Time off | 12:00–13:00 |
+| `Holidays` 2026-12-25 and 2026-12-28 | Time off | None |
+| **Working time** | | 09:00–12:00 and 13:00–17:00: 7 hours in two periods |
+
+Because working time is a set of instants, the order in which rules are given never matters. Overlapping available rules never count time twice: 09:00–17:00 and 13:00–20:00 on the same weekdays give 11 hours a day, not 15 (DESIGN.md U1). Time off is subtracted after merging, so a break removes its time from every `WorkDay` it overlaps, and a break outside working time has no effect.
+
+## Build a schedule
+
+The London support desk works 09:00–17:00 on weekdays with a lunch hour, and is closed on Friday 25 and Monday 28 December 2026. Each tab builds that schedule and counts the 7 hours of working time on Tuesday 29 December, London time.
+
+<Tabs groupId="lang" persist items={['Rust', 'Python', 'JavaScript']}>
+<Tab value="Rust">
+
+```rust
+use jiff::civil::{date, time};
+use jiff::{SignedDuration, Zoned};
+use workclock::{Break, Holidays, Schedule, Weekdays, WorkDay};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let days = Weekdays::MON_TO_FRI;
+    let support = Schedule::builder()
+        .time_zone("Europe/London")
+        .rule(WorkDay::new(time(9, 0, 0, 0), time(17, 0, 0, 0), days))
+        .rule(Break::new(time(12, 0, 0, 0), time(13, 0, 0, 0), days))
+        .rule(Holidays::new([date(2026, 12, 25), date(2026, 12, 28)]))
+        .build()?;
+
+    let tuesday: Zoned = "2026-12-29T00:00[Europe/London]".parse()?;
+    let wednesday: Zoned = "2026-12-30T00:00[Europe/London]".parse()?;
+    let worked = support.between(&tuesday, &wednesday);
+    assert_eq!(worked, SignedDuration::from_hours(7));
+    Ok(())
+}
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+from datetime import date, datetime, time
+from zoneinfo import ZoneInfo
+
+from workclock import Break, Holidays, Schedule, WorkDay
+
+london = ZoneInfo("Europe/London")
+support = Schedule(
+    [
+        WorkDay(time(9), time(17)),  # Monday to Friday by default
+        Break(time(12), time(13)),
+        Holidays([date(2026, 12, 25), date(2026, 12, 28)]),
+    ],
+    time_zone=london,
+)
+
+tuesday = datetime(2026, 12, 29, tzinfo=london)
+wednesday = datetime(2026, 12, 30, tzinfo=london)
+support.between(tuesday, wednesday)  # 7:00:00
+```
+
+</Tab>
+<Tab value="JavaScript">
+
+```js
+import { Schedule } from "workclock";
+
+const support = new Schedule({
+  timeZone: "Europe/London",
+  rules: [
+    { type: "workday", start: "09:00", end: "17:00" },
+    { type: "break", start: "12:00", end: "13:00" },
+    { type: "holidays", dates: ["2026-12-25", "2026-12-28"] },
+  ],
+});
+
+// London is at UTC+00:00 in December: these are midnight, London time.
+const tuesday = "2026-12-29T00:00:00Z";
+const wednesday = "2026-12-30T00:00:00Z";
+support.between(tuesday, wednesday); // 25200000 ms
+```
+
+</Tab>
+</Tabs>
+
+How each language builds a schedule:
+
+- **Rust:** `workclock::Schedule::builder()` returns a `workclock::ScheduleBuilder`. Call `.time_zone(name)` once, `.rule(rule)` for each `WorkDay`, `Break` or `Holidays`, then `.build()`, which returns `Result<Schedule, workclock::Error>`.
+- **Python:** `workclock.Schedule(rules, *, time_zone=None)` takes any iterable of `WorkDay`, `Break` and `Holidays`. `time_zone` is an IANA name or a `tzinfo` that has one: `zoneinfo.ZoneInfo`, a pytz zone or `datetime.timezone.utc`. The `rules` and `time_zone` properties return what the schedule was built from, and a schedule pickles and deep-copies by being built again from them.
+- **JavaScript:** `new Schedule({ timeZone, rules })` takes plain objects whose `type` is `"workday"`, `"break"` or `"holidays"`.
+
+The rule types and their options are on [Rules](/docs/concepts/rules/).
+
+## The default time zone
+
+The schedule's time zone is the zone of every rule that does not set its own, holidays included. If the schedule sets none, it is `UTC`. Working hours are wall-clock times in their rule's zone, and every time zone is an IANA name such as `Europe/London`.
+
+A rule can set its own zone, so one schedule can mix working hours in one zone with holidays in another; [Rules](/docs/concepts/rules/#time-zones-of-rules) shows how. How wall-clock times behave when clocks change is on [Time zones and DST](/docs/concepts/time-zones-and-dst/).
+
+## When building fails
+
+A schedule is checked once, when it is built:
+
+| Problem | Rust (`workclock::Error`) | Python (`workclock`) | JavaScript (`workclock`) |
+|---|---|---|---|
+| A time zone is not in the IANA database | `Error::UnknownZone { name }` | `UnknownZoneError` | `UnknownZoneError` |
+| No available rule, or the working hours minus the breaks are empty | `Error::NoWorkingTime` | `NoWorkingTimeError` | `NoWorkingTimeError` |
+
+The no-working-time check looks at a 14-day reference window from Monday 1 January 2001, UTC. Holidays are left out of it, because there are finitely many of them. A schedule that builds therefore has working time, and every later search is bounded, so no call can loop forever. Malformed input is not a workclock error: Python raises `TypeError` for a rule that is not a `WorkDay`, `Break` or `Holidays`, and JavaScript throws `TypeError` or `RangeError` for a rule of the wrong shape. Every error class is on [Errors](/docs/concepts/errors/).
+
+## Edge cases
+
+These examples are from [DESIGN.md](https://github.com/Karthik-beta/workclock/blob/main/DESIGN.md#combining-rules), and the Rust, Python and JavaScript test suites all run them from [tests/fixtures/design_examples.json](https://github.com/Karthik-beta/workclock/blob/main/tests/fixtures/design_examples.json). They use the week of Monday 5 January 2026 in UTC, and `9–17 Mon–Fri` is a `WorkDay` from 09:00 to 17:00, Monday to Friday.
+
+| ID | Schedule | Query | Result | What it shows |
+|---|---|---|---|---|
+| U1 | 9–17 Mon–Fri and 13–20 Mon–Fri | `between(Mon 00:00, Tue 00:00)` | 11h | Overlapping available rules merge; 13:00–17:00 counts once |
+| K1 | 9–17 Mon–Fri, break 12–13 Mon–Fri | `between(Mon 09:00, Mon 17:00)` | 7h | Time off is subtracted from the merged working time |
+| E1 | No rules | Build | No-working-time error | A schedule needs at least one available rule |
+| E2 | 9–17 with no working days | Build | No-working-time error | A `WorkDay` on no weekdays adds no working time |
+| E3 | 9–17 Mon–Fri, break 9–17 Mon–Fri | Build | No-working-time error | Breaks that cover all the working hours leave none |
+| E6 | Zone `Mars/Olympus_Mons` | Build | Unknown-zone error | Zone names are checked when the schedule is built |
+
+## See also
+
+- [Rules](/docs/concepts/rules/): `WorkDay`, `Break` and `Holidays`, overnight shifts and per-rule time zones.
+- [Adding time](/docs/concepts/adding-time/) and [Measuring time](/docs/concepts/measuring-time/): `add`, `sub` and `between`.
+- [Periods](/docs/concepts/periods/): the maximal stretches of working time a schedule is made of.
+- [Errors](/docs/concepts/errors/): every error class in each language.
+- [DESIGN.md: Model](https://github.com/Karthik-beta/workclock/blob/main/DESIGN.md#model): the specification.

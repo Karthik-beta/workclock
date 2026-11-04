@@ -1,0 +1,22 @@
+[package]
+name = "workclock-py"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+name = "_workclock"
+crate-type = ["cdylib"]
+
+[dependencies]
+# Bundle the zone database so slim images without tzdata still resolve zones;
+# jiff prefers the system copy when one exists.
+jiff = { version = "0.2.38", features = ["tzdb-bundle-always"] }
+pyo3 = { version = "0.30", features = ["abi3-py39"] }
+workclock = { path = "../workclock" }
+
+[lints]
+workspace = true

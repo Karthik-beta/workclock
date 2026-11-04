@@ -1,0 +1,161 @@
+---
+title: Adding time
+description: Find the instant reached after adding or subtracting an amount of working time, with add and sub.
+---
+
+`add(t, d)` returns the earliest instant at or after `t` with exactly `d` of working time between them. `sub(t, d)` returns the latest instant at or before `t` with exactly `d` of working time between them. This page covers both in Rust, Python and JavaScript.
+
+## Add working time
+
+A support desk in London works 09:00–17:00 on weekdays with a lunch hour, and is closed on 25 and 28 December 2026. A ticket opened at 16:30 on Thursday 24 December with an 8-hour SLA uses 30 minutes on Thursday, none on the holidays or the weekend, 7 hours on Tuesday 29 December, and its last 30 minutes on Wednesday 30 December. It is due at 09:30 on Wednesday 30 December 2026, London time.
+
+<WeekStrip />
+
+Each tab adds the 8 hours, then subtracts them again from the due instant. Because 16:30 on Thursday is inside working time, `sub` returns the instant the ticket was opened.
+
+<Tabs groupId="lang" persist items={['Rust', 'Python', 'JavaScript']}>
+<Tab value="Rust">
+
+```rust
+use jiff::civil::{date, time};
+use jiff::{SignedDuration, Zoned};
+use workclock::{Break, Holidays, Schedule, Weekdays, WorkDay};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let days = Weekdays::MON_TO_FRI;
+    let support = Schedule::builder()
+        .time_zone("Europe/London")
+        .rule(WorkDay::new(time(9, 0, 0, 0), time(17, 0, 0, 0), days))
+        .rule(Break::new(time(12, 0, 0, 0), time(13, 0, 0, 0), days))
+        .rule(Holidays::new([date(2026, 12, 25), date(2026, 12, 28)]))
+        .build()?;
+
+    let opened: Zoned = "2026-12-24T16:30[Europe/London]".parse()?;
+    let due = support.add(&opened, SignedDuration::from_hours(8))?;
+    assert_eq!(due.to_string(), "2026-12-30T09:30:00Z");
+
+    let start = support.sub(due, SignedDuration::from_hours(8))?;
+    assert_eq!(start.to_string(), "2026-12-24T16:30:00Z");
+    Ok(())
+}
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+from datetime import date, datetime, time
+from zoneinfo import ZoneInfo
+
+from workclock import Break, Holidays, Schedule, WorkDay
+
+london = ZoneInfo("Europe/London")
+support = Schedule(
+    [
+        WorkDay(time(9), time(17)),  # Monday to Friday by default
+        Break(time(12), time(13)),
+        Holidays([date(2026, 12, 25), date(2026, 12, 28)]),
+    ],
+    time_zone=london,
+)
+
+opened = datetime(2026, 12, 24, 16, 30, tzinfo=london)
+due = support.add(opened, hours=8)  # 2026-12-30 09:30, London time
+support.sub(due, hours=8)  # 2026-12-24 16:30, London time
+```
+
+</Tab>
+<Tab value="JavaScript">
+
+```js
+import { Schedule } from "workclock";
+
+const HOUR = 3_600_000; // 1 hour in milliseconds
+
+const support = new Schedule({
+  timeZone: "Europe/London",
+  rules: [
+    { type: "workday", start: "09:00", end: "17:00" },
+    { type: "break", start: "12:00", end: "13:00" },
+    { type: "holidays", dates: ["2026-12-25", "2026-12-28"] },
+  ],
+});
+
+const opened = "2026-12-24T16:30:00Z";
+const due = support.add(opened, 8 * HOUR); // Date 2026-12-30T09:30:00.000Z
+support.sub(due, 8 * HOUR); // Date 2026-12-24T16:30:00.000Z
+```
+
+</Tab>
+</Tabs>
+
+What each language takes and returns:
+
+- **Rust:** `workclock::Schedule::add(&self, t: impl Into<jiff::Timestamp>, d: jiff::SignedDuration)` returns `Result<jiff::Timestamp, workclock::Error>`, and `sub` has the same signature. `t` can be a `jiff::Timestamp` or a `&jiff::Zoned`. For local time, convert the result with `due.to_zoned(opened.time_zone().clone())`, as [crates/workclock/examples/sla.rs](https://github.com/Karthik-beta/workclock/blob/main/crates/workclock/examples/sla.rs) does.
+- **Python:** `workclock.Schedule.add(dt, delta=None, /, *, hours=0, minutes=0, seconds=0)` adds `delta` (a `datetime.timedelta`) plus `hours`, `minutes` and `seconds`. `dt` must be a timezone-aware `datetime` (a naive one raises `ValueError`); the result has the same `tzinfo` as `dt`. `sub` takes the same arguments.
+- **JavaScript:** `add(t, ms)` and `sub(t, ms)` take a `Date` or an ISO 8601 string with a UTC offset, and a duration in milliseconds, and return a `Date`. The duration must be a whole number of milliseconds within ±`Number.MAX_SAFE_INTEGER`, or they throw `RangeError`; a string or `BigInt` duration throws `TypeError` rather than being converted.
+
+Python's `add_many` and `sub_many`, and JavaScript's `addMany` and `subMany`, do the same for many instants in one call.
+
+## Where the result lands
+
+- **On a period's end.** `add` returns the earliest instant with enough working time, so a result that uses up a period lands on the period's end, not on the start of the next one. On the London desk, adding 1 hour at 11:00 on Tuesday 29 December returns 12:00, the start of lunch, not 13:00 (DESIGN.md A2).
+- **On a period's start**, for `sub`. Subtracting 1 hour at 10:00 on a Monday of a 09:00–17:00 schedule returns 09:00 (DESIGN.md A9).
+- **From outside working time**, `add` counts from the start of the next working time: 1 hour from 17:00 on Monday is 10:00 on Tuesday (DESIGN.md A3).
+- **Zero returns `t` unchanged**, even outside working time or inside a break (DESIGN.md A5, A8, A11).
+- **A negative amount reverses the direction.** `add(t, -d)` is `sub(t, d)`, and `sub(t, -d)` is `add(t, d)` (DESIGN.md A6).
+
+## Round trips
+
+For every `t` and `d`, `between(t, add(t, d))` is `d`: [Measuring time](/docs/concepts/measuring-time/) counts exactly the working time `add` used.
+
+The reverse, `sub(add(t, d), d)` returning `t`, holds only when `t` is inside working time. From outside, `sub` lands on the start of the working time that `add` used. On a 09:00–17:00 weekday schedule, adding 1 hour at 10:00 on a Saturday returns 10:00 on Monday, and subtracting 1 hour from that returns 09:00 on Monday, not Saturday (DESIGN.md A4 then A9).
+
+## When add and sub fail
+
+| Error | Rust (`workclock::Error`) | Python (`workclock`) | JavaScript (`workclock`) |
+|---|---|---|---|
+| No working time within the search bound: 366 days, plus seven days per holiday date | `Error::NoWorkingTime` | `NoWorkingTimeError` | `NoWorkingTimeError` |
+| The result is outside the supported range, `-009999-01-02T01:59:59Z` to `9999-12-30T22:00:00Z` | `Error::OutOfRange` | `OutOfRangeError` | `OutOfRangeError` |
+
+A schedule that builds always has working time, so the search bound trips only when rules in different zones are kept apart by daylight saving time (DST) changes for more than a year, or, in theory, when decades of holidays all fall on the only working day. Python also raises `OutOfRangeError` for a result outside the years 1 to 9999 of `datetime`, or an amount that does not fit in 64-bit microseconds. Every error class is on [Errors](/docs/concepts/errors/).
+
+## Edge cases
+
+These examples are from [DESIGN.md](https://github.com/Karthik-beta/workclock/blob/main/DESIGN.md#addt-d-and-subt-d), and the Rust, Python and JavaScript test suites all run them from [tests/fixtures/design_examples.json](https://github.com/Karthik-beta/workclock/blob/main/tests/fixtures/design_examples.json). Unless the row says otherwise, they use the week of Monday 5 January 2026 in UTC, and `9–17 Mon–Fri` is a `WorkDay` from 09:00 to 17:00, Monday to Friday.
+
+| ID | Schedule | Query | Result | What it shows |
+|---|---|---|---|---|
+| A1 | 9–17 Mon–Fri | `add(Mon 10:00, 2h)` | Mon 12:00 | Inside one period |
+| A2 | Same | `add(Mon 16:00, 1h)` | Mon 17:00 | A result that uses up a period lands on its end |
+| A3 | Same | `add(Mon 17:00, 1h)` | Tue 10:00 | From the end of a period, counting starts at the next one |
+| A4 | Same | `add(Sat 10:00, 1h)` | Mon 2026-01-12 10:00 | From outside working time |
+| A5 | Same | `add(Sat 10:00, 0h)` | Sat 10:00 | Zero returns `t`, even outside working time |
+| A6 | Same | `add(Mon 10:00, -2h)` | Fri 2026-01-02 16:00 | A negative amount counts back |
+| A7 | Same | `sub(Tue 09:00, 1h)` | Mon 16:00 | `sub` from the start of a period |
+| A8 | Same | `sub(Sat 10:00, 0h)` | Sat 10:00 | Zero returns `t` for `sub` too |
+| A9 | Same | `sub(Mon 2026-01-12 10:00, 1h)` | Mon 2026-01-12 09:00 | `sub` lands on a period's start, so A4 does not round-trip |
+| A10 | Same | `sub(Sat 10:00, 1h)` | Fri 16:00 | `sub` from outside working time |
+| A11 | 9–17 Mon–Fri, break 12–13 | `add(Mon 12:30, 0h)` | Mon 12:30 | Zero returns `t` inside a break |
+| O2 | 22–06 Mon–Fri | `add(Mon 22:00, 4h)` | Tue 02:00 | `add` through midnight in an overnight shift |
+| O3 | Same | `sub(Tue 06:00, 4h)` | Tue 02:00 | `sub` within an overnight shift |
+| O4 | Same | `add(Tue 02:00, 1h)` | Tue 03:00 | A shift in progress at `t` counts |
+| K3 | 9–17 Mon–Fri, break 12–13 Mon–Fri | `add(Mon 11:30, 1h)` | Mon 13:30 | `add` skips a break |
+| K4 | Same | `add(Mon 12:30, 30m)` | Mon 13:30 | From inside a break |
+| K5 | Same | `sub(Mon 13:30, 1h)` | Mon 11:30 | `sub` skips a break |
+| H2 | 9–17 Mon–Fri, holiday Wed 2026-01-07 | `add(Tue 16:00, 2h)` | Thu 10:00 | `add` skips a holiday |
+| HO3 | 22–06 Mon–Fri, holiday Tue 2026-01-06 | `add(Mon 22:00, 3h)` | Wed 01:00 | A holiday cuts an overnight shift at midnight |
+| D3 | 22–06 every day, `America/New_York` | `add(Sat 2026-03-07 22:00 EST, 7h)` | Sun 2026-03-08 06:00 EDT | The night clocks go forward has 7 hours |
+| E4 | 9–17 Mon–Fri, holidays every date from 2026-01-01 to 2035-12-29 | `add(2026-01-01 00:00, 1h)` | Mon 2035-12-31 10:00 | Holidays lengthen the search bound |
+| E5 | 9–17 Mon–Fri | `add(Thu 9999-12-30 16:00, 2h)` | Out-of-range error | A result past the supported range |
+| E7 | 9–17 Mondays only, holidays every Monday from 2026-01-12 to 2027-03-15 (62 dates) | `add(Tue 2026-01-06 00:00, 1h)` | Mon 2027-03-22 10:00 | A search across 62 missing weeks |
+| E8 | Same | `sub(Mon 2027-03-22 09:00, 1h)` | Mon 2026-01-05 16:00 | The same search backwards |
+
+## See also
+
+- [Measuring time](/docs/concepts/measuring-time/): `between`, the inverse of `add`.
+- [Periods](/docs/concepts/periods/): `next_period` and `previous_period`, the stretches `add` and `sub` walk through.
+- [Rules](/docs/concepts/rules/): overnight shifts, breaks and holidays.
+- [Inputs and precision](/docs/concepts/inputs-and-precision/): instant and duration types in each language.
+- [Errors](/docs/concepts/errors/): the no-working-time and out-of-range errors.
+- [DESIGN.md: add(t, d) and sub(t, d)](https://github.com/Karthik-beta/workclock/blob/main/DESIGN.md#addt-d-and-subt-d): the specification.

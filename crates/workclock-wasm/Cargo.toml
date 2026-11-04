@@ -1,0 +1,24 @@
+[package]
+name = "workclock-wasm"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+jiff = "0.2.38"
+js-sys = "0.3.106"
+wasm-bindgen = "0.2.129"
+workclock = { path = "../workclock" }
+
+# WebAssembly has no system time zone database, so bundle jiff's.
+[target.'cfg(target_family = "wasm")'.dependencies]
+jiff = { version = "0.2.38", features = ["tzdb-bundle-always"] }
+
+[lints]
+workspace = true

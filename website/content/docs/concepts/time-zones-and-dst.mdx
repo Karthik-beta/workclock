@@ -1,0 +1,151 @@
+---
+title: Time zones and DST
+description: How rule times follow each rule's IANA time zone, and how workclock resolves daylight saving time gaps and overlaps.
+---
+
+Working hours are wall-clock times in a rule's IANA time zone, and durations are elapsed real time. So a shift that spans a daylight saving time (DST) change is an hour shorter or longer than its wall-clock length. This page covers time zones and DST in Rust, Python and JavaScript.
+
+## Zones of a schedule and its rules
+
+- Every schedule has a default time zone: `time_zone` in Rust and Python, `timeZone` in JavaScript. It is UTC if omitted.
+- Each rule can set its own zone. A rule without one uses the schedule's zone; holidays do too, not UTC. [Rules](/docs/concepts/rules/) has examples with rules in different zones.
+- Zones are IANA names, such as `Europe/London` or `America/New_York`. Python also accepts a `zoneinfo.ZoneInfo`, a pytz zone or `datetime.timezone.utc`, and converts it to its name.
+- An unknown name is an unknown-zone error when the schedule is built ([Errors](/docs/concepts/errors/)).
+
+Instants are absolute, so the zone an instant is written in does not change a result. It only changes how the result is shown: Rust returns a `jiff::Timestamp`, Python returns a `datetime` in the `tzinfo` of the datetime passed in, and JavaScript returns a `Date`.
+
+## Gaps and overlaps
+
+When a rule's start or end is not a unique local time, workclock resolves it with the *compatible* strategy, the default of jiff, RFC 5545 and JavaScript Temporal:
+
+- **Gap** (clocks go forward): a time that does not exist moves forward by the length of the gap. On a day when clocks jump from 02:00 to 03:00, 02:30 becomes 03:30.
+- **Overlap** (clocks go back): a time that occurs twice resolves to the earlier occurrence.
+
+If resolving leaves a block's start at or after its end, the rule has no working time that day (D8).
+
+A holiday removes local 00:00 to the next local 00:00, so a holiday on a DST change day is 23 or 25 hours long when the change is one hour (D7).
+
+## A night shift across a DST change
+
+In `America/New_York`, clocks go forward on Sunday 8 March 2026: at 02:00 EST they jump to 03:00 EDT. A 22:00–06:00 shift that night has 7 hours of working time:
+
+```text
+Sat 7 Mar   22:00 EST ──── 4 hours ────▶ 02:00 EST
+            02:00 EST is the same instant as 03:00 EDT
+Sun 8 Mar   03:00 EDT ──── 3 hours ────▶ 06:00 EDT
+```
+
+Adding 7 hours of working time to 22:00 on Saturday therefore ends at 06:00 EDT on Sunday, which is `2026-03-08T10:00:00Z`.
+
+<Tabs groupId="lang" persist items={['Rust', 'Python', 'JavaScript']}>
+<Tab value="Rust">
+
+```rust
+use jiff::civil::time;
+use jiff::{SignedDuration, Zoned};
+use workclock::{Schedule, Weekdays, WorkDay};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let nights = Schedule::builder()
+        .time_zone("America/New_York")
+        .rule(WorkDay::new(time(22, 0, 0, 0), time(6, 0, 0, 0), Weekdays::ALL))
+        .build()?;
+
+    let start: Zoned = "2026-03-07T22:00[America/New_York]".parse()?;
+    let end: Zoned = "2026-03-08T06:00[America/New_York]".parse()?;
+    assert_eq!(nights.between(&start, &end), SignedDuration::from_hours(7));
+
+    let done = nights.add(&start, SignedDuration::from_hours(7))?;
+    let local = done.to_zoned(start.time_zone().clone());
+    assert_eq!(local.to_string(), "2026-03-08T06:00:00-04:00[America/New_York]");
+    Ok(())
+}
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+from datetime import datetime, time
+from zoneinfo import ZoneInfo
+
+from workclock import Schedule, WorkDay
+
+new_york = ZoneInfo("America/New_York")
+nights = Schedule(
+    [WorkDay(time(22), time(6), days=range(7))],  # every day
+    time_zone=new_york,
+)
+
+start = datetime(2026, 3, 7, 22, tzinfo=new_york)
+end = datetime(2026, 3, 8, 6, tzinfo=new_york)
+nights.between(start, end)  # 7:00:00
+nights.add(start, hours=7)  # 2026-03-08 06:00, New York time (EDT)
+```
+
+</Tab>
+<Tab value="JavaScript">
+
+```js
+import { Schedule } from "workclock";
+
+const nights = new Schedule({
+  timeZone: "America/New_York",
+  rules: [
+    {
+      type: "workday",
+      start: "22:00",
+      end: "06:00",
+      days: ["mon", "tue", "wed", "thu", "fri", "sat", "sun"],
+    },
+  ],
+});
+
+const start = "2026-03-07T22:00:00-05:00";
+nights.between(start, "2026-03-08T06:00:00-04:00"); // 25200000 ms
+nights.add(start, 7 * 3_600_000); // Date 2026-03-08T10:00:00.000Z
+```
+
+</Tab>
+</Tabs>
+
+The same shift on the night clocks go back, Saturday 31 October to Sunday 1 November 2026, has 9 hours (D2).
+
+`workclock.compat` resolves overlaps to the earlier occurrence too, while businesstimedelta's pytz `localize()` picks the later one, so results differ for rule boundaries inside a repeated hour ([Migrating from businesstimedelta](/docs/guides/migrating-from-businesstimedelta/)).
+
+## Time zone data
+
+Zone rules come from a copy of the IANA time zone database, and which copy depends on the package:
+
+| Package | Database used |
+|---|---|
+| npm package | Always its bundled copy, as current as the workclock release |
+| Python wheels | The system database when there is one, otherwise the bundled copy |
+| Rust crate | jiff's defaults: the system database (`/usr/share/zoneinfo`, or the directory in `TZDIR`) on Linux and macOS, and a bundled copy on Windows |
+
+<Callout type="info" title="Note">
+On a Linux image without tzdata, as some slim and distroless images are, every named zone in the Rust crate, even `"UTC"`, is an unknown-zone error. Install the `tzdata` package, point `TZDIR` at a zoneinfo directory, or enable jiff's `tzdb-bundle-always` feature to bundle the database.
+</Callout>
+
+## Edge cases
+
+These are the DST examples from [DESIGN.md](https://github.com/Karthik-beta/workclock/blob/main/DESIGN.md#time-zones-and-dst). Each ID is a case in [tests/fixtures/design_examples.json](https://github.com/Karthik-beta/workclock/blob/main/tests/fixtures/design_examples.json), which the Rust, Python and JavaScript test suites all run. Unless noted, the zone is `America/New_York`, where clocks go forward on Sunday 8 March 2026 and back on Sunday 1 November 2026.
+
+| ID | Schedule | Query | Result | Shows |
+|---|---|---|---|---|
+| D1 | 22–06 every day | `between(Sat 2026-03-07 22:00 EST, Sun 06:00 EDT)` | 7h | A night shift loses the hour clocks skip |
+| D2 | 22–06 every day | `between(Sat 2026-10-31 22:00 EDT, Sun 06:00 EST)` | 9h | A night shift gains the hour clocks repeat |
+| D3 | 22–06 every day | `add(Sat 2026-03-07 22:00 EST, 7h)` | Sun 2026-03-08 06:00 EDT | `add` counts elapsed time across the change |
+| D4 | 02:30–04:00 Sun | Working time on 2026-03-08 | 03:30–04:00 EDT, 0.5h | A start in the gap moves forward by the gap |
+| D5 | 01:30–03:00 Sun | Working time on 2026-11-01 | 01:30 EDT–03:00 EST, 2.5h | A start in the overlap takes the earlier 01:30 |
+| D6 | 00–00 every day, `Europe/London` | `between(Sun 2026-03-29 00:00 GMT, Mon 00:00 BST)` | 23h | A 24-hour shift on a change day follows the clock |
+| D7 | 00–00 every day, holiday 2026-03-08 | `between(Sat 2026-03-07 00:00, Tue 2026-03-10 00:00)` | 48h | A holiday on a change day removes 23 hours |
+| D8 | 02:30–03:00 Sun | Working time on 2026-03-08 | None, 0h | A block that resolves to start after its end is empty |
+| D9 | 02:00–02:30 Sun | Working time on 2026-03-08 | 03:00–03:30 EDT, 0.5h | Both ends in the gap move forward together |
+
+## See also
+
+- [Rules](/docs/concepts/rules/): rules in different time zones, and holidays in the schedule's zone.
+- [Inputs and precision](/docs/concepts/inputs-and-precision/): which instants and zone objects each language accepts.
+- [Errors](/docs/concepts/errors/): the unknown-zone error.
+- [DESIGN.md: Time zones and DST](https://github.com/Karthik-beta/workclock/blob/main/DESIGN.md#time-zones-and-dst), the specification.
