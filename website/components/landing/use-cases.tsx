@@ -11,13 +11,13 @@ const useCases: { title: string; question: string; functions: ReactNode; href: s
         <Code>add</Code>, <Code>between</Code>
       </>
     ),
-    href: '/docs/',
+    href: '/docs/guides/support-slas/',
   },
   {
     title: 'Payroll and overtime',
     question: 'How many hours of a shift fell inside contracted time?',
     functions: <Code>between</Code>,
-    href: '/docs/',
+    href: '/docs/guides/payroll-and-overtime/',
   },
   {
     title: 'Staff rosters, including overnight shifts',
@@ -27,13 +27,13 @@ const useCases: { title: string; question: string; functions: ReactNode; href: s
         <Code>next_period</Code> / <Code>nextPeriod</Code>
       </>
     ),
-    href: '/docs/',
+    href: '/docs/guides/overnight-shifts/',
   },
   {
     title: 'Delivery ETAs that only count operating hours',
     question: 'When does a parcel arrive?',
     functions: <Code>add</Code>,
-    href: '/docs/',
+    href: '/docs/guides/delivery-etas/',
   },
 ];
 
