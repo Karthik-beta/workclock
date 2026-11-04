@@ -2,7 +2,6 @@ import type { Metadata } from 'next';
 import { Schedule } from 'workclock/web';
 import { Playground } from '@/components/playground/playground';
 import { SiteFooter } from '@/components/site-footer';
-import { SkipLink } from '@/components/skip-link';
 import { computeStrip, readmeInputs } from '@/lib/week-strip';
 import { initWorkclock } from '@/lib/workclock-build';
 
@@ -17,7 +16,6 @@ export default async function PlaygroundPage() {
   if (!result.ok) throw new Error(`The README scenario failed: ${result.message}`);
   return (
     <>
-      <SkipLink href="#main-content" />
       <div id="main-content" className="landing-container w-full py-12 lg:py-16">
         <h1 className="text-h1 text-text">Playground</h1>
         <p className="mt-3 max-w-[640px] text-lead text-text-2">

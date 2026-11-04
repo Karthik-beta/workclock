@@ -6,7 +6,6 @@ import { A, repoFile } from '@/components/landing/parts';
 import { SameAnswer } from '@/components/landing/same-answer';
 import { UseCases } from '@/components/landing/use-cases';
 import { SiteFooter } from '@/components/site-footer';
-import { SkipLink } from '@/components/skip-link';
 import { WeekStripDemo } from '@/components/week-strip/demo';
 import { repoUrl } from '@/lib/shared';
 import { computeStrip, readmeInputs } from '@/lib/week-strip';
@@ -29,7 +28,6 @@ export default async function HomePage() {
   const strip = await readmeStrip();
   return (
     <>
-      <SkipLink href="#main-content" />
       <div id="main-content" className="landing-container w-full pt-16 pb-16 md:pb-20 lg:pt-24 lg:pb-24">
         <section aria-labelledby="hero-title" className="flex flex-col gap-6">
           <h1 id="hero-title" className="text-display-sm text-balance text-text lg:text-display">
