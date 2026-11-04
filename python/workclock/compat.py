@@ -203,6 +203,7 @@ class HolidayRule(Rule):
 
     The dates are read once. A python-holidays object is filled in for every
     year from 1970 to 2100 first; later or earlier dates are not holidays.
+    One created with ``expand=False`` is read as it is.
     """
 
     def __init__(

@@ -49,8 +49,10 @@ businesstimedelta's absolute value, so existing code sees no change there.
   added to the list or object later, or a new `holidays` attribute, are not
   seen; businesstimedelta reads `holidays` on every call. A python-holidays
   object is filled in for every year from 1970 to 2100 first, and dates
-  outside that window are not holidays. Lists of `datetime` objects raise
-  `TypeError`; pass `date` objects.
+  outside that window are not holidays. An object created with
+  `expand=False` is not filled in, so it must already hold every year you
+  need, for example through `years=range(2026, 2031)`. Lists of `datetime`
+  objects raise `TypeError`; pass `date` objects.
 - **Working days** must be integers from 0 (Monday) to 6. Other entries raise
   `ValueError` when the rule is used; businesstimedelta ignored them, or
   matched `1.0` as Tuesday.
@@ -72,9 +74,9 @@ businesstimedelta's absolute value, so existing code sees no change there.
   `pytz.utc`; workclock does not depend on pytz. Zones may be IANA names,
   `zoneinfo.ZoneInfo`, pytz zones or `datetime.timezone.utc`. Fixed-offset
   `tzinfo` objects raise `TypeError`, because they have no IANA name.
-- **Operators with other types.** `BusinessTimeDelta == x` and
-  `BusinessTimeDelta - x` for unsupported `x` return `NotImplemented`, so
-  Python raises `TypeError`, instead of raising `AttributeError` or returning
-  `None`.
+- **Operators with other types.** `BusinessTimeDelta == x` is `False` for
+  anything but another `BusinessTimeDelta`; businesstimedelta raised
+  `AttributeError`. `BusinessTimeDelta - x` for unsupported `x` raises
+  `TypeError`; businesstimedelta returned `None`.
 - **Errors** are `workclock.WorkclockError` subclasses that also inherit from
   `ValueError` or `OverflowError`, so existing `except` clauses keep working.
