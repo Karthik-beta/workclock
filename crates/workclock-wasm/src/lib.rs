@@ -202,7 +202,7 @@ impl Schedule {
     /// @param t The instant to count from.
     /// @param ms Working time in milliseconds; a negative amount counts back.
     /// @returns The earliest instant with `ms` of working time after `t`, or
-    /// `t` itself when `ms` is zero.
+    /// `t` itself when `ms` is zero. A negative `ms` returns `sub(t, -ms)`.
     /// @throws {NoWorkingTimeError} If no working time is found within 366
     /// days, plus seven days per holiday date.
     /// @throws {OutOfRangeError} If `t` or the result is outside the supported
@@ -232,7 +232,7 @@ impl Schedule {
     /// @param ms Working time in milliseconds; a negative amount counts
     /// forward.
     /// @returns The latest instant with `ms` of working time before `t`, or
-    /// `t` itself when `ms` is zero.
+    /// `t` itself when `ms` is zero. A negative `ms` returns `add(t, -ms)`.
     /// @throws {NoWorkingTimeError} If no working time is found within 366
     /// days, plus seven days per holiday date.
     /// @throws {OutOfRangeError} If `t` or the result is outside the supported

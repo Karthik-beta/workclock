@@ -261,7 +261,7 @@ Finds the instant a given amount of working time after another. [Adding time](/d
 | `t` | `Instant` | The instant to count from. |
 | `ms` | `number` | Working time in milliseconds; a negative amount counts back. |
 
-Returns the earliest `Date` with exactly `ms` of working time between `t` and it, or `t` itself when `ms` is zero.
+Returns the earliest `Date` with exactly `ms` of working time between `t` and it, or `t` itself when `ms` is zero. A negative `ms` returns `sub(t, -ms)`, the latest `Date` before `t` with that much working time between them.
 
 | Throws | When |
 |---|---|
@@ -300,7 +300,7 @@ Finds the instant a given amount of working time before another. It takes the sa
 | `t` | `Instant` | The instant to count back from. |
 | `ms` | `number` | Working time in milliseconds; a negative amount counts forward. |
 
-Returns the latest `Date` with exactly `ms` of working time between it and `t`, or `t` itself when `ms` is zero.
+Returns the latest `Date` with exactly `ms` of working time between it and `t`, or `t` itself when `ms` is zero. A negative `ms` returns `add(t, -ms)`, the earliest `Date` after `t` with that much working time between them.
 
 In JavaScript:
 
