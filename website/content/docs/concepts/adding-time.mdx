@@ -3,7 +3,7 @@ title: Adding time
 description: Find the instant reached after adding or subtracting an amount of working time, with add and sub.
 ---
 
-`add(t, d)` returns the earliest instant at or after `t` with exactly `d` of working time between them. `sub(t, d)` returns the latest instant at or before `t` with exactly `d` of working time between them. This page covers both in Rust, Python and JavaScript.
+For a positive `d`, `add(t, d)` returns the earliest instant after `t` with exactly `d` of working time between them, and `sub(t, d)` returns the latest instant before `t` with exactly `d` of working time between them. A zero `d` returns `t`, and a negative `d` reverses the direction. This page covers both in Rust, Python and JavaScript.
 
 ## Add working time
 
@@ -109,7 +109,9 @@ Python's `add_many` and `sub_many`, and JavaScript's `addMany` and `subMany`, do
 
 For every `t` and `d`, `between(t, add(t, d))` is `d`: [Measuring time](/docs/concepts/measuring-time/) counts exactly the working time `add` used.
 
-The reverse, `sub(add(t, d), d)` returning `t`, holds only when `t` is inside working time. From outside, `sub` lands on the start of the working time that `add` used. On a 09:00–17:00 weekday schedule, adding 1 hour at 10:00 on a Saturday returns 10:00 on Monday, and subtracting 1 hour from that returns 09:00 on Monday, not Saturday (DESIGN.md A4 then A9).
+The reverse, `sub(add(t, d), d)` returning `t`, holds for a positive `d` only when `t` is inside working time. From outside, `sub` lands on the start of the working time that `add` used. On a 09:00–17:00 weekday schedule, adding 1 hour at 10:00 on a Saturday returns 10:00 on Monday, and subtracting 1 hour from that returns 09:00 on Monday, not Saturday (DESIGN.md A4 then A9).
+
+A zero `d` always comes back to `t`. A negative `d` counts back first, so it comes back to `t` only when working time runs up to `t`, which rules out a period's start. On the same schedule, adding -1 hour at 09:00 on Monday returns 16:00 on Friday, and subtracting -1 hour from that returns 17:00 on Friday, not Monday.
 
 ## When add and sub fail
 
@@ -118,7 +120,7 @@ The reverse, `sub(add(t, d), d)` returning `t`, holds only when `t` is inside wo
 | No working time within the search bound: 366 days, plus seven days per holiday date | `Error::NoWorkingTime` | `NoWorkingTimeError` | `NoWorkingTimeError` |
 | The result is outside the supported range, `-009999-01-02T01:59:59Z` to `9999-12-30T22:00:00Z` | `Error::OutOfRange` | `OutOfRangeError` | `OutOfRangeError` |
 
-A schedule that builds always has working time, so the search bound trips only when rules in different zones are kept apart by daylight saving time (DST) changes for more than a year, or, in theory, when decades of holidays all fall on the only working day. Python also raises `OutOfRangeError` for a result outside the years 1 to 9999 of `datetime`, or an amount that does not fit in 64-bit microseconds. Every error class is on [Errors](/docs/concepts/errors/).
+After a schedule builds, the search bound trips only when rules in different zones are kept apart by daylight saving time (DST) changes for more than a year (DESIGN.md P22), or, in theory, when decades of holidays all fall on the only working day. Python also raises `OutOfRangeError` for a result outside the years 1 to 9999 of `datetime`, or an amount that does not fit in 64-bit microseconds. Every error class is on [Errors](/docs/concepts/errors/).
 
 ## Edge cases
 
