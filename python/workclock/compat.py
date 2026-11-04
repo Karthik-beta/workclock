@@ -113,10 +113,10 @@ class Rule:
         Rules are mutable, so the schedule is built again whenever the
         attributes it is built from have changed since the last call.
         """
-        _require_supported(self)
         key = self._key()
         built = self._built
         if built is None or built[0] != key:
+            _require_supported(self)
             built = self._built = (key, self._build())
         return built[1]
 
@@ -491,13 +491,16 @@ def _holiday_dates(holidays: Iterable[_dt.date]) -> set[_dt.date]:
 
 
 def _require_supported(rule: Rule) -> None:
-    # The engine builds a rule from its attributes, so it would silently
-    # ignore a subclass's own next(), previous() or difference().
     cls = type(rule)
-    base = next((c for c in cls.__mro__ if c in _ENGINE_RULES), None)
-    if base is None or any(
-        getattr(cls, name) is not getattr(base, name) for name in _COMPUTED
-    ):
+    supported = _SUPPORTED.get(cls)
+    if supported is None:
+        # The engine builds a rule from its attributes, so it would silently
+        # ignore a subclass's own next(), previous() or difference().
+        base = next((c for c in cls.__mro__ if c in _ENGINE_RULES), None)
+        supported = _SUPPORTED[cls] = base is not None and all(
+            getattr(cls, name) is getattr(base, name) for name in _COMPUTED
+        )
+    if not supported:
         raise TypeError(
             f"{cls.__name__} is not supported by workclock.compat, which "
             "runs WorkDayRule, LunchTimeRule, HolidayRule and Rules on its engine"
@@ -506,6 +509,7 @@ def _require_supported(rule: Rule) -> None:
 
 _ENGINE_RULES = (LunchTimeRule, WorkDayRule, HolidayRule, Rules)
 _COMPUTED = ("next", "previous", "difference")
+_SUPPORTED: dict[type, bool] = {}
 
 
 def _unsupported(rule: Rule, role: str) -> TypeError:
