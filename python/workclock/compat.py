@@ -113,6 +113,7 @@ class Rule:
         Rules are mutable, so the schedule is built again whenever the
         attributes it is built from have changed since the last call.
         """
+        _require_supported(self)
         key = self._key()
         built = self._built
         if built is None or built[0] != key:
@@ -124,10 +125,7 @@ class Rule:
         return None
 
     def _build(self) -> Schedule:
-        raise TypeError(
-            f"{type(self).__name__} is not supported by workclock.compat, which "
-            "runs WorkDayRule, LunchTimeRule, HolidayRule and Rules on its engine"
-        )
+        raise NotImplementedError
 
     def _add(self, dt: _dt.datetime, td: _dt.timedelta) -> _dt.datetime:
         if td == _ZERO:
@@ -231,6 +229,7 @@ class HolidayRule(Rule):
 
         Raises `NoWorkingTimeError` if there is no holiday after ``dt``.
         """
+        _require_supported(self)
         dt = localize_unlocalized_dt(dt)
         t = _micros(dt)
         # One date of slack: bounds are midnights resolved in the rule's zone,
@@ -248,6 +247,7 @@ class HolidayRule(Rule):
 
         Raises `NoWorkingTimeError` if there is no holiday before ``dt``.
         """
+        _require_supported(self)
         dt = localize_unlocalized_dt(dt)
         t = _micros(dt)
         # One date of slack, as in next().
@@ -264,6 +264,7 @@ class HolidayRule(Rule):
         Raises `OutOfRangeError` if either datetime is outside the supported
         range.
         """
+        _require_supported(self)
         a, b = sorted(
             [
                 _micros(localize_unlocalized_dt(dt1)),
@@ -281,6 +282,7 @@ class HolidayRule(Rule):
         return BusinessTimeDelta(self, hours=result.days * 24, seconds=result.seconds)
 
     def _add(self, dt: _dt.datetime, td: _dt.timedelta) -> _dt.datetime:
+        _require_supported(self)
         if td == _ZERO:
             return self.next(dt)[0]
         dt = localize_unlocalized_dt(dt)
@@ -295,6 +297,7 @@ class HolidayRule(Rule):
             x = end
 
     def _sub(self, dt: _dt.datetime, td: _dt.timedelta) -> _dt.datetime:
+        _require_supported(self)
         if td == _ZERO:
             return self.previous(dt)[1]
         dt = localize_unlocalized_dt(dt)
@@ -346,6 +349,8 @@ class Rules(Rule):
 
     def _build(self) -> Schedule:
         engine_rules: list[WorkDay | Break | Holidays] = []
+        for rule in self.available_rules + self.unavailable_rules:
+            _require_supported(rule)
         for rule in self.available_rules:
             if not isinstance(rule, WorkDayRule):
                 raise _unsupported(rule, "working time")
@@ -483,6 +488,24 @@ def _holiday_dates(holidays: Iterable[_dt.date]) -> set[_dt.date]:
             raise TypeError(f"holidays must be datetime.date objects, got {day!r}")
         dates.add(day)
     return dates
+
+
+def _require_supported(rule: Rule) -> None:
+    # The engine builds a rule from its attributes, so it would silently
+    # ignore a subclass's own next(), previous() or difference().
+    cls = type(rule)
+    base = next((c for c in cls.__mro__ if c in _ENGINE_RULES), None)
+    if base is None or any(
+        getattr(cls, name) is not getattr(base, name) for name in _COMPUTED
+    ):
+        raise TypeError(
+            f"{cls.__name__} is not supported by workclock.compat, which "
+            "runs WorkDayRule, LunchTimeRule, HolidayRule and Rules on its engine"
+        )
+
+
+_ENGINE_RULES = (LunchTimeRule, WorkDayRule, HolidayRule, Rules)
+_COMPUTED = ("next", "previous", "difference")
 
 
 def _unsupported(rule: Rule, role: str) -> TypeError:
