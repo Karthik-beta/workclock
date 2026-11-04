@@ -218,3 +218,49 @@ def test_unsupported_rules_are_rejected() -> None:
         )
     with pytest.raises(TypeError, match=r"datetime\.date"):
         compat.HolidayRule([utc(2026, 1, 1)])
+
+
+def test_subclasses_that_compute_blocks_are_rejected() -> None:
+    class LateStart(compat.WorkDayRule):
+        def next(
+            self, dt: datetime.datetime
+        ) -> tuple[datetime.datetime, datetime.datetime]:
+            start, end = super().next(dt)
+            return start + datetime.timedelta(hours=1), end
+
+    class Lunch(compat.LunchTimeRule):
+        def previous(
+            self, dt: datetime.datetime
+        ) -> tuple[datetime.datetime, datetime.datetime]:
+            return super().previous(dt)
+
+    class Holidays(compat.HolidayRule):
+        def difference(
+            self, dt1: datetime.datetime, dt2: datetime.datetime
+        ) -> compat.BusinessTimeDelta:
+            return super().difference(dt1, dt2)
+
+    workday = compat.WorkDayRule(datetime.time(9), datetime.time(17))
+    new_year = [datetime.date(2026, 1, 1)]
+    for rule in [
+        LateStart(datetime.time(9), datetime.time(17)),
+        Holidays(new_year),
+        compat.Rules([LateStart()]),
+        compat.Rules([workday, Lunch()]),
+        compat.Rules([workday, Holidays(new_year)]),
+    ]:
+        with pytest.raises(TypeError, match="not supported"):
+            rule.difference(utc(2026, 1, 5), utc(2026, 1, 6))
+
+
+def test_subclasses_that_only_set_defaults_run_as_their_parent() -> None:
+    class Office(compat.WorkDayRule):
+        def __init__(self) -> None:
+            super().__init__(datetime.time(9), datetime.time(17))
+
+    class Combined(compat.Rules):
+        pass
+
+    for rule in [Office(), Combined([Office()]), compat.Rules([Office()])]:
+        delta = rule.difference(utc(2026, 1, 5, 9), utc(2026, 1, 5, 12))
+        assert delta.timedelta == datetime.timedelta(hours=3)

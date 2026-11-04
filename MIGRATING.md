@@ -67,9 +67,11 @@ businesstimedelta's absolute value, so existing code sees no change there.
   holiday that starts at `dt`.
 - **Supported rules.** `Rules` accepts `WorkDayRule` and `LunchTimeRule` as
   working time, and `WorkDayRule`, `LunchTimeRule` and `HolidayRule` as time
-  off. Subclasses of `Rule` that compute their own blocks, a `HolidayRule`
-  used as working time, and nested `Rules` raise `TypeError`, because rules
-  run on the engine rather than as Python code.
+  off. Subclasses of `Rule` that compute their own blocks, subclasses of
+  these classes that override `next`, `previous` or `difference`, a
+  `HolidayRule` used as working time, and nested `Rules` raise `TypeError`
+  when they are used, because rules run on the engine rather than as Python
+  code.
 - **Default zone.** `tz` defaults to `datetime.timezone.utc` instead of
   `pytz.utc`; workclock does not depend on pytz. Zones may be IANA names,
   `zoneinfo.ZoneInfo`, pytz zones or `datetime.timezone.utc`. Fixed-offset

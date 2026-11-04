@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Python compat: a subclass of `WorkDayRule`, `LunchTimeRule` or
+  `HolidayRule` that overrides `next()`, `previous()` or `difference()` raises
+  `TypeError`, as other `Rule` subclasses that compute their own blocks do. It
+  used to run as its parent class and ignore the override.
+
 ## [0.1.4] - 2026-10-30
 
 ### Changed
