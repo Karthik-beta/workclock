@@ -123,7 +123,7 @@ HolidayRule(
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `holidays` | `Iterable[date]` | Required | `datetime.date` objects, or a python-holidays object. Read once, when the rule is created. A python-holidays object is first filled in for every year from 1970 to 2100, unless it was created with `expand=False`; outside those years, only the dates it already holds are holidays. Stored as `holidays`. |
+| `holidays` | `Iterable[date]` | Required | `datetime.date` objects, or a python-holidays object. Read once, when the rule is created. A python-holidays object is first filled in for every year from 1970 to 2100. Outside those years, and in an object created with `expand=False`, only the dates it already holds are holidays. Stored as `holidays`. |
 | `tz` | `str` or `tzinfo` | `datetime.timezone.utc` | The rule's time zone, as for `Rule`. |
 | `time_off` | `bool` | `True` | Whether the rule is time off. A `HolidayRule` used as working time in `Rules` raises `TypeError`. |
 
