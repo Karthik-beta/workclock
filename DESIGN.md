@@ -166,9 +166,11 @@ period lands on the period's end, not on the start of the next period (A2).
 For `sub` the result lands on a period's start.
 
 For every `t` and `d`, `between(t, add(t, d)) = d`. The reverse,
-`sub(add(t, d), d) = t`, holds only when `t` is inside working time: from
-outside, `sub` lands on the start of the working time that `add` consumed
-(A4 then A9).
+`sub(add(t, d), d) = t`, holds for `d > 0` only when `t` is inside working
+time: from outside, `sub` lands on the start of the working time that `add`
+consumed (A4 then A9). It always holds for `d = 0`. For `d < 0` it holds only
+when working time runs up to `t`, so not at a period's start: on 9–17 Mon–Fri,
+`add(Mon 09:00, -1h)` is Fri 16:00, and `sub` of `-1h` from that is Fri 17:00.
 
 | ID | Schedule | Query | Result |
 |---|---|---|---|
