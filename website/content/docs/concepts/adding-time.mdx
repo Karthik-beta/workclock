@@ -120,7 +120,7 @@ A zero `d` always comes back to `t`. A negative `d` counts back first, so it com
 | No working time within the search bound: 366 days, plus seven days per holiday date | `Error::NoWorkingTime` | `NoWorkingTimeError` | `NoWorkingTimeError` |
 | The result is outside the supported range, `-009999-01-02T01:59:59Z` to `9999-12-30T22:00:00Z` | `Error::OutOfRange` | `OutOfRangeError` | `OutOfRangeError` |
 
-After a schedule builds, the search bound trips only when rules in different zones are kept apart by daylight saving time (DST) changes for more than a year (DESIGN.md P22), or, in theory, when decades of holidays all fall on the only working day. Python also raises `OutOfRangeError` for a result outside the years 1 to 9999 of `datetime`, or an amount that does not fit in 64-bit microseconds. Every error class is on [Errors](/docs/concepts/errors/).
+After a schedule builds, the search bound trips only when a change to a zone's daylight saving time (DST) rules makes a break in that zone cover all the working hours for more than a year (DESIGN.md P22), or, in theory, when decades of holidays all fall on the only working day. Python also raises `OutOfRangeError` for a result outside the years 1 to 9999 of `datetime`, or an amount that does not fit in 64-bit microseconds. Every error class is on [Errors](/docs/concepts/errors/).
 
 ## Edge cases
 
