@@ -6,9 +6,10 @@ live in the Python and JavaScript suites). The Rust, Python and JavaScript test
 suites all run it, so the bindings cannot disagree on these cases.
 
 - `schedules` maps a name to a schedule: a default `zone`, and lists of
-  `workdays`, `breaks` and `holidays`. A rule has `start` and `end` (`HH:MM`),
-  `days` (`mon` … `sun`) and an optional `zone`. A holiday entry has `dates`,
-  inclusive `ranges` of dates, or both, and an optional `zone`.
+  `workdays`, `breaks`, `holidays` and `specialdays`. A rule has `start` and
+  `end` (`HH:MM`), `days` (`mon` … `sun`) and an optional `zone`. A holiday
+  entry has `dates`, inclusive `ranges` of dates, or both, and an optional
+  `zone`. A special day has `start`, `end`, `dates` and an optional `zone`.
 - Each case has an `id` matching DESIGN.md, a `schedule` name and an `op`:
   - `between` with instants `a` and `b`; `expect.seconds` is the signed result.
   - `add` or `sub` with an instant `t` and a signed `seconds`; `expect.instant`
