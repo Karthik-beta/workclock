@@ -126,7 +126,7 @@ For a delivery leg with different hours, such as a courier that works on Saturda
 - **An order placed during the break** starts counting at 13:00: 1 hour from 12:30 ends at 14:00 (DESIGN.md K4).
 - **Different hours on Saturdays.** Add a second `WorkDay` rule for Saturday with its own hours; working time is the union of all `WorkDay` rules ([Schedules](/docs/concepts/schedules/)).
 - **Holidays.** Each date in `Holidays` removes 00:00 to the next 00:00 in the schedule's time zone ([Rules: Holidays](/docs/concepts/rules/#holidays)).
-- **Different hours on one date.** A `SpecialDay` replaces the `WorkDay` shifts that start on its dates, so closing at 13:00 on Christmas Eve is one rule with 09:00–13:00 on 2026-12-24 ([Rules: SpecialDay](/docs/concepts/rules/#specialday)).
+- **Different hours on one date.** A `SpecialDay` replaces the `WorkDay` shifts that start on its dates, and the lunch break still applies, so closing at 12:00 on Christmas Eve is one rule with 08:00–12:00 on 2026-12-24 ([Rules: SpecialDay](/docs/concepts/rules/#specialday)).
 - **Daylight saving time (DST).** Operating hours are wall-clock times, so 08:00 stays 08:00 London time after the clocks change. An order placed at 15:00 on Friday 27 March 2026 is dispatched at 11:00 on Monday 30 March, London time (BST), which is 10:00 UTC ([Time zones and DST](/docs/concepts/time-zones-and-dst/)).
 
 What 0.2 does not do ([DESIGN.md: Scope](https://github.com/Karthik-beta/workclock/blob/main/DESIGN.md#scope)):
