@@ -16,7 +16,7 @@ use workclock::{Error, Schedule};
 
 use support::engine::{build, error_name};
 use support::oracle::{Oracle, OracleError};
-use support::spec::ScheduleSpec;
+use support::spec::{RuleSpec, ScheduleSpec, SpecialDaySpec};
 use support::strategies::{duration, moment, schedule, span};
 
 fn oracle_error_name(error: OracleError) -> &'static str {
@@ -72,6 +72,55 @@ fn engine_and_oracle_agree_at_the_end_of_the_range() {
     assert_eq!(oracle.add(t, hour), Ok(t + hour));
     assert_eq!(engine.add(t, 3 * hour), Err(Error::OutOfRange));
     assert_eq!(oracle.add(t, 3 * hour), Err(OracleError::OutOfRange));
+}
+
+/// Apia skipped 2011-12-30, so a shift that starts on 2011-12-29 and ends at
+/// 06:00 reaches 2011-12-31 06:00, two local dates after its own.
+fn apia_overnight(workday_days: &[&str], special_dates: &[&str]) -> ScheduleSpec {
+    let strings = |items: &[&str]| items.iter().map(ToString::to_string).collect();
+    let night = |days: &[&str]| RuleSpec {
+        start: "22:00".into(),
+        end: "06:00".into(),
+        days: strings(days),
+        zone: None,
+    };
+    ScheduleSpec {
+        zone: "Pacific/Apia".into(),
+        workdays: vec![night(workday_days)],
+        breaks: Vec::new(),
+        holidays: Vec::new(),
+        specialdays: if special_dates.is_empty() {
+            Vec::new()
+        } else {
+            vec![SpecialDaySpec {
+                start: "22:00".into(),
+                end: "06:00".into(),
+                dates: strings(special_dates),
+                zone: None,
+            }]
+        },
+    }
+}
+
+fn assert_apia_hour_is_worked(spec: &ScheduleSpec) {
+    let (lo, hi) = (
+        "2011-12-30T15:00:00Z".parse::<Timestamp>().unwrap(),
+        "2011-12-30T16:00:00Z".parse::<Timestamp>().unwrap(),
+    );
+    let engine = build(spec).unwrap();
+    let oracle = Oracle::build(spec).unwrap();
+    assert_eq!(engine.between(lo, hi), SignedDuration::from_hours(1));
+    assert_eq!(oracle.between(lo, hi), SignedDuration::from_hours(1));
+}
+
+#[test]
+fn a_special_block_can_reach_two_local_dates_past_its_own() {
+    assert_apia_hour_is_worked(&apia_overnight(&["mon"], &["2011-12-29"]));
+}
+
+#[test]
+fn a_workday_shift_can_reach_two_local_dates_past_its_own() {
+    assert_apia_hour_is_worked(&apia_overnight(&["thu"], &[]));
 }
 
 proptest! {
