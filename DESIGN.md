@@ -16,9 +16,8 @@ workclock answers two questions:
 - Which instant is reached after adding or subtracting an amount of working
   time?
 
-Not in 0.1.1: converting a duration into business days or weeks (upstream
-[seppemans/businesstimedelta#3](https://github.com/seppemans/businesstimedelta/issues/3)),
-and per-date overrides of working hours.
+Not in 0.2.0: converting a duration into business days or weeks (upstream
+[seppemans/businesstimedelta#3](https://github.com/seppemans/businesstimedelta/issues/3)).
 
 ## Model
 
@@ -27,9 +26,11 @@ and per-date overrides of working hours.
 - A **duration** is elapsed real time, not wall-clock time. It can be negative.
 - A **block** is a half-open interval of instants, `[start, end)`.
 - A **rule** produces blocks. It is either *available* (working time) or
-  *time off*.
+  *time off*. A special day is available, and also replaces the WorkDay
+  shifts that start on its dates.
 - A **schedule** combines rules. Its working time is the union of all
-  available blocks minus the union of all time-off blocks.
+  available blocks, without the shifts that special days replace, minus the
+  union of all time-off blocks.
 - A **period** is a maximal block of working time.
 
 Every operation is defined on that working-time set, so the order in which
@@ -106,10 +107,70 @@ on a holiday keeps the part after the next midnight.
 | HO2 | same | `between(Tue 22:00, Wed 06:00)` | 6h |
 | HO3 | same | `add(Mon 22:00, 3h)` | Wed 01:00 |
 
+### SpecialDay
+
+`start`, `end`, `dates` and a time zone. A special day gives some dates other
+working hours, such as a short day before a holiday.
+
+- For each local date in `dates`, the rule produces the block from `start` on
+  that date to `end`, exactly as WorkDay does for a matching weekday: if
+  `end <= start` the block is overnight, so `start == end` is 24 hours, and
+  DST changes resolve the same way.
+- A WorkDay shift whose date is a date of any SpecialDay rule is not
+  produced. A shift's date is the local date it starts on in its own
+  WorkDay's zone, and it is compared with `dates` as a calendar date, whatever
+  the special day's zone (S18).
+- A shift that starts on the date before and runs into a special date is kept
+  (S6).
+- Breaks and holidays still apply: on a holiday in the same zone a special
+  day adds no time before the next midnight (S11).
+- Several SpecialDay rules on one date add up, which is how split hours are
+  written (S13). Duplicate dates are ignored, and a rule without dates has no
+  effect.
+
+Working time is therefore the WorkDay shifts that do not start on a special
+date, plus the SpecialDay blocks, minus the breaks and holidays.
+
+| ID | Schedule | Query | Result |
+|---|---|---|---|
+| S1 | 9–17 Mon–Fri, special day 8–12 on Wed 2026-01-07 | `between(Wed 00:00, Thu 00:00)` | 4h |
+| S2 | same | `add(Tue 16:00, 2h)` | Wed 09:00 |
+| S3 | same | `sub(Thu 10:00, 2h)` | Wed 11:00 |
+| S4 | 9–17 Mon–Fri, special day 10–14 on Sat 2026-01-10 | `between(Fri 16:00, Mon 2026-01-12 10:00)` | 6h |
+| S5 | same | `add(Fri 17:00, 2h)` | Sat 12:00 |
+| S6 | 22–06 Mon–Fri, special day 22–02 on Tue 2026-01-06 | `between(Tue 00:00, Tue 06:00)` (Monday's shift) | 6h |
+| S7 | same | `between(Tue 22:00, Wed 06:00)` | 4h |
+| S8 | same | `add(Tue 05:00, 2h)` | Tue 23:00 |
+| S9 | 9–17 Mon–Fri, break 12–13 Mon–Fri, special day 8–14 on Wed 2026-01-07 | `between(Wed 00:00, Thu 00:00)` | 5h |
+| S10 | same | `next_period(Wed 12:30)` (inside the break) | Wed 13:00–14:00 |
+| S11 | 9–17 Mon–Fri, holiday Wed 2026-01-07, special day 8–12 on Wed 2026-01-07 | `between(Wed 00:00, Thu 00:00)` | 0h |
+| S12 | same | `add(Tue 16:00, 2h)` | Thu 10:00 |
+| S13 | 9–17 Mon–Fri, special days 8–12 and 14–18 on Wed 2026-01-07 | `between(Wed 00:00, Thu 00:00)` | 8h |
+| S14 | same | `next_period(Wed 12:00)` | Wed 14:00–18:00 |
+| S15 | same | `previous_period(Wed 14:00)` | Wed 08:00–12:00 |
+| S16 | 9–17 Mon–Fri America/New_York, special day 01:00–05:00 on Sun 2026-03-08 and Sun 2026-11-01 | `between(Sun 2026-03-08 00:00 EST, Mon 00:00 EDT)` | 3h |
+| S17 | same | `between(Sun 2026-11-01 00:00 EDT, Mon 00:00 EST)` | 5h |
+| S18 | 9–17 Mon–Fri Asia/Kolkata, special day 10–12 on Wed 2026-01-07 in America/New_York | `between(Wed 00:00, Thu 00:00)` | 2h |
+| S19 | special day 8–12 on Wed 2026-01-07 only | build | no-working-time error |
+| S20 | 9–17 Mondays only, break 12–13 Mondays only, special day 12–13 on every Monday from 2026-01-12 to 2027-03-15 (62 dates) | `add(Tue 2026-01-06 00:00, 1h)` | Mon 2027-03-22 10:00 |
+| S21 | same | `sub(Mon 2027-03-22 09:00, 1h)` | Mon 2026-01-05 16:00 |
+
+In S6–S8, Monday's shift runs into Tuesday and is kept, and Tuesday's shift is
+replaced by the shorter special night. In S16 the special day loses an hour to
+the spring change and in S17 gains one at the autumn change, like D1 and D2.
+In S18 Kolkata's Wednesday shift starts at 22:30 on Tuesday in New York, but
+its own date is Wednesday, so the special day replaces it; only the special
+day's 15:00–17:00 UTC remains. In S20 every special Monday falls inside the
+break, so no Monday from 2026-01-12 to 2027-03-15 is worked. The gap of 440
+days is longer than 366 days but inside the search bound of 366 + 7 × 62 = 800
+days ([Errors and termination](#errors-and-termination)).
+
 ### Combining rules
 
 Available blocks are merged, so overlapping rules never count time twice.
-Time-off blocks are subtracted after merging.
+WorkDay shifts that start on a special date are left out before merging, and
+time-off blocks are subtracted after merging, so breaks and holidays apply on
+special days too.
 
 | ID | Schedule | Query | Result |
 |---|---|---|---|
@@ -326,19 +387,25 @@ Library code does not panic.
 
 - **No working time.** Building a schedule fails if it has no available rule,
   or if its available time minus its breaks is empty over a 14-day reference
-  window (Monday 2001-01-01 onward, UTC). Holidays are excluded from this
-  check because there are finitely many of them.
+  window (Monday 2001-01-01 onward, UTC). Holidays and special days are
+  excluded from this check because there are finitely many of them: the check
+  ignores both the special days' blocks and the shifts they replace. A
+  schedule whose only available rules are special days therefore fails to
+  build (S19).
 - **Search bound.** `add`, `sub`, `next_period` and `previous_period` stop
   with the same error if they cross 366 days, plus seven days per holiday
-  date, without finding working time. Without holidays, a schedule whose
-  rules share one zone repeats every week, except that a DST change can skip
-  a week's working time (D8), which happens at most twice a year. A holiday
-  removes one day of calendar time, which can hide one week's working time
-  (E7, E8), so each date can lengthen a gap by at most a week. After a
-  successful build the bound can therefore trip only for schedules whose rules
-  use different zones whose DST changes keep them apart for longer than a
-  year, or, in theory, for decades of holidays that all fall on the only
-  working day.
+  date and per distinct special date, without finding working time. Without
+  holidays and special days, a schedule whose rules share one zone repeats
+  every week, except that a DST change can skip a week's working time (D8),
+  which happens at most twice a year. A holiday removes one day of calendar
+  time, which can hide one week's working time (E7, E8). A special date
+  replaces the shifts of one date and adds blocks that end within two dates,
+  so like a holiday it can hide at most one week's working time (S20, S21).
+  Each date can therefore lengthen a gap by at most a week. After a
+  successful build the bound can trip only for schedules whose rules use
+  different zones whose DST changes keep them apart for longer than a year,
+  or, in theory, for decades of holidays that all fall on the only working
+  day.
 - **Past the last holiday.** Holidays are a finite set; searching beyond the
   last date simply finds no more time off
   ([seppemans/businesstimedelta#8](https://github.com/seppemans/businesstimedelta/issues/8),
@@ -468,10 +535,10 @@ speed-ups over businesstimedelta stayed within about 6%.
 
 **Algorithm.** The engine computes working time a week at a time: it builds
 the week's intervals from every rule and subtracts breaks and holidays. A
-week with no DST transition and no holiday near it is the same as the week
-before, so a long span adds the previous week's total instead of rebuilding
-it. The cost of a span therefore depends on how many of its weeks hold
-holidays or DST changes, not on its length. businesstimedelta walks the span
+week with no DST transition, holiday or special day near it is the same as
+the week before, so a long span adds the previous week's total instead of
+rebuilding it. The cost of a span therefore depends on how many of its weeks
+hold holidays, special days or DST changes, not on its length. businesstimedelta walks the span
 one period at a time in Python.
 
 **Against the standard library.** The hand-written loop builds two intervals
@@ -511,4 +578,6 @@ crossing is cheap: a loop is only about 5% slower than `betweenMany` on
 | DST disambiguation | compatible | Same as jiff, RFC 5545 and Temporal, so the three bindings agree with their ecosystems. |
 | Holiday zone default | schedule's zone | Avoids the UTC/local mismatch behind upstream issue 9. |
 | python-holidays objects | typed `Holidays`: only the years the object holds, and `ValueError` if it holds none; compat `HolidayRule`: every year from 1970 to 2100 first | Keeps "convert once at construction"; no per-date or per-year FFI. Rejecting an object with no years stops it from silently removing nothing. Compat fills in years because upstream code passes objects that fill them in on demand. |
-| Duration-to-business-days (upstream issue 3) | not in 0.1.1 | A formatting feature, not a correctness fix. |
+| Special day vs breaks and holidays | breaks and holidays still apply | Time off always wins, as for every other available rule, so a special day never depends on rules for its neighbouring dates. Working on a holiday is already written by leaving the date out of `Holidays` (ADR 0011). |
+| Special day vs WorkDay shifts | replaces the shifts that start on its dates | A shift belongs to the date it starts on, so the night shift that runs into a special date is kept. Replacing the whole calendar day would cut it in half (ADR 0011). |
+| Duration-to-business-days (upstream issue 3) | not in 0.2.0 | A formatting feature, not a correctness fix. |
