@@ -206,13 +206,15 @@ class Shifts(Blocks):
         raise NotImplementedError
 
     def blocks_near(self, today: date) -> list[Block]:
-        """A shift belongs to the date it starts on, so `t` can only fall in the
-        shift of its own local date or of the day before.
+        """A shift belongs to the date it starts on and nominally ends on the
+        next date. A zone gap of up to 24 hours (Pacific/Apia skipped
+        2011-12-30) can move that end one date later, so `t` can fall in the
+        shift of its own local date or of either of the two days before.
         """
         overnight = self.end <= self.start
         return [
             (resolve(d, self.start, self.tz), resolve(d, self.end, self.tz, overnight))
-            for d in dates_around(today, before=1, after=0)
+            for d in dates_around(today, before=2, after=0)
             if self.on(d)
         ]
 
