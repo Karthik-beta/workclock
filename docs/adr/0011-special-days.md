@@ -42,10 +42,11 @@ zone that defaults to the schedule's, as specified in
 - A WorkDay shift whose start date, in its own WorkDay's zone, is a date of
   any SpecialDay rule is not produced. Dates compare as calendar dates. A
   shift that starts the date before and runs into a special date is kept.
-- Breaks and holidays still apply. A holiday removes its date from midnight
-  to midnight in its own zone, so a special day on that date in the same zone
-  adds no time before the next midnight; an overnight special day keeps its
-  hours after it. Several special days on one date add up.
+- Breaks and holidays still apply: they remove the part of a special-day
+  block that they overlap. A holiday covers its date from midnight to
+  midnight in its own zone, so a special day on a holiday in the same zone
+  keeps only the hours that an overnight block runs past midnight. Several
+  special days on one date add up.
 - Special days take no part in the build check, and each distinct special
   date adds seven days to the search bound, as each holiday date does.
 
@@ -61,11 +62,12 @@ and `{ type: "specialday", start, end, dates, timeZone }` in JavaScript.
 - Working time stays the available blocks minus the time off, so rule order
   never matters and breaks, holidays and DST behave on special days as on any
   other date.
-- A special day on a holiday in the same zone adds no working time on that
-  date, but it still replaces the shifts that start on the date, so a night
-  shift loses the hours after midnight that the holiday alone would keep. Users who expect
-  a special day to open the holiday, as in ule-hours, have to remove the date
-  from `Holidays`.
+- A special day on a holiday in the same zone adds no time on that date, but
+  it still replaces the shifts that start on the date. A night shift then
+  loses the hours after midnight that the holiday alone would keep, except
+  where the special day itself runs past midnight. Users who expect a special
+  day to open the holiday, as in ule-hours, have to remove the date from
+  `Holidays`.
 - A special date replaces the shifts of every WorkDay in the schedule. A
   schedule cannot keep one WorkDay's shifts and replace another's on the same
   date.
