@@ -32,7 +32,9 @@ if TYPE_CHECKING:
 
 _T = TypeVar("_T")
 _TimeTuple = tuple[int, int, int, int]
+_DateTuple = tuple[int, int, int]
 _HoursSpec = tuple[_TimeTuple, _TimeTuple, list[int], str | None]
+_SpecialDaySpec = tuple[_TimeTuple, _TimeTuple, list[_DateTuple], str | None]
 
 _EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 _MICROSECOND = timedelta(microseconds=1)
@@ -93,7 +95,8 @@ def _batch_errors(start: Callable[[int], object]) -> Iterator[None]:
 
 def _search_failed(start: object) -> str:
     return (
-        f"no working time within 366 days, plus seven days per holiday date, of {start}"
+        "no working time within 366 days, plus seven days per holiday date and "
+        f"per special date, of {start}"
     )
 
 
@@ -107,6 +110,23 @@ def _time_tuple(value: time) -> _TimeTuple:
     if value.tzinfo is not None:
         raise ValueError(f"{value!r} has a tzinfo; set the rule's time_zone instead")
     return (value.hour, value.minute, value.second, value.microsecond)
+
+
+def _date_set(dates: Iterable[date], items: str) -> frozenset[date]:
+    """Read ``dates`` once, rejecting a string and anything but dates."""
+    if isinstance(dates, str):
+        raise TypeError(
+            f"dates must be a list of datetime.date objects, not the string {dates!r}"
+        )
+    result = frozenset(dates)
+    for value in result:
+        if isinstance(value, datetime) or not isinstance(value, date):
+            raise TypeError(f"{items} must be datetime.date objects, got {value!r}")
+    return result
+
+
+def _date_tuples(dates: frozenset[date]) -> list[_DateTuple]:
+    return [(d.year, d.month, d.day) for d in sorted(dates)]
 
 
 def _micros(value: datetime) -> int:
@@ -270,56 +290,105 @@ class Holidays:
 
     dates: frozenset[date]
     time_zone: str | None
-    _sorted_dates: list[tuple[int, int, int]] = field(
-        init=False, repr=False, compare=False
-    )
+    _sorted_dates: list[_DateTuple] = field(init=False, repr=False, compare=False)
 
     def __init__(
         self, dates: Iterable[date], *, time_zone: str | tzinfo | None = None
     ) -> None:
-        if isinstance(dates, str):
-            raise TypeError(
-                "dates must be a list of datetime.date objects, "
-                f"not the string {dates!r}"
-            )
         if isinstance(dates, dict) and not getattr(dates, "years", True):
             raise ValueError(
                 "the python-holidays object holds no years, so it lists no "
                 "dates; create it with years=..., such as years=range(2026, 2031)"
             )
-        dates = frozenset(dates)
-        for value in dates:
-            if isinstance(value, datetime) or not isinstance(value, date):
-                raise TypeError(
-                    f"holidays must be datetime.date objects, got {value!r}"
-                )
+        dates = _date_set(dates, "holidays")
         object.__setattr__(self, "dates", dates)
         object.__setattr__(self, "time_zone", _optional_zone(time_zone))
-        object.__setattr__(
-            self, "_sorted_dates", [(d.year, d.month, d.day) for d in sorted(dates)]
-        )
+        object.__setattr__(self, "_sorted_dates", _date_tuples(dates))
 
-    def _spec(self) -> tuple[list[tuple[int, int, int]], str | None]:
+    def _spec(self) -> tuple[list[_DateTuple], str | None]:
         return (self._sorted_dates, self.time_zone)
 
 
-Rule = WorkDay | Break | Holidays
-"""Any rule a `Schedule` takes: a `WorkDay`, `Break` or `Holidays`."""
+@dataclass(frozen=True, init=False)
+class SpecialDay:
+    """Other working hours on some dates, such as a short day before a holiday.
+
+    On each local date in ``dates``, the rule makes the time from ``start`` to
+    ``end`` available for work, exactly as a `WorkDay` does on a matching
+    weekday, overnight shifts included. It replaces every `WorkDay` shift
+    that starts on one of its dates, compared as calendar dates in that
+    `WorkDay`'s own zone; a shift that starts the date before is kept.
+
+    Breaks and holidays still apply, and several special days on one date add
+    up. ``dates`` is read once and duplicates are ignored. ``time_zone`` defaults
+    to the schedule's. Special days do not count as working hours when a
+    schedule is built, so a schedule of special days alone raises
+    `NoWorkingTimeError`.
+
+    Raises `TypeError` if ``start`` or ``end`` is not a ``datetime.time``,
+    ``dates`` is a string or holds anything but ``datetime.date`` objects,
+    including ``datetime`` objects, or ``time_zone`` has no IANA name, and
+    `ValueError` if a time has a tzinfo.
+
+    >>> from datetime import date, datetime, time, timezone
+    >>> from workclock import Schedule, SpecialDay, WorkDay
+    >>> eve = SpecialDay(time(8), time(12), [date(2026, 12, 24)])
+    >>> office = Schedule([WorkDay(time(9), time(17)), eve])
+    >>> start, end = office.next_period(datetime(2026, 12, 24, tzinfo=timezone.utc))
+    >>> print(start, end)
+    2026-12-24 08:00:00+00:00 2026-12-24 12:00:00+00:00
+    """
+
+    start: time
+    end: time
+    dates: frozenset[date]
+    time_zone: str | None
+    _sorted_dates: list[_DateTuple] = field(init=False, repr=False, compare=False)
+
+    def __init__(
+        self,
+        start: time,
+        end: time,
+        dates: Iterable[date],
+        *,
+        time_zone: str | tzinfo | None = None,
+    ) -> None:
+        _time_tuple(start)
+        _time_tuple(end)
+        dates = _date_set(dates, "dates")
+        object.__setattr__(self, "start", start)
+        object.__setattr__(self, "end", end)
+        object.__setattr__(self, "dates", dates)
+        object.__setattr__(self, "time_zone", _optional_zone(time_zone))
+        object.__setattr__(self, "_sorted_dates", _date_tuples(dates))
+
+    def _spec(self) -> _SpecialDaySpec:
+        return (
+            _time_tuple(self.start),
+            _time_tuple(self.end),
+            self._sorted_dates,
+            self.time_zone,
+        )
+
+
+Rule = WorkDay | Break | Holidays | SpecialDay
+"""Any rule a `Schedule` takes: a `WorkDay`, `Break`, `Holidays` or `SpecialDay`."""
 
 
 class Schedule:
     """Working time defined by rules, evaluated in IANA time zones.
 
-    Working time is the union of every `WorkDay` minus every `Break` and
-    `Holidays` date, so the order of rules never matters. ``time_zone`` is
-    the default for rules that do not set their own, and is UTC if omitted.
-    A schedule pickles and deep-copies as its rules and zone, and is built
-    again from them.
+    Working time is the union of every `WorkDay` and `SpecialDay` minus every
+    `Break` and `Holidays` date, so the order of rules never matters. A
+    special day replaces the `WorkDay` shifts that start on its dates.
+    ``time_zone`` is the default for rules that do not set their own, and is
+    UTC if omitted. A schedule pickles and deep-copies as its rules and zone,
+    and is built again from them.
 
-    Raises `TypeError` for a rule that is not a `WorkDay`, `Break` or
-    `Holidays`, or a ``time_zone`` with no IANA name, `UnknownZoneError` for
-    a zone that is not in the IANA database, and `NoWorkingTimeError` if the
-    working hours minus the breaks are empty.
+    Raises `TypeError` for a rule that is not a `WorkDay`, `Break`,
+    `Holidays` or `SpecialDay`, or a ``time_zone`` with no IANA name,
+    `UnknownZoneError` for a zone that is not in the IANA database, and
+    `NoWorkingTimeError` if the working hours minus the breaks are empty.
 
     Every method that takes datetimes raises `TypeError` for a value that is
     not a ``datetime``, `ValueError` for a naive one, and `OutOfRangeError`
@@ -341,7 +410,7 @@ class Schedule:
     ) -> None:
         self._rules = tuple(rules)
         self._time_zone = _optional_zone(time_zone)
-        workdays, breaks, holidays = [], [], []
+        workdays, breaks, holidays, special_days = [], [], [], []
         for rule in self._rules:
             if isinstance(rule, WorkDay):
                 workdays.append(rule._spec())
@@ -349,11 +418,15 @@ class Schedule:
                 breaks.append(rule._spec())
             elif isinstance(rule, Holidays):
                 holidays.append(rule._spec())
+            elif isinstance(rule, SpecialDay):
+                special_days.append(rule._spec())
             else:
-                raise TypeError(f"expected WorkDay, Break or Holidays, got {rule!r}")
+                raise TypeError(
+                    f"expected WorkDay, Break, Holidays or SpecialDay, got {rule!r}"
+                )
         with _engine_errors():
             self._schedule = _workclock.Schedule(
-                self._time_zone, workdays, breaks, holidays
+                self._time_zone, workdays, breaks, holidays, special_days
             )
 
     def __repr__(self) -> str:
@@ -404,9 +477,10 @@ class Schedule:
         Raises the errors described on `Schedule` for ``dt``, `TypeError` if
         ``delta`` is not a timedelta, `ValueError` if an amount is NaN,
         `NoWorkingTimeError` if the search crosses 366 days plus seven per
-        holiday date without finding working time, and `OutOfRangeError` if
-        the amount does not fit in 64-bit microseconds or the result is
-        outside the supported range or the years 1 to 9999 of ``datetime``.
+        holiday date and per special date without finding working time, and
+        `OutOfRangeError` if the amount does not fit in 64-bit microseconds or
+        the result is outside the supported range or the years 1 to 9999 of
+        ``datetime``.
         """
         amount = _amount(delta, hours, minutes, seconds)
         t = _micros(dt)
@@ -442,7 +516,7 @@ class Schedule:
         A period is a maximal stretch of working time, returned as
         ``(start, end)`` in the ``tzinfo`` of ``dt``. If ``dt`` is inside one,
         ``start`` is ``dt``. A period never runs longer than the search bound
-        of 366 days plus seven per holiday date.
+        of 366 days plus seven per holiday date and per special date.
 
         Raises the errors described on `Schedule` for ``dt``,
         `NoWorkingTimeError` if no working time starts within the search
