@@ -60,8 +60,8 @@ class Oracle:
         special_dates = frozenset(d for s in special_days for d in s.dates)
         breaks = [Rule(r, tz(r.zone)) for r in spec.breaks]
 
-        # Like holidays, special days take no part in the check: neither their
-        # blocks nor the shifts they replace count.
+        # Like holidays, special days take no part in the check: their blocks do
+        # not count, and the shifts they replace still do.
         check = cls([Rule(r, tz(r.zone)) for r in spec.workdays], breaks, [], [])
         window_start = datetime(2001, 1, 1, tzinfo=UTC)
         m = window_start
