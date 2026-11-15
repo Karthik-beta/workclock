@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Special days: `SpecialDay` in Rust and Python and `{ type: "specialday" }` in
+  JavaScript give chosen dates other working hours. They replace the `WorkDay`
+  shifts that start on those dates, breaks and holidays still apply, and each
+  distinct special date adds seven days to the search bound.
+
 ### Removed
 
 - Python: support for Python 3.9 and 3.10, which no longer get security fixes.
