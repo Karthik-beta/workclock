@@ -1,6 +1,6 @@
 {
   "name": "workclock",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "description": "Fast, correct business-time arithmetic: working hours, SLAs and shifts",
   "keywords": [
     "business-hours",
