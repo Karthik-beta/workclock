@@ -10,7 +10,7 @@ from typing import Any
 
 import pytest
 
-UTC = datetime.timezone.utc
+UTC = datetime.UTC
 
 
 def utc(day: int, hour: int) -> datetime.datetime:

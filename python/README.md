@@ -25,7 +25,7 @@ pip install workclock
 uv add workclock
 ```
 
-Requires CPython 3.9 or later. The wheels use the stable ABI (abi3), one per
+Requires CPython 3.11 or later. The wheels use the stable ABI (abi3), one per
 platform: Linux x86_64 and aarch64 (manylinux and musllinux), macOS x86_64
 and arm64, and Windows x64. Free-threaded CPython cannot load abi3 wheels.
 Other platforms build from the sdist, which needs a Rust toolchain.

@@ -28,7 +28,7 @@ ZONES = ["UTC", "Asia/Kolkata"]
 # Far from every query, so they never change a result, but within 1.0.1's
 # five-year holiday look-ahead in both directions.
 LOOK_AHEAD_HOLIDAYS = ["2023-06-15", "2029-06-15"]
-UTC = datetime.timezone.utc
+UTC = datetime.UTC
 
 
 @st.composite

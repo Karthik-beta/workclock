@@ -24,4 +24,4 @@ def test_adding_across_a_listed_holiday(btd: ModuleType) -> None:
     task = start + btd.BusinessTimeDelta(rules, hours=8)
 
     # Mon 15 is the holiday: 7h on Tue 16, then 1h on Wed 17.
-    assert task == datetime.datetime(2021, 3, 17, 10, tzinfo=datetime.timezone.utc)
+    assert task == datetime.datetime(2021, 3, 17, 10, tzinfo=datetime.UTC)

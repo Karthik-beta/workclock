@@ -6,7 +6,7 @@ datetime and zoneinfo.
 """
 
 from collections.abc import Callable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import businesstimedelta
@@ -35,8 +35,8 @@ def between(request: pytest.FixtureRequest) -> Between:
 
 @pytest.mark.benchmark(group="single")
 def test_single(benchmark: BenchmarkFixture, between: Between) -> None:
-    a = datetime(2026, 3, 10, 10, 15, tzinfo=timezone.utc)
-    b = datetime(2026, 3, 10, 15, 45, tzinfo=timezone.utc)
+    a = datetime(2026, 3, 10, 10, 15, tzinfo=UTC)
+    b = datetime(2026, 3, 10, 15, 45, tzinfo=UTC)
     benchmark(between, a, b)
 
 
@@ -46,15 +46,15 @@ def test_single_python_holidays(benchmark: BenchmarkFixture, module: Any) -> Non
     # compat fills the object in for 1970 to 2100: 1,156 dates.
     between = rules(module, holidays.country_holidays("GB", subdiv="ENG"))
     benchmark.extra_info["implementation"] = f"{module.__name__}, python-holidays"
-    a = datetime(2026, 3, 10, 10, 15, tzinfo=timezone.utc)
-    b = datetime(2026, 3, 10, 15, 45, tzinfo=timezone.utc)
+    a = datetime(2026, 3, 10, 10, 15, tzinfo=UTC)
+    b = datetime(2026, 3, 10, 15, 45, tzinfo=UTC)
     benchmark(between, a, b)
 
 
 @pytest.mark.benchmark(group="year")
 def test_year(benchmark: BenchmarkFixture, between: Between) -> None:
-    a = datetime(2026, 1, 1, tzinfo=timezone.utc)
-    b = datetime(2027, 1, 1, tzinfo=timezone.utc)
+    a = datetime(2026, 1, 1, tzinfo=UTC)
+    b = datetime(2027, 1, 1, tzinfo=UTC)
     benchmark(between, a, b)
 
 
@@ -64,7 +64,8 @@ def test_batch(benchmark: BenchmarkFixture, between: Between) -> None:
     # businesstimedelta takes about half an hour for one round.
     slow = benchmark.extra_info["implementation"] == "businesstimedelta"
     benchmark.pedantic(
-        lambda: [between(a, b) for a, b in zip(starts, ends)], rounds=1 if slow else 3
+        lambda: [between(a, b) for a, b in zip(starts, ends, strict=True)],
+        rounds=1 if slow else 3,
     )
 
 

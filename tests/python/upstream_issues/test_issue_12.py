@@ -12,7 +12,7 @@ from types import ModuleType
 import pytest
 from workclock import Schedule, WorkDay
 
-UTC = datetime.timezone.utc
+UTC = datetime.UTC
 
 
 @pytest.mark.parametrize("btd", ["businesstimedelta"], indirect=True)

@@ -1,5 +1,4 @@
 from datetime import datetime, timedelta
-from typing import Union
 
 import pytest
 from support.fixture import (
@@ -20,7 +19,7 @@ FIXTURE = load()
 # E4 walks ten years minute by minute, and P19-P21 a year of working time.
 SLOW = {"E4", "P19", "P20", "P21"}
 
-Outcome = Union[timedelta, datetime, tuple[datetime, datetime], str, None]
+Outcome = timedelta | datetime | tuple[datetime, datetime] | str | None
 
 
 def run(spec: ScheduleSpec, op: Op) -> Outcome:

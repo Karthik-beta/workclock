@@ -60,7 +60,9 @@ def rust() -> list[Row]:
         sample = json.loads(
             (ROOT / "target" / "criterion" / path / "new" / "sample.json").read_text()
         )
-        seconds = [t / n / 1e9 for t, n in zip(sample["times"], sample["iters"])]
+        seconds = [
+            t / n / 1e9 for t, n in zip(sample["times"], sample["iters"], strict=True)
+        ]
         rows.append(row(case, "Rust", seconds))
     return rows
 
