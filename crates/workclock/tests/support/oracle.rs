@@ -263,8 +263,10 @@ impl SpecialDay {
 }
 
 /// Whether `t` falls in the shift from `start` to `end` on a local date for
-/// which `on` holds. A shift belongs to the date it starts on, so `t` can only
-/// fall in the shift of its own local date or of the day before.
+/// which `on` holds. A shift belongs to the date it starts on and nominally
+/// ends on the next date. A zone gap of up to 24 hours (Pacific/Apia skipped
+/// 2011-12-30) can move that end one date later, so `t` can fall in the shift
+/// of its own local date or of either of the two days before.
 fn in_shift(
     t: Timestamp,
     start: Time,
@@ -273,7 +275,9 @@ fn in_shift(
     on: impl Fn(Date) -> bool,
 ) -> bool {
     let today = t.to_zoned(tz.clone()).date();
-    [today.yesterday().ok(), Some(today)]
+    let yesterday = today.yesterday().ok();
+    let before = yesterday.and_then(|d| d.yesterday().ok());
+    [before, yesterday, Some(today)]
         .into_iter()
         .flatten()
         .filter(|&d| on(d))
