@@ -366,4 +366,17 @@ mod tests {
             ]
         );
     }
+
+    #[test]
+    fn an_overnight_shift_on_the_first_date_reaches_the_window() {
+        let got = blocks(
+            time(22, 0, 0, 0),
+            time(6, 0, 0, 0),
+            Weekdays::ALL,
+            "UTC",
+            "-009999-01-02T02:00:00Z",
+            "-009999-01-02T06:00:00Z",
+        );
+        assert_eq!(got, ["-009999-01-02T02:00:00Z/-009999-01-02T06:00:00Z"]);
+    }
 }

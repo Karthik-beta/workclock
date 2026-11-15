@@ -54,7 +54,8 @@ pub(crate) fn resolve(date: Date, time: Time, tz: &TimeZone) -> Timestamp {
 /// each side is enough.
 pub(crate) fn local_dates(lo: Timestamp, hi: Timestamp, tz: &TimeZone) -> RangeInclusive<Date> {
     let first = tz.to_datetime(lo).date();
-    let first = first.yesterday().and_then(Date::yesterday).unwrap_or(first);
+    let first = first.yesterday().unwrap_or(first);
+    let first = first.yesterday().unwrap_or(first);
     let last = tz.to_datetime(hi).date();
     let last = last.tomorrow().unwrap_or(last);
     first..=last
