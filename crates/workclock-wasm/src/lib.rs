@@ -16,7 +16,9 @@ use jiff::fmt::temporal::{Pieces, PiecesOffset};
 use jiff::{SignedDuration, Timestamp};
 use js_sys::{Array, Float64Array, Reflect};
 use wasm_bindgen::prelude::*;
-use workclock::{Break, Error, Holidays, Rule, Schedule as CoreSchedule, Weekdays, WorkDay};
+use workclock::{
+    Break, Error, Holidays, Rule, Schedule as CoreSchedule, SpecialDay, Weekdays, WorkDay,
+};
 
 /// The repository README's Rust example. It runs here because the README is
 /// outside the published `workclock` crate.
@@ -63,10 +65,35 @@ export interface HolidaysRule {
 }
 
 /**
- * One rule of a schedule. Working time is the time inside workdays and
- * outside breaks and holidays.
+ * Other working hours on some dates, such as a short day before a holiday.
+ * On each date the hours replace the workday hours that start on it, and
+ * breaks and holidays still apply. A workday shift that started the day
+ * before and runs into the date is kept. Several special days on one date
+ * add up.
+ *
+ * @example
+ * ```js
+ * const christmasEve = { type: "specialday", start: "08:00", end: "12:00", dates: ["2026-12-24"] };
+ * ```
  */
-export type Rule = HoursRule | HolidaysRule;
+export interface SpecialDayRule {
+  type: "specialday";
+  /** Wall-clock start, such as `"08:00"`. */
+  start: string;
+  /** Wall-clock end; at or before `start` means the hours end the next day. */
+  end: string;
+  /** Dates such as `"2026-12-24"`. */
+  dates: readonly string[];
+  /** IANA time zone; defaults to the schedule's. */
+  timeZone?: string;
+}
+
+/**
+ * One rule of a schedule. Working time is the time inside workdays, except
+ * shifts that start on a special date, and inside special days, and outside
+ * breaks and holidays.
+ */
+export type Rule = HoursRule | HolidaysRule | SpecialDayRule;
 
 /** What `new Schedule` takes. */
 export interface ScheduleOptions {
@@ -204,7 +231,7 @@ impl Schedule {
     /// @returns The earliest instant with `ms` of working time after `t`, or
     /// `t` itself when `ms` is zero. A negative `ms` returns `sub(t, -ms)`.
     /// @throws {NoWorkingTimeError} If no working time is found within 366
-    /// days, plus seven days per holiday date.
+    /// days, plus seven days per holiday date and per special date.
     /// @throws {OutOfRangeError} If `t` or the result is outside the supported
     /// range.
     /// @throws {TypeError} If `t` is neither a `Date` nor a string, or `ms` is
@@ -234,7 +261,7 @@ impl Schedule {
     /// @returns The latest instant with `ms` of working time before `t`, or
     /// `t` itself when `ms` is zero. A negative `ms` returns `add(t, -ms)`.
     /// @throws {NoWorkingTimeError} If no working time is found within 366
-    /// days, plus seven days per holiday date.
+    /// days, plus seven days per holiday date and per special date.
     /// @throws {OutOfRangeError} If `t` or the result is outside the supported
     /// range.
     /// @throws {TypeError} If `t` is neither a `Date` nor a string, or `ms` is
@@ -257,7 +284,7 @@ impl Schedule {
     /// @returns The period that contains `t`, starting at `t`, or else the
     /// first one after it.
     /// @throws {NoWorkingTimeError} If no working time is found within 366
-    /// days, plus seven days per holiday date.
+    /// days, plus seven days per holiday date and per special date.
     /// @throws {OutOfRangeError} If `t` is outside the supported range, or the
     /// search reaches its end.
     /// @throws {TypeError} If `t` is neither a `Date` nor a string.
@@ -278,7 +305,7 @@ impl Schedule {
     /// @returns The period that contains `t`, ending at `t`, or else the last
     /// one before it.
     /// @throws {NoWorkingTimeError} If no working time is found within 366
-    /// days, plus seven days per holiday date.
+    /// days, plus seven days per holiday date and per special date.
     /// @throws {OutOfRangeError} If `t` is outside the supported range, or the
     /// search reaches its start.
     /// @throws {TypeError} If `t` is neither a `Date` nor a string.
@@ -382,10 +409,18 @@ fn rule(value: &JsValue) -> Result<Rule, JsValue> {
             let (start, end, days) = hours(value)?;
             in_zone(Break::new(start, end, days), zone, Break::time_zone).into()
         }
-        Some("holidays") => in_zone(Holidays::new(dates(value)?), zone, Holidays::time_zone).into(),
+        Some("holidays") => {
+            let rule = Holidays::new(dates(value, "holiday")?);
+            in_zone(rule, zone, Holidays::time_zone).into()
+        }
+        Some("specialday") => {
+            let (start, end) = (time(value, "start")?, time(value, "end")?);
+            let rule = SpecialDay::new(start, end, dates(value, "special day")?);
+            in_zone(rule, zone, SpecialDay::time_zone).into()
+        }
         _ => {
             return Err(type_error(
-                "rule `type` must be \"workday\", \"break\" or \"holidays\"",
+                "rule `type` must be \"workday\", \"break\", \"holidays\" or \"specialday\"",
             ))
         }
     })
@@ -415,22 +450,7 @@ fn optional_string(object: &JsValue, key: &str) -> Result<Option<String>, JsValu
 }
 
 fn hours(rule: &JsValue) -> Result<(Time, Time, Weekdays), JsValue> {
-    let time = |key: &str| -> Result<Time, JsValue> {
-        let text = optional_string(rule, key)?
-            .ok_or_else(|| type_error(&format!("`{key}` is required")))?;
-        let time: Time = text.parse().map_err(|_| {
-            range_error(&format!(
-                "`{key}` must be a time such as \"09:00\", got {text:?}"
-            ))
-        })?;
-        if time.subsec_nanosecond() % 1_000_000 != 0 {
-            return Err(range_error(&format!(
-                "`{key}` has digits below a millisecond, which cannot be represented, got {text:?}"
-            )));
-        }
-        Ok(time)
-    };
-    let (start, end) = (time("start")?, time("end")?);
+    let (start, end) = (time(rule, "start")?, time(rule, "end")?);
     let days = property(rule, "days")?;
     let days = if days.is_undefined() {
         Weekdays::MON_TO_FRI
@@ -446,6 +466,22 @@ fn hours(rule: &JsValue) -> Result<(Time, Time, Weekdays), JsValue> {
         )));
     };
     Ok((start, end, days))
+}
+
+fn time(rule: &JsValue, key: &str) -> Result<Time, JsValue> {
+    let text =
+        optional_string(rule, key)?.ok_or_else(|| type_error(&format!("`{key}` is required")))?;
+    let parsed: Time = text.parse().map_err(|_| {
+        range_error(&format!(
+            "`{key}` must be a time such as \"09:00\", got {text:?}"
+        ))
+    })?;
+    if parsed.subsec_nanosecond() % 1_000_000 != 0 {
+        return Err(range_error(&format!(
+            "`{key}` has digits below a millisecond, which cannot be represented, got {text:?}"
+        )));
+    }
+    Ok(parsed)
 }
 
 fn weekday(day: &JsValue) -> Result<Weekday, JsValue> {
@@ -464,7 +500,8 @@ fn weekday(day: &JsValue) -> Result<Weekday, JsValue> {
     }
 }
 
-fn dates(rule: &JsValue) -> Result<Vec<Date>, JsValue> {
+/// The rule's `dates`; `noun` names the rule in error messages.
+fn dates(rule: &JsValue, noun: &str) -> Result<Vec<Date>, JsValue> {
     let dates = property(rule, "dates")?;
     if !Array::is_array(&dates) {
         return Err(type_error(&format!(
@@ -477,13 +514,13 @@ fn dates(rule: &JsValue) -> Result<Vec<Date>, JsValue> {
         .map(|value| {
             let text = value.as_string().ok_or_else(|| {
                 type_error(&format!(
-                    "holiday dates must be strings, got {}",
+                    "{noun} dates must be strings, got {}",
                     show(&value)
                 ))
             })?;
             text.parse().map_err(|_| {
                 range_error(&format!(
-                    "holiday dates must look like \"2026-12-25\", got {text:?}"
+                    "{noun} dates must look like \"2026-12-25\", got {text:?}"
                 ))
             })
         })
@@ -750,7 +787,9 @@ fn search_error(error: &Error, t: Timestamp) -> JsValue {
         Error::NoWorkingTime => workclock_error(
             "NoWorkingTimeError",
             "no_working_time",
-            &format!("no working time within 366 days, plus seven days per holiday date, of {t}"),
+            &format!(
+                "no working time within 366 days, plus seven days per holiday date and per special date, of {t}"
+            ),
         ),
         _ => engine_error(error),
     }

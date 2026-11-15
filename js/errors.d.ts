@@ -16,7 +16,7 @@ export declare class WorkclockError extends Error {
 
 /**
  * The rules have no working time, or a search found none within 366 days,
- * plus seven days per holiday date.
+ * plus seven days per holiday date and per special date.
  */
 export declare class NoWorkingTimeError extends WorkclockError {
   readonly kind: "no_working_time";

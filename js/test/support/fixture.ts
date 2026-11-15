@@ -19,11 +19,19 @@ export interface HolidaySpec {
   zone?: string;
 }
 
+export interface SpecialDaySpec {
+  start: string;
+  end: string;
+  dates: string[];
+  zone?: string;
+}
+
 export interface ScheduleSpec {
   zone: string;
   workdays?: RuleSpec[];
   breaks?: RuleSpec[];
   holidays?: HolidaySpec[];
+  specialdays?: SpecialDaySpec[];
 }
 
 export type Op =
@@ -80,6 +88,15 @@ export function scheduleOptions(spec: ScheduleSpec): ScheduleOptions {
           type: "holidays",
           dates: allDates(h),
           ...(h.zone === undefined ? {} : { timeZone: h.zone }),
+        }),
+      ),
+      ...(spec.specialdays ?? []).map(
+        (s): Rule => ({
+          type: "specialday",
+          start: s.start,
+          end: s.end,
+          dates: s.dates,
+          ...(s.zone === undefined ? {} : { timeZone: s.zone }),
         }),
       ),
     ],

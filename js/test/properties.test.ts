@@ -6,7 +6,13 @@ import fc from "fast-check";
 import { describe, expect, test } from "vitest";
 
 import { Schedule, type Weekday } from "../node.js";
-import { type HolidaySpec, type RuleSpec, scheduleOptions, type ScheduleSpec } from "./support/fixture.js";
+import {
+  type HolidaySpec,
+  type RuleSpec,
+  scheduleOptions,
+  type ScheduleSpec,
+  type SpecialDaySpec,
+} from "./support/fixture.js";
 import { Oracle } from "./support/oracle.js";
 
 const MINUTE = 60_000;
@@ -49,12 +55,65 @@ const holidays: fc.Arbitrary<HolidaySpec> = fc.record(
   { requiredKeys: ["dates"] },
 );
 
-const spec: fc.Arbitrary<ScheduleSpec> = fc.record({
-  zone,
-  workdays: fc.array(rule, { minLength: 1, maxLength: 2 }),
-  breaks: fc.array(rule, { maxLength: 2 }),
-  holidays: fc.array(holidays, { maxLength: 1 }),
-});
+/** Local dates in the window on which a zone used here changes its offset. */
+const transitionDates = [
+  ...new Set(
+    ZONES.flatMap((timeZone) => {
+      const format = new Intl.DateTimeFormat("en-CA", { timeZone, timeZoneName: "longOffset" });
+      const offset = (t: number) => format.formatToParts(t).find((p) => p.type === "timeZoneName")?.value;
+      const local = new Intl.DateTimeFormat("en-US", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" });
+      const date = (t: number) => {
+        const part = (type: string) => local.formatToParts(t).find((p) => p.type === type)?.value;
+        return `${part("year")}-${part("month")}-${part("day")}`;
+      };
+      const dates: string[] = [];
+      for (let t = WINDOW_START; t < WINDOW_START + WINDOW_DAYS * DAY; t += 30 * MINUTE) {
+        if (offset(t) !== offset(t + 30 * MINUTE)) {
+          dates.push(date(t + 30 * MINUTE));
+        }
+      }
+      return dates;
+    }),
+  ),
+];
+
+/**
+ * Up to 20 dates, so that queries often meet one, and many of them on DST
+ * changes. One in five lasts 24 hours.
+ */
+const specialDay: fc.Arbitrary<SpecialDaySpec> = fc
+  .record(
+    {
+      start: time,
+      end: fc.option(time, { freq: 5 }),
+      dates: fc.array(fc.oneof({ arbitrary: day, weight: 3 }, fc.constantFrom(...transitionDates)), {
+        minLength: 1,
+        maxLength: 20,
+      }),
+      zone,
+    },
+    { requiredKeys: ["start", "end", "dates"] },
+  )
+  .map(({ end, ...rest }) => ({ ...rest, end: end ?? rest.start }));
+
+const spec: fc.Arbitrary<ScheduleSpec> = fc
+  .record({
+    zone,
+    workdays: fc.array(rule, { minLength: 1, maxLength: 2 }),
+    breaks: fc.array(rule, { maxLength: 2 }),
+    holidays: fc.array(holidays, { maxLength: 1 }),
+    specialdays: fc.array(specialDay, { maxLength: 2 }),
+    onHoliday: fc.boolean(),
+  })
+  .map(({ onHoliday, ...s }) => {
+    // Random dates rarely meet, so put a special day on a holiday on purpose.
+    const [holiday] = s.holidays;
+    const [special, ...others] = s.specialdays;
+    if (!onHoliday || holiday?.dates === undefined || special === undefined) {
+      return s;
+    }
+    return { ...s, specialdays: [{ ...special, dates: [...special.dates, holiday.dates[0]] }, ...others] };
+  });
 
 const instant = fc.integer({ min: 0, max: WINDOW_DAYS * 24 * 60 }).map((m) => WINDOW_START + m * MINUTE);
 

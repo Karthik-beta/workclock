@@ -7,7 +7,13 @@
 // given must be a whole number of minutes. Instants and durations are
 // milliseconds; time zones come from `Intl`, not from the engine's database.
 
-import { allDates, type ErrorKind, type RuleSpec, type ScheduleSpec } from "./fixture.js";
+import {
+  allDates,
+  type ErrorKind,
+  type RuleSpec,
+  type ScheduleSpec,
+  type SpecialDaySpec,
+} from "./fixture.js";
 
 const MINUTE = 60_000;
 const DAY = 86_400_000;
@@ -27,13 +33,15 @@ export class OracleError extends Error {
 export class Oracle {
   private readonly searchLimit: number;
 
+  /** `dates` counts the holiday and special dates, a week of search each. */
   private constructor(
     private readonly workdays: Blocks[],
+    private readonly specialDays: Blocks[],
     private readonly breaks: Blocks[],
     private readonly holidays: Blocks[],
-    holidayDates: number,
+    dates: number,
   ) {
-    this.searchLimit = (366 + 7 * holidayDates) * DAY;
+    this.searchLimit = (366 + 7 * dates) * DAY;
   }
 
   static build(spec: ScheduleSpec): Oracle {
@@ -47,18 +55,26 @@ export class Oracle {
       return found;
     };
     zone();
+    const workdays = (except?: ReadonlySet<number>) =>
+      (spec.workdays ?? []).map((r) => new Hours(r, zone(r.zone), except));
+    const breaks = (spec.breaks ?? []).map((r) => new Hours(r, zone(r.zone)));
     const holidays = (spec.holidays ?? []).map((h) => new Holidays(allDates(h), zone(h.zone)));
-    const oracle = new Oracle(
-      (spec.workdays ?? []).map((r) => new Hours(r, zone(r.zone))),
-      (spec.breaks ?? []).map((r) => new Hours(r, zone(r.zone))),
-      holidays,
-      holidays.reduce((n, h) => n + h.size, 0),
-    );
+    const specialDays = (spec.specialdays ?? []).map((s) => new SpecialDay(s, zone(s.zone)));
+    const specialDates = new Set(specialDays.flatMap((s) => [...s.dates]));
 
+    // Like holidays, special days take no part in the check: neither their
+    // blocks nor the shifts they replace.
+    const check = new Oracle(workdays(), [], breaks, [], 0);
     const windowStart = Date.UTC(2001, 0, 1);
     for (let m = windowStart; m < windowStart + 14 * DAY; m += MINUTE) {
-      if (oracle.available(m) && !oracle.onBreak(m)) {
-        return oracle;
+      if (check.available(m) && !check.onBreak(m)) {
+        return new Oracle(
+          workdays(specialDates),
+          specialDays,
+          breaks,
+          holidays,
+          holidays.reduce((n, h) => n + h.size, 0) + specialDates.size,
+        );
       }
     }
     throw new OracleError("no_working_time");
@@ -158,7 +174,7 @@ export class Oracle {
   }
 
   private available(t: number): boolean {
-    return this.workdays.some((r) => r.contains(t));
+    return this.workdays.some((r) => r.contains(t)) || this.specialDays.some((s) => s.contains(t));
   }
 
   private onBreak(t: number): boolean {
@@ -227,18 +243,18 @@ abstract class Blocks {
   protected abstract blocksNear(day: number): Block[];
 }
 
-/** A workday or a break. */
-class Hours extends Blocks {
+/** Shifts from `start` to `end` on the local dates for which `startsOn` holds. */
+abstract class Shifts extends Blocks {
   private readonly start: number;
   private readonly end: number;
-  private readonly days: Set<number>;
 
-  constructor(spec: RuleSpec, zone: Zone) {
+  constructor(start: string, end: string, zone: Zone) {
     super(zone);
-    this.start = timeOfDay(spec.start);
-    this.end = timeOfDay(spec.end);
-    this.days = new Set(spec.days.map((d) => WEEKDAYS.indexOf(d)));
+    this.start = timeOfDay(start);
+    this.end = timeOfDay(end);
   }
+
+  protected abstract startsOn(day: number): boolean;
 
   /**
    * A shift belongs to the local date it starts on, so an instant can only fall
@@ -248,7 +264,7 @@ class Hours extends Blocks {
     const overnight = this.end <= this.start ? DAY : 0;
     const blocks: Block[] = [];
     for (let d = day - 2; d <= day + 1; d++) {
-      if (this.days.has(weekday(d))) {
+      if (this.startsOn(d)) {
         blocks.push([
           this.zone.resolve(d * DAY + this.start),
           this.zone.resolve(d * DAY + overnight + this.end),
@@ -256,6 +272,37 @@ class Hours extends Blocks {
       }
     }
     return blocks;
+  }
+}
+
+/** A workday or a break, without its shifts that start on a date in `except`. */
+class Hours extends Shifts {
+  private readonly days: Set<number>;
+
+  constructor(
+    spec: RuleSpec,
+    zone: Zone,
+    private readonly except: ReadonlySet<number> = new Set(),
+  ) {
+    super(spec.start, spec.end, zone);
+    this.days = new Set(spec.days.map((d) => WEEKDAYS.indexOf(d)));
+  }
+
+  protected startsOn(day: number): boolean {
+    return this.days.has(weekday(day)) && !this.except.has(day);
+  }
+}
+
+class SpecialDay extends Shifts {
+  readonly dates: Set<number>;
+
+  constructor(spec: SpecialDaySpec, zone: Zone) {
+    super(spec.start, spec.end, zone);
+    this.dates = new Set(spec.dates.map((d) => Date.parse(d) / DAY));
+  }
+
+  protected startsOn(day: number): boolean {
+    return this.dates.has(day);
   }
 }
 
