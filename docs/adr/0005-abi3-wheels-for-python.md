@@ -1,6 +1,6 @@
 # 0005. abi3 wheels for Python
 
-- Status: Accepted
+- Status: Superseded by [0010](0010-abi3-wheels-for-python-3-11.md)
 - Date: 2026-10-22
 
 ## Context

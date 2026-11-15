@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- Python: support for Python 3.9 and 3.10, which no longer get security fixes.
+  workclock now requires Python 3.11 or later, and its wheels target the 3.11
+  stable ABI (`cp311-abi3`). pip and uv keep installing 0.1.x on older
+  versions.
+
 ### Fixed
 
 - Python compat: a subclass of `WorkDayRule`, `LunchTimeRule` or
