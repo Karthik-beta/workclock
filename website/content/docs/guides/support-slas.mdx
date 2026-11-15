@@ -136,7 +136,7 @@ Used plus left is always the SLA: `between(opened, now) + between(now, due)` is 
 - **Tickets opened outside working hours.** `add` counts from the start of the next working time. A ticket opened at 10:00 on Saturday 26 December starts counting at 09:00 on Tuesday 29 December and is due at 10:00 on Wednesday 30 December ([Adding time: Where the result lands](/docs/concepts/adding-time/#where-the-result-lands)).
 - **A due time at the end of the day.** A ticket that uses up a stretch of working time is due when that stretch ends, such as 17:00, not at 09:00 the next working day (DESIGN.md A2).
 - **Holidays.** Each date in `Holidays` removes 00:00 to the next 00:00 in the schedule's time zone, not in UTC ([Rules: Holidays](/docs/concepts/rules/#holidays)).
-- **Shorter hours on one date.** A `SpecialDay` replaces the `WorkDay` shifts that start on its dates, so closing at 13:00 on Christmas Eve is one rule with 09:00–13:00 on 2026-12-24 ([Rules: SpecialDay](/docs/concepts/rules/#specialday)).
+- **Shorter hours on one date.** A `SpecialDay` replaces the `WorkDay` shifts that start on its dates, and the lunch break still applies, so closing at 12:00 on Christmas Eve is one rule with 09:00–12:00 on 2026-12-24 ([Rules: SpecialDay](/docs/concepts/rules/#specialday)).
 - **Daylight saving time (DST).** Working hours are wall-clock times in `Europe/London`, so 09:00 stays 09:00 after the clocks change ([Time zones and DST](/docs/concepts/time-zones-and-dst/)).
 
 What 0.2 does not do ([DESIGN.md: Scope](https://github.com/Karthik-beta/workclock/blob/main/DESIGN.md#scope)):
