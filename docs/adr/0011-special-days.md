@@ -64,11 +64,11 @@ and `{ type: "specialday", start, end, dates, timeZone }` in JavaScript.
   never matters and breaks, holidays and DST behave on special days as on any
   other date.
 - A special day on a holiday in the same zone adds no time on that date, but
-  it still replaces the shifts that start on the date. A night shift then
-  loses the hours after midnight that the holiday alone would keep, except
-  where the special day itself runs past midnight. Users who expect a special
-  day to open the holiday, as in ule-hours, have to remove the date from
-  `Holidays`.
+  it still replaces every shift that starts on the date, in any zone. Those
+  shifts lose the hours the holiday does not cover, such as a night shift's
+  hours after midnight, except where the special day itself covers them. Users
+  who expect a special day to open the holiday, as in ule-hours, have to
+  remove the date from `Holidays`.
 - A special date replaces the shifts of every WorkDay in the schedule. A
   schedule cannot keep one WorkDay's shifts and replace another's on the same
   date.
