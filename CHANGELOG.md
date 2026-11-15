@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `HolidayRule` that overrides `next()`, `previous()` or `difference()` raises
   `TypeError`, as other `Rule` subclasses that compute their own blocks do. It
   used to run as its parent class and ignore the override.
+- An overnight shift that starts on the first date the engine can represent
+  is no longer missing from the working time on the next date.
 
 ## [0.1.4] - 2026-10-30
 
