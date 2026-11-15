@@ -46,9 +46,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ## Other crates
 
 [ule-hours](https://crates.io/crates/ule-hours) also does working-time
-arithmetic on jiff, and adds paused SLA clocks, Easter-based holiday rules,
-special days and holiday presets for several countries. If you need those, use
-it. workclock is for the same engine in Rust, Python and JavaScript, and for
+arithmetic on jiff, and adds paused SLA clocks, Easter-based holiday rules
+and holiday presets for several countries. If you need those, use it.
+workclock is for the same engine in Rust, Python and JavaScript, and for
 replacing businesstimedelta.
 
 API documentation is on [docs.rs](https://docs.rs/workclock), and the

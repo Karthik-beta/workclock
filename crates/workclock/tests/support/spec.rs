@@ -14,6 +14,8 @@ pub struct ScheduleSpec {
     pub breaks: Vec<RuleSpec>,
     #[serde(default)]
     pub holidays: Vec<HolidaySpec>,
+    #[serde(default)]
+    pub specialdays: Vec<SpecialDaySpec>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -35,6 +37,15 @@ pub struct HolidaySpec {
     pub zone: Option<String>,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct SpecialDaySpec {
+    pub start: String,
+    pub end: String,
+    pub dates: Vec<String>,
+    #[serde(default)]
+    pub zone: Option<String>,
+}
+
 impl RuleSpec {
     pub fn start_time(&self) -> Time {
         self.start.parse().expect("rule start is HH:MM")
@@ -46,6 +57,23 @@ impl RuleSpec {
 
     pub fn weekdays(&self) -> Vec<Weekday> {
         self.days.iter().map(|d| weekday(d)).collect()
+    }
+}
+
+impl SpecialDaySpec {
+    pub fn start_time(&self) -> Time {
+        self.start.parse().expect("special day start is HH:MM")
+    }
+
+    pub fn end_time(&self) -> Time {
+        self.end.parse().expect("special day end is HH:MM")
+    }
+
+    pub fn all_dates(&self) -> BTreeSet<Date> {
+        self.dates
+            .iter()
+            .map(|d| d.parse().expect("date is YYYY-MM-DD"))
+            .collect()
     }
 }
 

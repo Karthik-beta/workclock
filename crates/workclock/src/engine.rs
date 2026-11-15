@@ -46,6 +46,18 @@ pub(crate) fn resolve(date: Date, time: Time, tz: &TimeZone) -> Timestamp {
         .map_or(beyond, |zoned| zoned.timestamp())
 }
 
+/// The instants from `start` on `date` to `end`, which falls on the next date
+/// if `end <= start`.
+pub(crate) fn shift(date: Date, start: Time, end: Time, tz: &TimeZone) -> (Timestamp, Timestamp) {
+    let from = resolve(date, start, tz);
+    let to = match (end <= start, date.tomorrow()) {
+        (false, _) => resolve(date, end, tz),
+        (true, Ok(next)) => resolve(next, end, tz),
+        (true, Err(_)) => Timestamp::MAX,
+    };
+    (from, to)
+}
+
 /// Local dates whose blocks can overlap `[lo, hi)`.
 ///
 /// A block that starts on a date ends before 00:00 two dates later, so the

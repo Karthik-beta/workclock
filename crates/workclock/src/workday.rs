@@ -1,8 +1,10 @@
-use jiff::civil::Time;
+use std::collections::BTreeSet;
+
+use jiff::civil::{Date, Time};
 use jiff::tz::TimeZone;
 use jiff::Timestamp;
 
-use crate::engine::{each_date, local_dates, resolve, Block};
+use crate::engine::{each_date, local_dates, shift, Block};
 use crate::Weekdays;
 
 /// Daily hours on some days of the week, in a time zone.
@@ -30,7 +32,8 @@ impl Hours {
 /// On each local date whose weekday is in `days`, the rule makes the time
 /// from `start` to `end` available for work. If `end <= start`, the shift is
 /// overnight and ends on the next date, so `start == end` is a 24-hour shift.
-/// A shift belongs to the day it starts on.
+/// A shift belongs to the day it starts on, and a
+/// [`SpecialDay`](crate::SpecialDay) on that date replaces it.
 ///
 /// Times are wall-clock times in the rule's time zone, which defaults to the
 /// schedule's.
@@ -178,18 +181,23 @@ impl Shifts {
 
     /// Appends the parts of every shift inside `[lo, hi)`.
     pub(crate) fn blocks(&self, lo: Timestamp, hi: Timestamp, out: &mut Vec<Block>) {
-        let overnight = self.end <= self.start;
+        self.blocks_except(lo, hi, &BTreeSet::new(), out);
+    }
+
+    /// Appends the parts inside `[lo, hi)` of every shift that does not start
+    /// on one of `replaced`.
+    pub(crate) fn blocks_except(
+        &self,
+        lo: Timestamp,
+        hi: Timestamp,
+        replaced: &BTreeSet<Date>,
+        out: &mut Vec<Block>,
+    ) {
         for date in each_date(local_dates(lo, hi, &self.tz)) {
-            if !self.days.contains(date.weekday()) {
-                continue;
+            if self.days.contains(date.weekday()) && !replaced.contains(&date) {
+                let (start, end) = shift(date, self.start, self.end, &self.tz);
+                out.extend(Block::clipped(start, end, lo, hi));
             }
-            let start = resolve(date, self.start, &self.tz);
-            let end = match (overnight, date.tomorrow()) {
-                (false, _) => resolve(date, self.end, &self.tz),
-                (true, Ok(next)) => resolve(next, self.end, &self.tz),
-                (true, Err(_)) => Timestamp::MAX,
-            };
-            out.extend(Block::clipped(start, end, lo, hi));
         }
     }
 }
