@@ -3,7 +3,7 @@ title: Python
 description: Every public class, method and exception of the workclock Python package, with signatures, parameters, return values and errors.
 ---
 
-This page lists the public API of the `workclock` Python package: `workclock.Schedule`, the rules `WorkDay`, `Break` and `Holidays`, the operations, the batch methods and the exceptions. workclock needs CPython 3.11 or later. Every datetime it takes must be timezone-aware, and every result comes back in the `tzinfo` of the datetime passed in. The businesstimedelta-compatible API is on [Python compat](/docs/reference/python-compat/).
+This page lists the public API of the `workclock` Python package: `workclock.Schedule`, the rules `WorkDay`, `Break`, `Holidays` and `SpecialDay`, the operations, the batch methods and the exceptions. workclock needs CPython 3.11 or later. Every datetime it takes must be timezone-aware, and every result comes back in the `tzinfo` of the datetime passed in. The businesstimedelta-compatible API is on [Python compat](/docs/reference/python-compat/).
 
 ## `Schedule`
 
@@ -15,11 +15,11 @@ Schedule(
 )
 ```
 
-`workclock.Schedule` is working time defined by rules: the union of every `WorkDay`, minus every `Break` and every `Holidays` date. The order of the rules does not matter. [Schedules](/docs/concepts/schedules/) explains how rules combine.
+`workclock.Schedule` is working time defined by rules: the union of every `WorkDay` and `SpecialDay`, without the `WorkDay` shifts that special days replace, minus every `Break` and every `Holidays` date. The order of the rules does not matter. [Schedules](/docs/concepts/schedules/) explains how rules combine.
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `rules` | `Iterable[Rule]` | Required | `WorkDay`, `Break` and `Holidays` rules, in any order. |
+| `rules` | `Iterable[Rule]` | Required | `WorkDay`, `Break`, `Holidays` and `SpecialDay` rules, in any order. |
 | `time_zone` | `str`, `tzinfo` or `None` | `None` | Keyword only. The time zone of rules that do not set their own: an IANA name, a `zoneinfo.ZoneInfo`, a pytz zone or `datetime.timezone.utc`. `None` means UTC. |
 
 Returns a `Schedule` with these attributes:
@@ -33,7 +33,7 @@ A schedule pickles and deep-copies as its rules and time zone, and is built agai
 
 | Raises | When |
 |---|---|
-| `TypeError` | A rule is not a `WorkDay`, `Break` or `Holidays`, or `time_zone` has no IANA name. |
+| `TypeError` | A rule is not a `WorkDay`, `Break`, `Holidays` or `SpecialDay`, or `time_zone` has no IANA name. |
 | `UnknownZoneError` | The schedule's or a rule's time zone is not in the IANA database (E6). |
 | `NoWorkingTimeError` | The working hours minus the breaks are empty over a 14-day reference window, including when there is no `WorkDay` (E1–E3). |
 
@@ -173,10 +173,61 @@ support.next_period(datetime(2026, 12, 24, 17, tzinfo=london))
 # (2026-12-29 09:00, 2026-12-29 17:00), London time
 ```
 
+## `SpecialDay`
+
+```python
+SpecialDay(
+    start: time,
+    end: time,
+    dates: Iterable[date],
+    *,
+    time_zone: str | tzinfo | None = None,
+)
+```
+
+`workclock.SpecialDay` is other working hours on some dates. On each local date in `dates`, it makes the time from `start` to `end` available for work, as `WorkDay` does on a matching weekday: at or before `start`, `end` falls on the next date, so `start == end` is 24 hours. A `WorkDay` shift that starts on one of its dates is not produced, for every `WorkDay` in the schedule. Breaks and holidays still apply. [Rules: SpecialDay](/docs/concepts/rules/#specialday) covers the details.
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `start` | `datetime.time` | Required | Wall-clock start, without a `tzinfo`. |
+| `end` | `datetime.time` | Required | Wall-clock end, without a `tzinfo`. At or before `start`, the block ends on the next date. |
+| `dates` | `Iterable[date]` | Required | `datetime.date` objects. Read once, when the rule is created. Duplicates are ignored, and no dates means no effect. |
+| `time_zone` | `str`, `tzinfo` or `None` | `None` | Keyword only. The rule's time zone, as for `Schedule`. `None` uses the schedule's. |
+
+Returns an immutable `SpecialDay` with the attributes `start`, `end`, `dates` (a `frozenset[date]`) and `time_zone` (an IANA name or `None`). Rules are equal when these attributes are equal.
+
+| Raises | When |
+|---|---|
+| `TypeError` | `start` or `end` is not a `datetime.time`, `dates` is a string or holds anything but `datetime.date` objects, including `datetime.datetime` objects, or `time_zone` has no IANA name. |
+| `ValueError` | `start` or `end` has a `tzinfo`. |
+
+An unknown time zone name raises `UnknownZoneError` when the `Schedule` is built, not here. A schedule whose only available rules are `SpecialDay` rules raises `NoWorkingTimeError` when built, because special days are left out of the build check.
+
+In Python, a 09:00–13:00 day on Christmas Eve 2026:
+
+```python
+from datetime import date, datetime, time
+from zoneinfo import ZoneInfo
+
+from workclock import Holidays, Schedule, SpecialDay, WorkDay
+
+london = ZoneInfo("Europe/London")
+support = Schedule(
+    [
+        WorkDay(time(9), time(17)),
+        SpecialDay(time(9), time(13), [date(2026, 12, 24)]),
+        Holidays([date(2026, 12, 25), date(2026, 12, 28)]),
+    ],
+    time_zone=london,
+)
+support.add(datetime(2026, 12, 24, 12, tzinfo=london), hours=2)
+# 2026-12-29 10:00, London time
+```
+
 ## `Rule`
 
 ```python
-Rule = WorkDay | Break | Holidays
+Rule = WorkDay | Break | Holidays | SpecialDay
 ```
 
 `workclock.Rule` is the type of any rule a `Schedule` takes, for type annotations.
@@ -226,7 +277,7 @@ Returns the earliest `datetime` with exactly the amount of working time between 
 |---|---|
 | `TypeError` | `dt` is not a `datetime`, `delta` is not a `timedelta`, or a keyword amount is not a number. |
 | `ValueError` | `dt` is naive, or a keyword amount is NaN. |
-| `NoWorkingTimeError` | The search crosses 366 days, plus seven days per holiday date, without finding working time. |
+| `NoWorkingTimeError` | The search crosses 366 days, plus seven days per holiday date and per distinct special date, without finding working time. |
 | `OutOfRangeError` | `dt` is outside the supported range, the amount does not fit in 64-bit microseconds, or the result is outside the supported range or `datetime`'s years 1 to 9999. |
 
 In Python:
@@ -344,7 +395,7 @@ Finds the period of working time that contains an instant, or else the first one
 |---|---|---|
 | `dt` | `datetime` | The aware datetime to search from. |
 
-Returns the period as `(start, end)`, in the `tzinfo` of `dt`. If `dt` is inside a period, `start` is `dt`. A period never runs longer than the search bound of 366 days, plus seven days per holiday date.
+Returns the period as `(start, end)`, in the `tzinfo` of `dt`. If `dt` is inside a period, `start` is `dt`. A period never runs longer than the search bound of 366 days, plus seven days per holiday date and per distinct special date.
 
 | Raises | When |
 |---|---|
@@ -567,10 +618,10 @@ except WorkclockError as error:
 class NoWorkingTimeError(WorkclockError, ValueError)
 ```
 
-`workclock.NoWorkingTimeError` is raised when a schedule has no working time, or a search finds none within its bound of 366 days, plus seven days per holiday date. `Schedule` raises it when built; `add`, `sub`, `next_period`, `previous_period`, `add_many` and `sub_many` raise it when a search fails. The message names the cause:
+`workclock.NoWorkingTimeError` is raised when a schedule has no working time, or a search finds none within its bound of 366 days, plus seven days per holiday date and per distinct special date. `Schedule` raises it when built; `add`, `sub`, `next_period`, `previous_period`, `add_many` and `sub_many` raise it when a search fails. The message names the cause:
 
 - Building: `schedule has no working time: its working hours minus its breaks are empty`.
-- A failed search: `no working time within 366 days, plus seven days per holiday date, of {start}`, where `start` is the datetime the search began from.
+- A failed search: `no working time within 366 days, plus seven days per holiday date and per special date, of {start}`, where `start` is the datetime the search began from.
 
 In Python, a `WorkDay` with no days (E2):
 

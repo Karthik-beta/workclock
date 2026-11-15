@@ -1,9 +1,9 @@
 ---
 title: Rules
-description: How WorkDay, Break and Holidays rules produce working time and time off, including overnight shifts and per-rule time zones.
+description: How WorkDay, Break, Holidays and SpecialDay rules produce working time and time off, including overnight shifts, per-date hours and per-rule time zones.
 ---
 
-A rule is one input to a schedule. `WorkDay` makes time available for work; `Break` and `Holidays` are time off. Every rule has a time zone, which is the schedule's unless the rule sets its own. This page covers the three rule types in Rust, Python and JavaScript.
+A rule is one input to a schedule. `WorkDay` makes time available for work, `SpecialDay` gives some dates other working hours, and `Break` and `Holidays` are time off. Every rule has a time zone, which is the schedule's unless the rule sets its own. This page covers the four rule types in Rust, Python and JavaScript.
 
 ## Rules across one week
 
@@ -206,6 +206,111 @@ What a holiday removes:
 
 The dates are read once, when the schedule is built; workclock never calls back into Python or JavaScript per date. Each holiday date also lengthens the search bound by seven days: [Errors](/docs/concepts/errors/) explains why.
 
+## SpecialDay
+
+A `SpecialDay` gives some dates other working hours, such as a short day before a holiday. It has a `start`, an `end`, a set of dates and a time zone.
+
+| | Rust | Python | JavaScript |
+|---|---|---|---|
+| Create | `workclock::SpecialDay::new(start, end, dates)` | `workclock.SpecialDay(start, end, dates, *, time_zone=None)` | `{ type: "specialday", start, end, dates, timeZone }` |
+| `start`, `end` | `jiff::civil::Time` | `datetime.time` without a `tzinfo` | `"HH:MM"`, `"HH:MM:SS"` or `"HH:MM:SS.fff"` |
+| `dates` | Any iterator of `jiff::civil::Date` | `datetime.date` values | `YYYY-MM-DD` strings |
+| Own time zone | `.time_zone("Asia/Kolkata")` | `time_zone="Asia/Kolkata"` or a `tzinfo` | `timeZone: "Asia/Kolkata"` |
+
+What a `SpecialDay` does:
+
+- **It adds working time.** For each date in `dates`, it produces the block from `start` on that date to `end`, as a `WorkDay` does for a matching weekday. If `end` is at or before `start`, the block is overnight and ends on the next date, so `start` equal to `end` is 24 hours.
+- **It replaces `WorkDay` shifts.** A shift of any `WorkDay` rule in the schedule that starts on a date of any `SpecialDay` rule is not produced. A shift's date is the local date it starts on, in its own `WorkDay`'s zone, and it is compared with `dates` as a calendar date, whatever zone the `SpecialDay` has (DESIGN.md S18).
+- **It keeps the shift that runs into the date.** A shift that starts on the date before and ends on a special date stays (DESIGN.md S6).
+- **Breaks and holidays still apply.** A break or holiday removes the part of a special block it overlaps (DESIGN.md S9). A holiday covers its date from midnight to midnight in its own zone, so a special day on a holiday in the same zone adds no time on that date, while an overnight special block keeps its hours past midnight (DESIGN.md S11). The special day still replaces the `WorkDay` shifts that start on that date, so a night shift loses the hours after midnight that the holiday alone would keep, except where the special day covers them. To open on a holiday, leave the date out of `Holidays`.
+- **It follows the clock.** A special day is cut by daylight saving time like a shift. On 8 March 2026 a `SpecialDay` from 01:00 to 05:00 in `America/New_York` has 3 hours, and on 1 November 2026 it has 5 (DESIGN.md S16, S17).
+- **Several rules on one date add up**, which is how split hours are written (DESIGN.md S13). Duplicate dates are ignored, and a rule without dates has no effect.
+
+Special days are left out of the check that runs when a schedule is built, so a schedule with only `SpecialDay` rules fails with the no-working-time error (DESIGN.md S19). Each distinct special date lengthens the search bound by seven days, like a holiday date ([Errors](/docs/concepts/errors/)).
+
+The London support desk closes at 13:00 on Christmas Eve, Thursday 24 December 2026. With a `SpecialDay` from 09:00 to 13:00, that date has 4 hours of working time instead of 8. Two hours counted from 12:00 on Christmas Eve use 1 hour that day, skip the holidays on 25 and 28 December and the weekend, and end at 10:00 on Tuesday 29 December.
+
+<Tabs groupId="lang" persist items={['Rust', 'Python', 'JavaScript']}>
+<Tab value="Rust">
+
+```rust
+use jiff::civil::{date, time};
+use jiff::{SignedDuration, Timestamp};
+use workclock::{Holidays, Schedule, SpecialDay, Weekdays, WorkDay};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let days = Weekdays::MON_TO_FRI;
+    let support = Schedule::builder()
+        .time_zone("Europe/London")
+        .rule(WorkDay::new(time(9, 0, 0, 0), time(17, 0, 0, 0), days))
+        .rule(SpecialDay::new(time(9, 0, 0, 0), time(13, 0, 0, 0), [date(2026, 12, 24)]))
+        .rule(Holidays::new([date(2026, 12, 25), date(2026, 12, 28)]))
+        .build()?;
+
+    // London is at UTC+00:00 in December.
+    let start: Timestamp = "2026-12-24T00:00:00Z".parse()?;
+    let end: Timestamp = "2026-12-25T00:00:00Z".parse()?;
+    assert_eq!(support.between(start, end), SignedDuration::from_hours(4));
+
+    let noon: Timestamp = "2026-12-24T12:00:00Z".parse()?;
+    let due = support.add(noon, SignedDuration::from_hours(2))?;
+    assert_eq!(due.to_string(), "2026-12-29T10:00:00Z");
+    Ok(())
+}
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+from datetime import date, datetime, time
+from zoneinfo import ZoneInfo
+
+from workclock import Holidays, Schedule, SpecialDay, WorkDay
+
+london = ZoneInfo("Europe/London")
+support = Schedule(
+    [
+        WorkDay(time(9), time(17)),  # Monday to Friday by default
+        SpecialDay(time(9), time(13), [date(2026, 12, 24)]),
+        Holidays([date(2026, 12, 25), date(2026, 12, 28)]),
+    ],
+    time_zone=london,
+)
+
+start = datetime(2026, 12, 24, tzinfo=london)
+end = datetime(2026, 12, 25, tzinfo=london)
+support.between(start, end)  # 4:00:00
+
+noon = datetime(2026, 12, 24, 12, tzinfo=london)
+support.add(noon, hours=2)  # 2026-12-29 10:00, London time
+```
+
+</Tab>
+<Tab value="JavaScript">
+
+```js
+import { Schedule } from "workclock";
+
+const HOUR = 3_600_000; // 1 hour in milliseconds
+
+const support = new Schedule({
+  timeZone: "Europe/London",
+  rules: [
+    { type: "workday", start: "09:00", end: "17:00" },
+    { type: "specialday", start: "09:00", end: "13:00", dates: ["2026-12-24"] },
+    { type: "holidays", dates: ["2026-12-25", "2026-12-28"] },
+  ],
+});
+
+// London is at UTC+00:00 in December: these are London times.
+support.between("2026-12-24T00:00:00Z", "2026-12-25T00:00:00Z"); // 14400000 ms
+support.add("2026-12-24T12:00:00Z", 2 * HOUR); // Date 2026-12-29T10:00:00.000Z
+```
+
+</Tab>
+</Tabs>
+
 ## Time zones of rules
 
 Each rule has its own time zone. A rule without one uses the schedule's, and that includes `Holidays`: a holiday is a local date in the schedule's zone, not in UTC.
@@ -310,6 +415,16 @@ These examples are from [DESIGN.md](https://github.com/Karthik-beta/workclock/bl
 | HO1 | 22–06 Mon–Fri, holiday Tue 2026-01-06 | `between(Mon 22:00, Tue 06:00)` | 2h | A shift that crosses into a holiday keeps the part before midnight |
 | HO2 | Same | `between(Tue 22:00, Wed 06:00)` | 6h | A shift that starts on a holiday keeps the part after midnight |
 | HO3 | Same | `add(Mon 22:00, 3h)` | Wed 01:00 | `add` across both |
+| S1 | 9–17 Mon–Fri, special day 8–12 on Wed 2026-01-07 | `between(Wed 00:00, Thu 00:00)` | 4h | The special hours replace the shift |
+| S2 | Same | `add(Tue 16:00, 2h)` | Wed 09:00 | 1 hour on Tuesday, then 1 hour from the special day's 08:00 |
+| S4 | 9–17 Mon–Fri, special day 10–14 on Sat 2026-01-10 | `between(Fri 16:00, Mon 2026-01-12 10:00)` | 6h | A special day can fall on a day with no shift |
+| S6 | 22–06 Mon–Fri, special day 22–02 on Tue 2026-01-06 | `between(Tue 00:00, Tue 06:00)` | 6h | Monday's shift runs into the special date and is kept |
+| S7 | Same | `between(Tue 22:00, Wed 06:00)` | 4h | Tuesday's shift is replaced by the shorter special night |
+| S9 | 9–17 Mon–Fri, break 12–13 Mon–Fri, special day 8–14 on Wed 2026-01-07 | `between(Wed 00:00, Thu 00:00)` | 5h | The break still applies |
+| S11 | 9–17 Mon–Fri, holiday and special day 8–12 on Wed 2026-01-07 | `between(Wed 00:00, Thu 00:00)` | 0h | A holiday in the same zone leaves a special day no time on its date |
+| S13 | 9–17 Mon–Fri, special days 8–12 and 14–18 on Wed 2026-01-07 | `between(Wed 00:00, Thu 00:00)` | 8h | Special days on one date add up |
+| S18 | 9–17 Mon–Fri `Asia/Kolkata`, special day 10–12 on Wed 2026-01-07 in `America/New_York` | `between(Wed 00:00, Thu 00:00)` | 2h | A shift's date is its own zone's date |
+| S19 | Special day 8–12 on Wed 2026-01-07 only | Build | No-working-time error | A schedule needs a `WorkDay` |
 | Z1 | 9–17 Mon–Fri `Asia/Kolkata`, holiday 2026-01-26 | `between(2026-01-26T03:30Z, 2026-01-26T11:30Z)` | 0h | The holiday covers 09:00–17:00 IST, here given as UTC instants |
 | Z2 | Same | `add(Fri 2026-01-23T11:00Z, 1h)` | 2026-01-27T04:00Z (Tue 09:30 IST) | `add` from a UTC instant skips the holiday in Kolkata time |
 | Z3 | 9–17 Mon–Fri `America/Los_Angeles`, holiday 2026-01-26 in the schedule's zone | `between(Mon 09:00 PST, Mon 17:00 PST)` | 0h | Holidays default to the schedule's zone, not UTC |

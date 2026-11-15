@@ -104,17 +104,17 @@ Install:
 Requirements: Rust 1.85 or later, CPython 3.11 or later, Node.js 22 or later.
 
 How it works:
-- Build one Schedule from rules: WorkDay (working hours on given weekdays), Break (time off on given weekdays) and Holidays (dates removed from 00:00 to the next 00:00).
-- Give the schedule an IANA time zone name, such as "Europe/London". Rules without their own zone use the schedule's, holidays included.
+- Build one Schedule from rules: WorkDay (working hours on given weekdays), SpecialDay (other working hours on given dates, replacing the WorkDay shifts that start on them), Break (time off on given weekdays) and Holidays (dates removed from 00:00 to the next 00:00).
+- Give the schedule an IANA time zone name, such as "Europe/London". Rules without their own zone use the schedule's, holidays and special days included.
 - WorkDay defaults to Monday to Friday. An end time at or before the start time is an overnight shift.
 - between(a, b) returns the working time between two instants. It is negative when b is before a.
 - add(t, d) returns the earliest instant with exactly d of working time after t; sub(t, d) goes backwards. add(t, 0) returns t unchanged.
 - next_period and previous_period (nextPeriod and previousPeriod in JavaScript) return a stretch of working time.
 
 Language rules:
-- Python: from workclock import Schedule, WorkDay, Break, Holidays. Pass datetimes with tzinfo (zoneinfo.ZoneInfo); naive datetimes raise ValueError. Weekdays are integers, 0 is Monday. Durations are timedelta, or add(t, hours=8). For many inputs, use between_many, add_many and sub_many.
+- Python: from workclock import Schedule, WorkDay, Break, Holidays, SpecialDay. Pass datetimes with tzinfo (zoneinfo.ZoneInfo); naive datetimes raise ValueError. Weekdays are integers, 0 is Monday. Durations are timedelta, or add(t, hours=8). For many inputs, use between_many, add_many and sub_many.
 - JavaScript: import { Schedule } from "workclock". new Schedule({ timeZone, rules: [{ type: "workday", start: "09:00", end: "17:00" }, ...] }). Instants are Date objects or ISO 8601 strings with an offset. Durations are numbers of milliseconds. Weekdays are "mon" to "sun". For many inputs, use betweenMany, addMany and subMany. In a browser without a bundler, import init from "workclock/web" and await init() first.
-- Rust: use workclock::{Schedule, WorkDay, Break, Holidays, Weekdays}; build with Schedule::builder().time_zone("...").rule(...).build()?. Instants are jiff::Zoned or jiff::Timestamp; durations are jiff::SignedDuration.
+- Rust: use workclock::{Schedule, WorkDay, Break, Holidays, SpecialDay, Weekdays}; build with Schedule::builder().time_zone("...").rule(...).build()?. Instants are jiff::Zoned or jiff::Timestamp; durations are jiff::SignedDuration.
 
 Errors: a schedule with no working time fails when it is built (NoWorkingTimeError in Python and JavaScript, workclock::Error::NoWorkingTime in Rust). Every search is bounded, so no call hangs. In Python and JavaScript the errors subclass WorkclockError.
 

@@ -8,7 +8,7 @@ Working hours are wall-clock times in a rule's IANA time zone, and durations are
 ## Zones of a schedule and its rules
 
 - Every schedule has a default time zone: `time_zone` in Rust and Python, `timeZone` in JavaScript. It is UTC if omitted.
-- Each rule can set its own zone. A rule without one uses the schedule's zone; holidays do too, not UTC. [Rules](/docs/concepts/rules/) has examples with rules in different zones.
+- Each rule can set its own zone. A rule without one uses the schedule's zone; holidays and special days do too, not UTC. [Rules](/docs/concepts/rules/) has examples with rules in different zones.
 - Zones are IANA names, such as `Europe/London` or `America/New_York`. Python also accepts a `zoneinfo.ZoneInfo`, a pytz zone or `datetime.timezone.utc`, and converts it to its name.
 - An unknown name is an unknown-zone error when the schedule is built ([Errors](/docs/concepts/errors/)).
 

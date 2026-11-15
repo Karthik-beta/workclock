@@ -133,6 +133,14 @@ More complete programs are in
 The errors each binding raises are listed in
 [DESIGN.md](https://github.com/Karthik-beta/workclock/blob/main/DESIGN.md#errors-and-termination).
 
+### Special days
+
+A special day gives chosen dates other working hours, such as 09:00–13:00 on
+Christmas Eve: `SpecialDay` in Rust and Python, `{ type: "specialday", ... }`
+in JavaScript. It replaces the `WorkDay` shifts that start on those dates, and
+breaks and holidays still apply. See
+[Rules](https://workclock.karthik.nz/docs/concepts/rules/#specialday).
+
 ## Why workclock
 
 ### Correct

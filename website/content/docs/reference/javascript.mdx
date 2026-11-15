@@ -11,7 +11,7 @@ This page lists the public API of the `workclock` npm package for JavaScript and
 new Schedule(options: ScheduleOptions)
 ```
 
-`Schedule` is working time defined by rules: the time inside `"workday"` rules and outside `"break"` and `"holidays"` rules. The order of the rules does not matter. [Schedules](/docs/concepts/schedules/) explains how rules combine.
+`Schedule` is working time defined by rules: the time inside `"workday"` and `"specialday"` rules, without the `"workday"` shifts that special days replace, and outside `"break"` and `"holidays"` rules. The order of the rules does not matter. [Schedules](/docs/concepts/schedules/) explains how rules combine.
 
 | Parameter | Type | Description |
 |---|---|---|
@@ -139,10 +139,51 @@ support.nextPeriod("2026-12-24T17:00:00Z").start;
 // Date 2026-12-29T09:00:00.000Z
 ```
 
+## `SpecialDayRule`
+
+```ts
+interface SpecialDayRule {
+  type: "specialday";
+  start: string;
+  end: string;
+  dates: readonly string[];
+  timeZone?: string;
+}
+```
+
+Other working hours on some dates. On each date in `dates`, the rule makes the time from `start` to `end` available for work, as a `"workday"` rule does on a matching weekday: at or before `start`, `end` falls on the next date, so `start` equal to `end` is 24 hours. A `"workday"` shift that starts on one of its dates is not produced, for every `"workday"` rule in the schedule. Breaks and holidays still apply. [Rules: SpecialDay](/docs/concepts/rules/#specialday) covers the details.
+
+| Property | Type | Default | Description |
+|---|---|---|---|
+| `type` | `"specialday"` | Required | Marks the rule as special days. |
+| `start` | `string` | Required | Wall-clock start in the rule's time zone, written `HH:MM`, `HH:MM:SS` or `HH:MM:SS.fff` on a 24-hour clock, such as `"09:00"`. |
+| `end` | `string` | Required | Wall-clock end, in the same form. At or before `start`, the block ends on the next date. |
+| `dates` | `readonly string[]` | Required | Dates such as `"2026-12-24"`. Duplicates are ignored, and no dates means no effect. |
+| `timeZone` | `string` | The schedule's | IANA time zone of the rule. |
+
+A schedule whose only available rules are `"specialday"` rules throws `NoWorkingTimeError` when built, because special days are left out of the build check.
+
+In JavaScript, a 09:00–13:00 day on Christmas Eve 2026:
+
+```js
+import { Schedule } from "workclock";
+
+const support = new Schedule({
+  timeZone: "Europe/London",
+  rules: [
+    { type: "workday", start: "09:00", end: "17:00" },
+    { type: "specialday", start: "09:00", end: "13:00", dates: ["2026-12-24"] },
+    { type: "holidays", dates: ["2026-12-25", "2026-12-28"] },
+  ],
+});
+support.add("2026-12-24T12:00:00Z", 2 * 3_600_000);
+// Date 2026-12-29T10:00:00.000Z
+```
+
 ## `Rule`
 
 ```ts
-type Rule = HoursRule | HolidaysRule;
+type Rule = HoursRule | HolidaysRule | SpecialDayRule;
 ```
 
 One rule of a schedule, as `ScheduleOptions.rules` takes it.
@@ -265,7 +306,7 @@ Returns the earliest `Date` with exactly `ms` of working time between `t` and it
 
 | Throws | When |
 |---|---|
-| `NoWorkingTimeError` | No working time is found within 366 days, plus seven days per holiday date. |
+| `NoWorkingTimeError` | No working time is found within 366 days, plus seven days per holiday date and per distinct special date. |
 | `OutOfRangeError` | `t` or the result is outside the supported range. |
 | `TypeError` | `t` is neither a `Date` nor a string, or `ms` is not a number. A string or `BigInt` is not converted. |
 | `RangeError` | `t` is malformed, or `ms` is not a whole number within ±`Number.MAX_SAFE_INTEGER`. |
@@ -373,7 +414,7 @@ Returns a `Period`. If `t` is inside a period, its `start` is `t`.
 
 | Throws | When |
 |---|---|
-| `NoWorkingTimeError` | No working time is found within 366 days, plus seven days per holiday date. |
+| `NoWorkingTimeError` | No working time is found within 366 days, plus seven days per holiday date and per distinct special date. |
 | `OutOfRangeError` | `t` is outside the supported range, or the search reaches its end. |
 | `TypeError` | `t` is neither a `Date` nor a string. |
 | `RangeError` | `t` is malformed. |
@@ -617,10 +658,10 @@ class NoWorkingTimeError extends WorkclockError {
 }
 ```
 
-Thrown when the rules have no working time, or a search finds none within 366 days, plus seven days per holiday date. `new Schedule` throws it when building; `add`, `sub`, `nextPeriod`, `previousPeriod`, `addMany` and `subMany` throw it when a search fails. The message names the cause:
+Thrown when the rules have no working time, or a search finds none within 366 days, plus seven days per holiday date and per distinct special date. `new Schedule` throws it when building; `add`, `sub`, `nextPeriod`, `previousPeriod`, `addMany` and `subMany` throw it when a search fails. The message names the cause:
 
 - Building: `schedule has no working time: its working hours minus its breaks are empty`.
-- A failed search: `no working time within 366 days, plus seven days per holiday date, of {t}`, where `t` is the instant the search began from.
+- A failed search: `no working time within 366 days, plus seven days per holiday date and per special date, of {t}`, where `t` is the instant the search began from.
 
 In JavaScript, a `"workday"` rule with no days (E2):
 

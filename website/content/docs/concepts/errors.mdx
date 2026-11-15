@@ -19,16 +19,16 @@ workclock reports a failure as one of three errors: no working time, out of rang
 
 ## When each error is raised
 
-- **No working time, when building.** Building a schedule fails if it has no `WorkDay` rule, or if its working hours minus its breaks are empty over a 14-day reference window from Monday 1 January 2001, UTC (E1–E3). Holidays are left out of this check because there are finitely many of them.
-- **No working time, when searching.** `add`, `sub`, `next_period` and `previous_period` fail with the same error if they cross the search bound without finding working time. The bound is 366 days, plus seven days per holiday date. `between` never searches, so it never raises this error.
+- **No working time, when building.** Building a schedule fails if it has no `WorkDay` rule, or if its working hours minus its breaks are empty over a 14-day reference window from Monday 1 January 2001, UTC (E1–E3). Holidays and special days are left out of this check because there are finitely many of them, so a schedule whose only available rules are `SpecialDay` rules fails to build (DESIGN.md S19).
+- **No working time, when searching.** `add`, `sub`, `next_period` and `previous_period` fail with the same error if they cross the search bound without finding working time. The bound is 366 days, plus seven days per holiday date and per distinct special date. `between` never searches, so it never raises this error.
 - **Out of range.** A result outside the supported range, `-009999-01-02T01:59:59Z` to `9999-12-30T22:00:00Z`, is an error (E5). Python and JavaScript also raise it for an input instant outside that range, and Python for a result outside `datetime`'s years 1 to 9999 or an amount that does not fit in 64-bit microseconds.
 - **Unknown zone.** A time zone name that is not in the IANA database is an error when the schedule is built (E6).
 
-Searching past the last holiday is not an error: holidays are a finite set, and after the last date there is no more time off.
+Searching past the last holiday or special date is not an error: both are finite sets. After the last holiday there is no more time off, and after the last special date the schedule repeats weekly.
 
 ### Why the search bound rarely trips
 
-Without holidays, a schedule whose rules share one zone repeats every week, except that a DST change can skip one week's working time (D8), at most twice a year. A holiday removes one day of calendar time, which can hide one week's working time (E7, E8), so each date lengthens the bound by a week. After a schedule builds, the bound can trip only when its rules use different zones whose DST changes keep them apart for over a year (P22), or, in theory, for decades of holidays that all fall on the only working day.
+Without holidays and special days, a schedule whose rules share one zone repeats every week, except that a DST change can skip one week's working time (D8), at most twice a year. A holiday removes one day of calendar time, which can hide one week's working time (E7, E8). A special date replaces the shifts of one date and adds blocks that end within two dates, so like a holiday it can hide at most one week's working time (S20, S21). Each date lengthens the bound by a week. After a schedule builds, the bound can trip only when its rules use different zones whose DST changes keep them apart for over a year (P22), or, in theory, for decades of holidays or special days that all fall on the only working day.
 
 ## Catch an error when building
 
@@ -156,7 +156,7 @@ try {
 
 ## Messages
 
-- The Python and JavaScript no-working-time errors name their cause. Building says `schedule has no working time: its working hours minus its breaks are empty`. A failed search names the bound and the instant it started from, such as `no working time within 366 days, plus seven days per holiday date, of 2021-01-01T00:00:00Z`.
+- The Python and JavaScript no-working-time errors name their cause. Building says `schedule has no working time: its working hours minus its breaks are empty`. A failed search names the bound and the instant it started from, such as `no working time within 366 days, plus seven days per holiday date and per special date, of 2021-01-01T00:00:00Z`.
 - Rust's `Error::NoWorkingTime` has one message for both causes: `no working time found`.
 - In the batch methods (`between_many`, `add_many`, `sub_many`; `betweenMany`, `addMany`, `subMany`), the message of an error caused by one item starts with `item {i}: `, where `i` is the item's zero-based index.
 
