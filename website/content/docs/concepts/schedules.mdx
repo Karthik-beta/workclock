@@ -12,8 +12,8 @@ workclock's model, from [DESIGN.md](https://github.com/Karthik-beta/workclock/bl
 - An **instant** is an absolute point in time. Every input is converted to an instant before any calculation.
 - A **duration** is elapsed real time, not wall-clock time. It can be negative.
 - A **block** is a half-open interval of instants, `[start, end)`.
-- A **rule** produces blocks. It is either available (`WorkDay`) or time off (`Break` and `Holidays`).
-- A **schedule** combines rules. Its working time is the union of all available blocks minus the union of all time-off blocks.
+- A **rule** produces blocks. It is either available (`WorkDay` and `SpecialDay`) or time off (`Break` and `Holidays`). A `SpecialDay` also replaces the `WorkDay` shifts that start on its dates.
+- A **schedule** combines rules. Its working time is the union of all available blocks, without the shifts that special days replace, minus the union of all time-off blocks.
 - A **period** is a maximal block of working time.
 
 For the London support desk on Tuesday 29 December 2026, times in `Europe/London`:
@@ -106,9 +106,9 @@ support.between(tuesday, wednesday); // 25200000 ms
 
 How each language builds a schedule:
 
-- **Rust:** `workclock::Schedule::builder()` returns a `workclock::ScheduleBuilder`. Call `.time_zone(name)` once, `.rule(rule)` for each `WorkDay`, `Break` or `Holidays`, then `.build()`, which returns `Result<Schedule, workclock::Error>`.
-- **Python:** `workclock.Schedule(rules, *, time_zone=None)` takes any iterable of `WorkDay`, `Break` and `Holidays`. `time_zone` is an IANA name or a `tzinfo` that has one: `zoneinfo.ZoneInfo`, a pytz zone or `datetime.timezone.utc`. The `rules` and `time_zone` properties return what the schedule was built from, and a schedule pickles and deep-copies by being built again from them.
-- **JavaScript:** `new Schedule({ timeZone, rules })` takes plain objects whose `type` is `"workday"`, `"break"` or `"holidays"`.
+- **Rust:** `workclock::Schedule::builder()` returns a `workclock::ScheduleBuilder`. Call `.time_zone(name)` once, `.rule(rule)` for each `WorkDay`, `Break`, `Holidays` or `SpecialDay`, then `.build()`, which returns `Result<Schedule, workclock::Error>`.
+- **Python:** `workclock.Schedule(rules, *, time_zone=None)` takes any iterable of `WorkDay`, `Break`, `Holidays` and `SpecialDay`. `time_zone` is an IANA name or a `tzinfo` that has one: `zoneinfo.ZoneInfo`, a pytz zone or `datetime.timezone.utc`. The `rules` and `time_zone` properties return what the schedule was built from, and a schedule pickles and deep-copies by being built again from them.
+- **JavaScript:** `new Schedule({ timeZone, rules })` takes plain objects whose `type` is `"workday"`, `"break"`, `"holidays"` or `"specialday"`.
 
 The rule types and their options are on [Rules](/docs/concepts/rules/).
 
@@ -127,7 +127,7 @@ A schedule is checked once, when it is built:
 | A time zone is not in the IANA database | `Error::UnknownZone { name }` | `UnknownZoneError` | `UnknownZoneError` |
 | No available rule, or the working hours minus the breaks are empty | `Error::NoWorkingTime` | `NoWorkingTimeError` | `NoWorkingTimeError` |
 
-The no-working-time check looks at a 14-day reference window from Monday 1 January 2001, UTC. Holidays are left out of it, because there are finitely many of them. A schedule that builds therefore has working time in that window, unless holidays cover it, but not always later: when its rules use different zones, a change to one zone's daylight saving time rules can make a break cover all the working hours. The schedule in DESIGN.md P22 and P23 builds, yet its searches from 2021 fail with the no-working-time error. Every search is bounded, so no call can loop forever. Malformed input is not a workclock error: Python raises `TypeError` for a rule that is not a `WorkDay`, `Break` or `Holidays`, and JavaScript throws `TypeError` or `RangeError` for a rule of the wrong shape. Every error class is on [Errors](/docs/concepts/errors/).
+The no-working-time check looks at a 14-day reference window from Monday 1 January 2001, UTC. Holidays and special days are left out of it, because there are finitely many of them. A schedule that builds therefore has working time in that window, unless holidays cover it, but not always later: when its rules use different zones, a change to one zone's daylight saving time rules can make a break cover all the working hours. The schedule in DESIGN.md P22 and P23 builds, yet its searches from 2021 fail with the no-working-time error. Every search is bounded, so no call can loop forever. Malformed input is not a workclock error: Python raises `TypeError` for a rule that is not a `WorkDay`, `Break`, `Holidays` or `SpecialDay`, and JavaScript throws `TypeError` or `RangeError` for a rule of the wrong shape. Every error class is on [Errors](/docs/concepts/errors/).
 
 ## Edge cases
 
@@ -144,7 +144,7 @@ These examples are from [DESIGN.md](https://github.com/Karthik-beta/workclock/bl
 
 ## See also
 
-- [Rules](/docs/concepts/rules/): `WorkDay`, `Break` and `Holidays`, overnight shifts and per-rule time zones.
+- [Rules](/docs/concepts/rules/): `WorkDay`, `Break`, `Holidays` and `SpecialDay`, overnight shifts and per-rule time zones.
 - [Adding time](/docs/concepts/adding-time/) and [Measuring time](/docs/concepts/measuring-time/): `add`, `sub` and `between`.
 - [Periods](/docs/concepts/periods/): the maximal stretches of working time a schedule is made of.
 - [Errors](/docs/concepts/errors/): every error class in each language.

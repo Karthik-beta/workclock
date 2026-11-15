@@ -124,7 +124,7 @@ London's offset from UTC is zero in December, so the UTC instants in the Rust an
 
 ## Long periods and errors
 
-Every search stops at the search bound: 366 days, plus seven days per holiday date in the schedule.
+Every search stops at the search bound: 366 days, plus seven days per holiday date and per distinct special date in the schedule.
 
 - **Round-the-clock schedules.** A period is capped at the search bound. `next_period` returns at most the bound from the period's start, and `previous_period` at most the bound up to its end. Only schedules that work round the clock have periods that long (P19–P21).
 - **No working time.** `next_period` fails with the no-working-time error if no period starts within the search bound after `t`, and `previous_period` if none ends within the bound before `t` (P22, P23). That is `workclock::Error::NoWorkingTime` in Rust and `NoWorkingTimeError` in Python and JavaScript.

@@ -67,6 +67,28 @@ Zones can be IANA names, `zoneinfo.ZoneInfo`, pytz zones or
 `datetime.timezone.utc`. Errors subclass `workclock.WorkclockError` and the
 matching built-in exception.
 
+### Special days
+
+A `SpecialDay` gives chosen dates other working hours, and replaces the
+`WorkDay` shifts that start on those dates. Breaks and holidays still apply.
+
+```python
+from datetime import date, datetime, time, timezone
+
+from workclock import Schedule, SpecialDay, WorkDay
+
+office = Schedule(
+    [
+        WorkDay(time(9), time(17)),
+        SpecialDay(time(9), time(13), [date(2026, 12, 24)]),  # Christmas Eve
+    ]
+)
+office.between(
+    datetime(2026, 12, 24, tzinfo=timezone.utc),
+    datetime(2026, 12, 25, tzinfo=timezone.utc),
+)  # 4:00:00
+```
+
 ### Batches and NumPy
 
 `between_many`, `add_many` and `sub_many` take lists of datetimes, or NumPy
