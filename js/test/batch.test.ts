@@ -95,6 +95,36 @@ describe("addMany and subMany", () => {
   });
 });
 
+describe("with special days", () => {
+  const christmas = new Schedule({
+    timeZone: "Europe/London",
+    rules: [
+      { type: "workday", start: "09:00", end: "17:00" },
+      { type: "break", start: "12:00", end: "13:00" },
+      { type: "specialday", start: "08:00", end: "12:00", dates: ["2026-12-24", "2026-12-31"] },
+      { type: "specialday", start: "10:00", end: "14:00", dates: ["2026-12-27"] },
+      { type: "holidays", dates: ["2026-12-25", "2026-12-28"] },
+    ],
+  });
+  // Every 20 minutes through December 2026.
+  const december = Float64Array.from({ length: 31 * 72 }, (_, i) => Date.UTC(2026, 11, 1) + i * 20 * 60_000);
+  const shifts = Float64Array.from(december, (_, i) => (i % 40) * 15 * 60_000 - 5 * HOUR);
+
+  test("betweenMany matches between", () => {
+    const end = december.map((t) => t + 26 * HOUR);
+    expect(Array.from(christmas.betweenMany(december, end))).toEqual(
+      Array.from(december, (t, i) => christmas.between(new Date(t), new Date(end[i]))),
+    );
+  });
+
+  test("addMany and subMany match add and sub", () => {
+    const one = (op: "add" | "sub") =>
+      Array.from(december, (t, i) => christmas[op](new Date(t), shifts[i]).getTime());
+    expect(Array.from(christmas.addMany(december, shifts))).toEqual(one("add"));
+    expect(Array.from(christmas.subMany(december, shifts))).toEqual(one("sub"));
+  });
+});
+
 describe("errors name the failing item", () => {
   test("a malformed instant", () => {
     expect(() => office.addMany(["2026-01-05T09:00:00Z", "2026-01-05"], HOUR)).toThrow(

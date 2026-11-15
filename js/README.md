@@ -48,9 +48,10 @@ support.nextPeriod("2026-12-29T11:00:00Z").end; // Date 2026-12-29T12:00:00.000Z
 ```
 
 `sub` counts back, and `previousPeriod` finds the period of working time at or
-before an instant. Rules are `"workday"`, `"break"` or `"holidays"`; times are
-`HH:MM[:SS[.fff]]`, `days` defaults to Monday to Friday, and each rule can set
-its own `timeZone`.
+before an instant. Rules are `"workday"`, `"break"`, `"holidays"` or
+`"specialday"`; times are `HH:MM[:SS[.fff]]`, `days` defaults to Monday to
+Friday, and each rule can set its own `timeZone`. A `"specialday"` replaces the
+workday hours that start on its `dates`; breaks and holidays still apply.
 
 ## Instants and durations
 
@@ -72,7 +73,7 @@ Schedule errors are instances of `WorkclockError`, with a `kind`:
 
 | Class | `kind` | Thrown when |
 |---|---|---|
-| `NoWorkingTimeError` | `"no_working_time"` | The rules have no working time, or a search finds none within 366 days, plus seven days per holiday date. |
+| `NoWorkingTimeError` | `"no_working_time"` | The rules have no working time, or a search finds none within 366 days, plus seven days per holiday date and per special date. |
 | `OutOfRangeError` | `"out_of_range"` | An instant or a result is outside the supported range. |
 | `UnknownZoneError` | `"unknown_zone"` | A time zone is not in the IANA database. |
 
