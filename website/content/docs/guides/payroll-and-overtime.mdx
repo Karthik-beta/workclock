@@ -159,7 +159,7 @@ In Python, subtracting two datetimes with the same `tzinfo` gives the difference
 - **Staying clocked in through lunch.** A span that covers the 12:00–13:00 break counts the break as overtime, because the break is not contracted time. A single span from 08:30 to 18:15 on Tuesday has 7 hours of contracted time and 2 hours 45 minutes of overtime, including the lunch hour. Record the break as a clock-out, or subtract it.
 - **Night shifts.** A contract with a 22:00–06:00 `WorkDay` counts across midnight, and the shift belongs to the weekday it starts on ([Overnight shifts](/docs/guides/overnight-shifts/)).
 - **Holidays.** Each date in `Holidays` removes 00:00 to the next 00:00 in the schedule's time zone ([Rules: Holidays](/docs/concepts/rules/#holidays)).
-- **Different hours on one date.** A `SpecialDay` gives a date other contracted hours, such as 09:00–12:00 on a half day, and replaces the `WorkDay` shifts that start on it. The lunch break still applies on that date ([Rules: SpecialDay](/docs/concepts/rules/#specialday)).
+- **Different hours on one date.** A `SpecialDay` gives a date other contracted hours, such as 09:00–12:00 on a half day, and replaces the `WorkDay` shifts that start on it. The lunch break still applies when that date is a weekday ([Rules: SpecialDay](/docs/concepts/rules/#specialday)).
 - **DST.** `between` returns elapsed real time, so a night shift across a clock change is an hour shorter or longer ([Time zones and DST](/docs/concepts/time-zones-and-dst/)).
 
 Not in 0.2: results as business days. `between` returns a duration ([DESIGN.md: Scope](https://github.com/Karthik-beta/workclock/blob/main/DESIGN.md#scope)).
