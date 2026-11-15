@@ -45,7 +45,7 @@ const header = `# workclock
 Status: pre-1.0; the API may still change in a minor release.
 
 - Install: \`cargo add workclock jiff\` (Rust; the API uses jiff 0.2 types), \`pip install workclock\` or \`uv add workclock\` (Python), \`npm i workclock\` (JavaScript and TypeScript).
-- Requires Rust 1.85+, CPython 3.9+, Node.js 22+.
+- Requires Rust 1.85+, CPython 3.11+, Node.js 22+.
 - Inputs must be timezone-aware: Python \`datetime\` with \`tzinfo\`, JavaScript \`Date\` or ISO 8601 string with an offset, Rust \`jiff::Zoned\` or \`jiff::Timestamp\`. Time zones are IANA names such as \`Europe/London\`.
 - JavaScript durations are milliseconds.`;
 

@@ -20,7 +20,7 @@ async function readmeStrip() {
 
 const requirements = [
   { label: 'Rust 1.85+', href: `${repoUrl}#requirements` },
-  { label: 'Python 3.9+', href: `${repoUrl}#requirements` },
+  { label: 'Python 3.11+', href: `${repoUrl}#requirements` },
   { label: 'Node.js 22+', href: `${repoUrl}#requirements` },
 ];
 

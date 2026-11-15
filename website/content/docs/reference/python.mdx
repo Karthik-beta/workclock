@@ -3,7 +3,7 @@ title: Python
 description: Every public class, method and exception of the workclock Python package, with signatures, parameters, return values and errors.
 ---
 
-This page lists the public API of the `workclock` Python package: `workclock.Schedule`, the rules `WorkDay`, `Break` and `Holidays`, the operations, the batch methods and the exceptions. workclock needs CPython 3.9 or later. Every datetime it takes must be timezone-aware, and every result comes back in the `tzinfo` of the datetime passed in. The businesstimedelta-compatible API is on [Python compat](/docs/reference/python-compat/).
+This page lists the public API of the `workclock` Python package: `workclock.Schedule`, the rules `WorkDay`, `Break` and `Holidays`, the operations, the batch methods and the exceptions. workclock needs CPython 3.11 or later. Every datetime it takes must be timezone-aware, and every result comes back in the `tzinfo` of the datetime passed in. The businesstimedelta-compatible API is on [Python compat](/docs/reference/python-compat/).
 
 ## `Schedule`
 
@@ -176,7 +176,7 @@ support.next_period(datetime(2026, 12, 24, 17, tzinfo=london))
 ## `Rule`
 
 ```python
-Rule = Union[WorkDay, Break, Holidays]
+Rule = WorkDay | Break | Holidays
 ```
 
 `workclock.Rule` is the type of any rule a `Schedule` takes, for type annotations.

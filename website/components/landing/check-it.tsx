@@ -79,7 +79,7 @@ const statements: { text: ReactNode; source: ReactNode }[] = [
     ),
   },
   {
-    text: 'Tested on Linux, macOS and Windows; Python 3.9 and 3.15; Node.js 22, 24 and 26; Rust 1.85 checked separately.',
+    text: 'Tested on Linux, macOS and Windows; Python 3.11 and 3.15; Node.js 22, 24 and 26; Rust 1.85 checked separately.',
     source: (
       <>
         <Code>ci.yml</Code>, jobs <Code>test</Code>, <Code>python-test</Code>,{' '}
@@ -122,7 +122,7 @@ const statements: { text: ReactNode; source: ReactNode }[] = [
     ),
   },
   {
-    text: 'MIT licence. Rust 1.85+, CPython 3.9+, Node.js 22+.',
+    text: 'MIT licence. Rust 1.85+, CPython 3.11+, Node.js 22+.',
     source: (
       <>
         <A href={repoFile('LICENSE')}>LICENSE</A>,{' '}
