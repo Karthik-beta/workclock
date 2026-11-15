@@ -2,9 +2,9 @@
 //! and which instant is reached after adding or subtracting working time.
 //!
 //! Working time is defined by composable rules (working days and hours,
-//! breaks and holidays) evaluated in IANA time zones, including overnight
-//! shifts. The exact semantics, with an example for every edge case, are in
-//! [DESIGN.md](https://github.com/Karthik-beta/workclock/blob/main/DESIGN.md).
+//! breaks, holidays and special days) evaluated in IANA time zones, including
+//! overnight shifts. The exact semantics, with an example for every edge
+//! case, are in [DESIGN.md](https://github.com/Karthik-beta/workclock/blob/main/DESIGN.md).
 //!
 //! # Examples
 //!
@@ -30,7 +30,7 @@
 //!
 //! Every fallible operation returns [`Error`], and no operation panics or
 //! loops forever: searches give up after crossing 366 days, plus seven days
-//! per holiday date, without finding working time.
+//! per holiday date and per special date, without finding working time.
 
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
@@ -40,6 +40,7 @@ mod error;
 mod holiday;
 mod rule;
 mod schedule;
+mod special;
 mod weekdays;
 mod workday;
 
@@ -47,6 +48,7 @@ pub use error::Error;
 pub use holiday::Holidays;
 pub use rule::Rule;
 pub use schedule::{Schedule, ScheduleBuilder};
+pub use special::SpecialDay;
 pub use weekdays::Weekdays;
 pub use workday::{Break, WorkDay};
 

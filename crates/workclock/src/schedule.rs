@@ -1,10 +1,13 @@
+use std::collections::BTreeSet;
 use std::ops::Range;
 
+use jiff::civil::Date;
 use jiff::tz::TimeZone;
 use jiff::{SignedDuration, Timestamp};
 
 use crate::engine::{subtract, union, Block};
 use crate::holiday::HolidayDates;
+use crate::special::SpecialShifts;
 use crate::workday::Shifts;
 use crate::{Break, Error, Rule, WorkDay};
 
@@ -29,8 +32,10 @@ struct Week {
 
 /// Working time defined by rules, evaluated in IANA time zones.
 ///
-/// Working time is the union of every [`WorkDay`] minus every [`Break`] and
-/// [`Holidays`](crate::Holidays) date, so the order of rules never matters.
+/// Working time is the union of every [`WorkDay`] and
+/// [`SpecialDay`](crate::SpecialDay) minus every [`Break`] and
+/// [`Holidays`](crate::Holidays) date, so the order of rules never matters. A
+/// special day replaces the `WorkDay` shifts that start on its dates.
 ///
 /// # Examples
 ///
@@ -51,6 +56,10 @@ pub struct Schedule {
     work: Vec<Shifts>,
     breaks: Vec<Shifts>,
     holidays: Vec<HolidayDates>,
+    special_days: Vec<SpecialShifts>,
+    /// The dates of every special day, on which no `WorkDay` shift starts.
+    /// They are compared as calendar dates in each `WorkDay`'s own time zone.
+    special_dates: BTreeSet<Date>,
     /// The longest stretch without working time that a search crosses before
     /// giving up, and the longest period that `next_period` and
     /// `previous_period` return.
@@ -135,7 +144,8 @@ impl Schedule {
     /// # Errors
     ///
     /// - [`Error::NoWorkingTime`] if the search crosses 366 days, plus seven
-    ///   days per holiday date, without finding working time.
+    ///   days per holiday date and per special date, without finding working
+    ///   time.
     /// - [`Error::OutOfRange`] if the result is outside the range of
     ///   [`Timestamp`].
     ///
@@ -172,7 +182,8 @@ impl Schedule {
     /// # Errors
     ///
     /// - [`Error::NoWorkingTime`] if the search crosses 366 days, plus seven
-    ///   days per holiday date, without finding working time.
+    ///   days per holiday date and per special date, without finding working
+    ///   time.
     /// - [`Error::OutOfRange`] if the result is outside the range of
     ///   [`Timestamp`].
     ///
@@ -429,8 +440,8 @@ impl Schedule {
     }
 
     /// Whether the chunks either side of `at` hold the same working time, a
-    /// week apart: no rule's time zone changes offset, and no holiday falls,
-    /// anywhere the blocks of either chunk can reach.
+    /// week apart: no rule's time zone changes offset, and no holiday or
+    /// special date falls, anywhere the blocks of either chunk can reach.
     fn repeats(&self, at: Timestamp) -> bool {
         let (Ok(start), Ok(end)) = (at.checked_sub(CHUNK + REACH), at.checked_add(CHUNK + REACH))
         else {
@@ -441,12 +452,23 @@ impl Schedule {
             .chain(&self.breaks)
             .all(|rule| rule.steady(start, end))
             && self.holidays.iter().all(|rule| rule.none_near(start, end))
+            && self.no_special_date_near(start, end)
+    }
+
+    /// Whether no special date falls near `[lo, hi)` in the zone of its rule.
+    /// The window is wider than any difference between time zones, so this
+    /// also covers the `WorkDay` shifts that those dates replace.
+    fn no_special_date_near(&self, lo: Timestamp, hi: Timestamp) -> bool {
+        self.special_days.iter().all(|rule| rule.none_near(lo, hi))
     }
 
     /// Working time inside `[lo, hi)`, sorted and merged.
     fn working_time(&self, lo: Timestamp, hi: Timestamp) -> Vec<Block> {
         let mut on = Vec::new();
         for rule in &self.work {
+            rule.blocks_except(lo, hi, &self.special_dates, &mut on);
+        }
+        for rule in &self.special_days {
             rule.blocks(lo, hi, &mut on);
         }
         union(&mut on);
@@ -534,8 +556,9 @@ impl ScheduleBuilder {
     /// - [`Error::UnknownZone`] if a time zone name is not in the IANA time
     ///   zone database.
     /// - [`Error::NoWorkingTime`] if the working hours minus the breaks are
-    ///   empty over the two weeks from Monday 2001-01-01, UTC. Holidays are
-    ///   not part of this check because there are finitely many of them.
+    ///   empty over the two weeks from Monday 2001-01-01, UTC. Holidays and
+    ///   special days are not part of this check because there are finitely
+    ///   many of them, so special days alone do not make a schedule.
     ///
     /// # Examples
     ///
@@ -562,9 +585,12 @@ impl ScheduleBuilder {
             work: Vec::new(),
             breaks: Vec::new(),
             holidays: Vec::new(),
+            special_days: Vec::new(),
+            special_dates: BTreeSet::new(),
             search_limit: SignedDuration::ZERO,
         };
         let mut holidays = Vec::new();
+        let mut special_days = Vec::new();
         for rule in self.rules {
             match rule {
                 Rule::WorkDay(WorkDay(hours)) => {
@@ -577,10 +603,15 @@ impl ScheduleBuilder {
                     let tz = zone(&rule.zone)?;
                     holidays.push(rule.resolve(tz));
                 }
+                Rule::SpecialDay(rule) => {
+                    let tz = zone(&rule.zone)?;
+                    special_days.push(rule.resolve(tz));
+                }
             }
         }
 
-        // Holidays are added after the check so that they do not count.
+        // Holidays and special days are added after the check so that they
+        // do not count.
         let check_end = BUILD_CHECK_START + SignedDuration::from_hours(14 * 24);
         if schedule
             .working_time(BUILD_CHECK_START, check_end)
@@ -589,13 +620,21 @@ impl ScheduleBuilder {
             return Err(Error::NoWorkingTime);
         }
         schedule.holidays = holidays;
+        schedule.special_dates = special_days
+            .iter()
+            .flat_map(|rule| rule.dates().iter().copied())
+            .collect();
+        schedule.special_days = special_days;
 
-        // Without holidays, a schedule in one zone repeats every week, apart
-        // from the odd week whose working time a DST change skips. A holiday
-        // removes one day of calendar time, which can hide one week's working
-        // time, so each date can lengthen a gap by a week.
+        // Without holidays and special days, a schedule in one zone repeats
+        // every week, apart from the odd week whose working time a DST change
+        // skips. A holiday removes one day of calendar time, and a special
+        // date replaces the shifts of one date with blocks that end within two
+        // dates, so each can hide one week's working time and lengthen a gap
+        // by a week.
         let holiday_dates: usize = schedule.holidays.iter().map(HolidayDates::len).sum();
-        schedule.search_limit = i64::try_from(holiday_dates)
+        let dates = holiday_dates + schedule.special_dates.len();
+        schedule.search_limit = i64::try_from(dates)
             .ok()
             .and_then(|n| {
                 n.checked_mul(7)?
@@ -615,12 +654,12 @@ fn lookup(name: &str) -> Result<TimeZone, Error> {
 
 #[cfg(test)]
 mod tests {
-    use jiff::civil::{date, time, Time, Weekday};
+    use jiff::civil::{date, time, Date, Time, Weekday};
     use jiff::tz::TimeZone;
-    use jiff::{SignedDuration, Timestamp, Zoned};
+    use jiff::{SignedDuration, Timestamp, ToSpan, Zoned};
 
     use super::{Schedule, BUILD_CHECK_START};
-    use crate::{Break, Error, Holidays, Weekdays, WorkDay};
+    use crate::{Break, Error, Holidays, SpecialDay, Weekdays, WorkDay};
 
     fn office() -> WorkDay {
         WorkDay::new(time(9, 0, 0, 0), time(17, 0, 0, 0), Weekdays::MON_TO_FRI)
@@ -1009,7 +1048,14 @@ mod tests {
             .rule(office())
             .rule(Holidays::new([]).time_zone("Mars/Olympus_Mons"))
             .build();
-        for result in [in_schedule, in_rule, in_holidays] {
+        let in_special_day = Schedule::builder()
+            .rule(office())
+            .rule(
+                SpecialDay::new(time(8, 0, 0, 0), time(12, 0, 0, 0), [])
+                    .time_zone("Mars/Olympus_Mons"),
+            )
+            .build();
+        for result in [in_schedule, in_rule, in_holidays, in_special_day] {
             assert_eq!(
                 result.unwrap_err(),
                 Error::UnknownZone {
@@ -1073,5 +1119,325 @@ mod tests {
             working(&utc, monday.0, monday.1),
             ["2026-01-27T00:00:00Z/2026-01-27T01:00:00Z"]
         );
+    }
+
+    fn special(start: i8, end: i8, dates: impl IntoIterator<Item = Date>) -> SpecialDay {
+        SpecialDay::new(time(start, 0, 0, 0), time(end, 0, 0, 0), dates)
+    }
+
+    fn wednesday() -> Date {
+        date(2026, 1, 7)
+    }
+
+    #[test]
+    fn special_day_replaces_the_shift_on_its_date() {
+        // S1, S2, S3
+        let schedule = Schedule::builder()
+            .rule(office())
+            .rule(special(8, 12, [wednesday()]))
+            .build()
+            .unwrap();
+        assert_eq!(
+            working(&schedule, "2026-01-07T00:00:00Z", "2026-01-08T00:00:00Z"),
+            ["2026-01-07T08:00:00Z/2026-01-07T12:00:00Z"]
+        );
+        assert_eq!(
+            schedule.add(at("2026-01-06T16:00:00Z"), h(2)),
+            Ok(at("2026-01-07T09:00:00Z"))
+        );
+        assert_eq!(
+            schedule.sub(at("2026-01-08T10:00:00Z"), h(2)),
+            Ok(at("2026-01-07T11:00:00Z"))
+        );
+    }
+
+    #[test]
+    fn special_day_on_a_weekend_adds_working_time() {
+        // S4, S5
+        let schedule = Schedule::builder()
+            .rule(office())
+            .rule(special(10, 14, [date(2026, 1, 10)]))
+            .build()
+            .unwrap();
+        assert_eq!(
+            between(&schedule, "2026-01-09T16:00:00Z", "2026-01-12T10:00:00Z"),
+            h(6)
+        );
+        assert_eq!(
+            schedule.add(at("2026-01-09T17:00:00Z"), h(2)),
+            Ok(at("2026-01-10T12:00:00Z"))
+        );
+    }
+
+    #[test]
+    fn special_night_keeps_the_shift_from_the_night_before() {
+        // S6, S7, S8
+        let schedule = Schedule::builder()
+            .rule(night())
+            .rule(special(22, 2, [date(2026, 1, 6)]))
+            .build()
+            .unwrap();
+        assert_eq!(
+            working(&schedule, "2026-01-05T12:00:00Z", "2026-01-07T12:00:00Z"),
+            [
+                "2026-01-05T22:00:00Z/2026-01-06T06:00:00Z",
+                "2026-01-06T22:00:00Z/2026-01-07T02:00:00Z",
+            ]
+        );
+        assert_eq!(
+            between(&schedule, "2026-01-06T22:00:00Z", "2026-01-07T06:00:00Z"),
+            h(4)
+        );
+        assert_eq!(
+            schedule.add(at("2026-01-06T05:00:00Z"), h(2)),
+            Ok(at("2026-01-06T23:00:00Z"))
+        );
+    }
+
+    #[test]
+    fn breaks_apply_inside_special_hours() {
+        // S9, S10
+        let lunch = Break::new(time(12, 0, 0, 0), time(13, 0, 0, 0), Weekdays::MON_TO_FRI);
+        let schedule = Schedule::builder()
+            .rule(office())
+            .rule(lunch)
+            .rule(special(8, 14, [wednesday()]))
+            .build()
+            .unwrap();
+        assert_eq!(
+            between(&schedule, "2026-01-07T00:00:00Z", "2026-01-08T00:00:00Z"),
+            h(5)
+        );
+        assert_eq!(
+            schedule.next_period(at("2026-01-07T12:30:00Z")),
+            Ok(at("2026-01-07T13:00:00Z")..at("2026-01-07T14:00:00Z"))
+        );
+    }
+
+    #[test]
+    fn a_holiday_that_is_also_a_special_day_is_not_worked() {
+        // S11, S12
+        let schedule = Schedule::builder()
+            .rule(office())
+            .rule(Holidays::new([wednesday()]))
+            .rule(special(8, 12, [wednesday()]))
+            .build()
+            .unwrap();
+        assert_eq!(
+            between(&schedule, "2026-01-07T00:00:00Z", "2026-01-08T00:00:00Z"),
+            h(0)
+        );
+        assert_eq!(
+            schedule.add(at("2026-01-06T16:00:00Z"), h(2)),
+            Ok(at("2026-01-08T10:00:00Z"))
+        );
+    }
+
+    #[test]
+    fn special_days_on_one_date_add_up() {
+        // S13, S14, S15
+        let schedule = Schedule::builder()
+            .rule(special(14, 18, [wednesday()]))
+            .rule(office())
+            .rule(special(8, 12, [wednesday()]))
+            .build()
+            .unwrap();
+        assert_eq!(
+            between(&schedule, "2026-01-07T00:00:00Z", "2026-01-08T00:00:00Z"),
+            h(8)
+        );
+        assert_eq!(
+            schedule.next_period(at("2026-01-07T12:00:00Z")),
+            Ok(at("2026-01-07T14:00:00Z")..at("2026-01-07T18:00:00Z"))
+        );
+        assert_eq!(
+            schedule.previous_period(at("2026-01-07T14:00:00Z")),
+            Ok(at("2026-01-07T08:00:00Z")..at("2026-01-07T12:00:00Z"))
+        );
+    }
+
+    #[test]
+    fn special_days_on_dst_changes_are_shorter_or_longer() {
+        // S16, S17
+        let schedule = Schedule::builder()
+            .time_zone("America/New_York")
+            .rule(office())
+            .rule(special(1, 5, [date(2026, 3, 8), date(2026, 11, 1)]))
+            .build()
+            .unwrap();
+        assert_eq!(
+            between(&schedule, "2026-03-08T05:00:00Z", "2026-03-09T04:00:00Z"),
+            h(3)
+        );
+        assert_eq!(
+            between(&schedule, "2026-11-01T04:00:00Z", "2026-11-02T05:00:00Z"),
+            h(5)
+        );
+    }
+
+    #[test]
+    fn special_dates_are_calendar_dates_in_each_workday_zone() {
+        // S18: Kolkata's Wednesday shift starts on Tuesday in New York.
+        let schedule = Schedule::builder()
+            .time_zone("Asia/Kolkata")
+            .rule(office())
+            .rule(special(10, 12, [wednesday()]).time_zone("America/New_York"))
+            .build()
+            .unwrap();
+        assert_eq!(
+            working(&schedule, "2026-01-06T00:00:00Z", "2026-01-09T00:00:00Z"),
+            [
+                "2026-01-06T03:30:00Z/2026-01-06T11:30:00Z",
+                "2026-01-07T15:00:00Z/2026-01-07T17:00:00Z",
+                "2026-01-08T03:30:00Z/2026-01-08T11:30:00Z",
+            ]
+        );
+    }
+
+    #[test]
+    fn special_dates_replace_the_shifts_of_every_workday() {
+        let schedule = Schedule::builder()
+            .rule(office())
+            .rule(office().time_zone("Asia/Kolkata"))
+            .rule(special(10, 11, [wednesday()]))
+            .build()
+            .unwrap();
+        assert_eq!(
+            working(&schedule, "2026-01-07T00:00:00Z", "2026-01-08T00:00:00Z"),
+            ["2026-01-07T10:00:00Z/2026-01-07T11:00:00Z"]
+        );
+    }
+
+    #[test]
+    fn special_days_do_not_count_against_the_build_check() {
+        // S19, and the shifts special days replace are not missed either.
+        let alone = Schedule::builder()
+            .rule(special(8, 12, [wednesday()]))
+            .build();
+        assert_eq!(alone.unwrap_err(), Error::NoWorkingTime);
+
+        let every_day = Weekdays::ALL;
+        let lunch_only = special(
+            12,
+            13,
+            std::iter::successors(Some(date(2001, 1, 1)), |d| d.tomorrow().ok())
+                .take_while(|d| d.year() == 2001),
+        );
+        assert!(Schedule::builder()
+            .rule(WorkDay::new(time(9, 0, 0, 0), time(17, 0, 0, 0), every_day))
+            .rule(Break::new(time(12, 0, 0, 0), time(13, 0, 0, 0), every_day))
+            .rule(lunch_only)
+            .build()
+            .is_ok());
+    }
+
+    #[test]
+    fn special_dates_extend_the_search_bound() {
+        // S20, S21: every special Monday falls inside the break.
+        let mondays: Weekdays = [Weekday::Monday].into_iter().collect();
+        let special_mondays =
+            std::iter::successors(Some(date(2026, 1, 12)), |d| d.checked_add(1.week()).ok())
+                .take_while(|d| *d <= date(2027, 3, 15));
+        let schedule = Schedule::builder()
+            .rule(WorkDay::new(time(9, 0, 0, 0), time(17, 0, 0, 0), mondays))
+            .rule(Break::new(time(12, 0, 0, 0), time(13, 0, 0, 0), mondays))
+            .rule(special(12, 13, special_mondays))
+            .build()
+            .unwrap();
+        assert_eq!(schedule.search_limit, h((366 + 7 * 62) * 24));
+        assert_eq!(
+            schedule.add(at("2026-01-06T00:00:00Z"), h(1)),
+            Ok(at("2027-03-22T10:00:00Z"))
+        );
+        assert_eq!(
+            schedule.sub(at("2027-03-22T09:00:00Z"), h(1)),
+            Ok(at("2026-01-05T16:00:00Z"))
+        );
+    }
+
+    #[test]
+    fn each_special_date_counts_once_towards_the_search_bound() {
+        let schedule = Schedule::builder()
+            .rule(office())
+            .rule(special(8, 12, [wednesday(), date(2026, 1, 8)]))
+            .rule(special(14, 18, [wednesday()]).time_zone("Asia/Kolkata"))
+            .rule(special(8, 12, []))
+            .build()
+            .unwrap();
+        assert_eq!(schedule.search_limit, h((366 + 7 * 2) * 24));
+    }
+
+    #[test]
+    fn holidays_and_special_dates_each_extend_the_search_bound() {
+        let schedule = Schedule::builder()
+            .rule(office())
+            .rule(Holidays::new([
+                date(2026, 1, 7),
+                date(2026, 1, 8),
+                date(2026, 1, 9),
+            ]))
+            .rule(special(8, 12, [date(2026, 1, 8), date(2026, 1, 10)]))
+            .rule(special(14, 18, [date(2026, 1, 10), date(2026, 1, 11)]))
+            .build()
+            .unwrap();
+        assert_eq!(schedule.search_limit, h((366 + 7 * 3 + 7 * 3) * 24));
+    }
+
+    #[test]
+    fn a_special_day_on_the_last_date_runs_to_the_end_of_the_range() {
+        // 9999-12-31 is a Friday, so the special hours replace a WorkDay shift.
+        let schedule = Schedule::builder()
+            .time_zone("Etc/GMT-14")
+            .rule(office())
+            .rule(special(0, 6, [date(9999, 12, 31)]))
+            .build()
+            .unwrap();
+        let start = at("9999-12-30T10:00:00Z");
+        assert_eq!(schedule.between(start, Timestamp::MAX), h(6));
+        assert_eq!(schedule.add(start, h(6)), Ok(at("9999-12-30T16:00:00Z")));
+        assert_eq!(schedule.add(start, h(7)), Err(Error::OutOfRange));
+        assert_eq!(
+            schedule.sub(Timestamp::MAX, h(1)),
+            Ok(at("9999-12-30T15:00:00Z"))
+        );
+        // The Thursday shift before it ends at 03:00.
+        assert_eq!(
+            schedule.sub(Timestamp::MAX, h(7)),
+            Ok(at("9999-12-30T02:00:00Z"))
+        );
+    }
+
+    #[test]
+    fn weeks_near_special_dates_are_not_reused() {
+        // A year of 9-17 Mon-Fri is 2080 hours. The special days take four
+        // hours off one Wednesday, add four on one Saturday, and turn one
+        // Wednesday into 17:00-18:00 UTC, an hour in Los Angeles.
+        let schedule = Schedule::builder()
+            .rule(office())
+            .rule(special(8, 12, [date(2026, 3, 11)]))
+            .rule(special(10, 14, [date(2026, 6, 13)]))
+            .rule(special(10, 11, [date(2026, 9, 16)]).time_zone("America/Los_Angeles"))
+            .build()
+            .unwrap();
+        let (start, end) = (at("2026-01-05T00:00:00Z"), at("2027-01-04T00:00:00Z"));
+        let total = h(2080 - 4 + 4 - 7);
+        assert_eq!(schedule.between(start, end), total);
+        assert_eq!(schedule.add(start, total), Ok(at("2027-01-01T17:00:00Z")));
+        assert_eq!(
+            schedule.sub(at("2027-01-01T17:00:00Z"), total),
+            Ok(at("2026-01-05T09:00:00Z"))
+        );
+    }
+
+    #[test]
+    fn special_day_without_dates_has_no_effect() {
+        let plain = Schedule::builder().rule(office()).build().unwrap();
+        let schedule = Schedule::builder()
+            .rule(office())
+            .rule(special(8, 12, []))
+            .build()
+            .unwrap();
+        let (a, b) = ("2026-01-05T00:00:00Z", "2026-02-02T00:00:00Z");
+        assert_eq!(between(&schedule, a, b), between(&plain, a, b));
     }
 }

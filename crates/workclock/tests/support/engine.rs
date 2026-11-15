@@ -1,6 +1,6 @@
 //! Builds engine schedules from fixture specs.
 
-use workclock::{Break, Error, Holidays, Schedule, WorkDay};
+use workclock::{Break, Error, Holidays, Schedule, SpecialDay, WorkDay};
 
 use super::spec::ScheduleSpec;
 
@@ -31,6 +31,13 @@ pub fn build(spec: &ScheduleSpec) -> Result<Schedule, Error> {
     for h in &spec.holidays {
         let rule = Holidays::new(h.all_dates());
         builder = builder.rule(match &h.zone {
+            Some(zone) => rule.time_zone(zone),
+            None => rule,
+        });
+    }
+    for s in &spec.specialdays {
+        let rule = SpecialDay::new(s.start_time(), s.end_time(), s.all_dates());
+        builder = builder.rule(match &s.zone {
             Some(zone) => rule.time_zone(zone),
             None => rule,
         });

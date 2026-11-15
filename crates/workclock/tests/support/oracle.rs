@@ -12,7 +12,7 @@ use jiff::civil::{Date, Time, Weekday};
 use jiff::tz::TimeZone;
 use jiff::{SignedDuration, Timestamp};
 
-use super::spec::{HolidaySpec, RuleSpec, ScheduleSpec};
+use super::spec::{HolidaySpec, RuleSpec, ScheduleSpec, SpecialDaySpec};
 
 const MINUTE: SignedDuration = SignedDuration::from_mins(1);
 
@@ -26,6 +26,9 @@ pub enum OracleError {
 pub struct Oracle {
     workdays: Vec<Rule>,
     breaks: Vec<Rule>,
+    special_days: Vec<SpecialDay>,
+    /// The dates of every special day, on which no workday shift starts.
+    special_dates: BTreeSet<Date>,
     holidays: Vec<Holidays>,
     search_limit: SignedDuration,
 }
@@ -49,6 +52,14 @@ impl Oracle {
                 tz: zone(h.zone.as_ref())?,
             })
         };
+        let special_day = |s: &SpecialDaySpec| {
+            Ok(SpecialDay {
+                start: s.start_time(),
+                end: s.end_time(),
+                dates: s.all_dates(),
+                tz: zone(s.zone.as_ref())?,
+            })
+        };
 
         zone(None)?;
         let workdays = spec.workdays.iter().map(rule).collect::<Result<_, _>>()?;
@@ -58,14 +69,27 @@ impl Oracle {
             .iter()
             .map(holidays)
             .collect::<Result<_, _>>()?;
-        let holiday_dates = i64::try_from(holidays.iter().map(|h| h.dates.len()).sum::<usize>())
-            .expect("holiday count fits in i64");
+        let special_days: Vec<SpecialDay> = spec
+            .specialdays
+            .iter()
+            .map(special_day)
+            .collect::<Result<_, _>>()?;
+        let special_dates: BTreeSet<Date> = special_days
+            .iter()
+            .flat_map(|s| s.dates.iter().copied())
+            .collect();
+        let dates = holidays.iter().map(|h| h.dates.len()).sum::<usize>() + special_dates.len();
+        let dates = i64::try_from(dates).expect("date count fits in i64");
 
-        let oracle = Oracle {
+        // Special days join after the check: like holidays, they take no part
+        // in it.
+        let mut oracle = Oracle {
             workdays,
             breaks,
+            special_days: Vec::new(),
+            special_dates: BTreeSet::new(),
             holidays,
-            search_limit: SignedDuration::from_hours(24 * (366 + 7 * holiday_dates)),
+            search_limit: SignedDuration::from_hours(24 * (366 + 7 * dates)),
         };
 
         let window_start: Timestamp = "2001-01-01T00:00:00Z".parse().unwrap();
@@ -73,6 +97,8 @@ impl Oracle {
         let mut m = window_start;
         while m < window_end {
             if oracle.available(m) && !oracle.on_break(m) {
+                oracle.special_days = special_days;
+                oracle.special_dates = special_dates;
                 return Ok(oracle);
             }
             m += MINUTE;
@@ -192,12 +218,16 @@ impl Oracle {
         Ok(start..end)
     }
 
+    /// Workday shifts that do not start on a special date, and special days.
     fn available(&self, t: Timestamp) -> bool {
-        self.workdays.iter().any(|r| r.contains(t))
+        self.workdays
+            .iter()
+            .any(|r| r.contains(t, &self.special_dates))
+            || self.special_days.iter().any(|s| s.contains(t))
     }
 
     fn on_break(&self, t: Timestamp) -> bool {
-        self.breaks.iter().any(|r| r.contains(t))
+        self.breaks.iter().any(|r| r.contains(t, &BTreeSet::new()))
     }
 }
 
@@ -209,23 +239,52 @@ struct Rule {
 }
 
 impl Rule {
-    /// A shift belongs to the date it starts on, so `t` can only fall in the
-    /// shift of its own local date or of the day before.
-    fn contains(&self, t: Timestamp) -> bool {
-        let today = t.to_zoned(self.tz.clone()).date();
-        [today.yesterday().ok(), Some(today)]
-            .into_iter()
-            .flatten()
-            .filter(|d| self.days.contains(&d.weekday()))
-            .any(|d| {
-                let end = match (self.end <= self.start, d.tomorrow()) {
-                    (false, _) => resolve(d, self.end, &self.tz),
-                    (true, Ok(next)) => resolve(next, self.end, &self.tz),
-                    (true, Err(_)) => Timestamp::MAX,
-                };
-                resolve(d, self.start, &self.tz) <= t && t < end
-            })
+    /// Whether `t` falls in a shift that does not start on one of `except`.
+    fn contains(&self, t: Timestamp, except: &BTreeSet<Date>) -> bool {
+        in_shift(t, self.start, self.end, &self.tz, |d| {
+            self.days.contains(&d.weekday()) && !except.contains(&d)
+        })
     }
+}
+
+struct SpecialDay {
+    start: Time,
+    end: Time,
+    dates: BTreeSet<Date>,
+    tz: TimeZone,
+}
+
+impl SpecialDay {
+    fn contains(&self, t: Timestamp) -> bool {
+        in_shift(t, self.start, self.end, &self.tz, |d| {
+            self.dates.contains(&d)
+        })
+    }
+}
+
+/// Whether `t` falls in the shift from `start` to `end` on a local date for
+/// which `on` holds. A shift belongs to the date it starts on, so `t` can only
+/// fall in the shift of its own local date or of the day before.
+fn in_shift(
+    t: Timestamp,
+    start: Time,
+    end: Time,
+    tz: &TimeZone,
+    on: impl Fn(Date) -> bool,
+) -> bool {
+    let today = t.to_zoned(tz.clone()).date();
+    [today.yesterday().ok(), Some(today)]
+        .into_iter()
+        .flatten()
+        .filter(|&d| on(d))
+        .any(|d| {
+            let until = match (end <= start, d.tomorrow()) {
+                (false, _) => resolve(d, end, tz),
+                (true, Ok(next)) => resolve(next, end, tz),
+                (true, Err(_)) => Timestamp::MAX,
+            };
+            resolve(d, start, tz) <= t && t < until
+        })
 }
 
 struct Holidays {

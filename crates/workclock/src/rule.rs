@@ -1,4 +1,4 @@
-use crate::{Break, Holidays, WorkDay};
+use crate::{Break, Holidays, SpecialDay, WorkDay};
 
 /// One rule of a [`Schedule`](crate::Schedule).
 ///
@@ -31,6 +31,8 @@ pub enum Rule {
     Break(Break),
     /// Dates that are not worked.
     Holidays(Holidays),
+    /// Other working hours on some dates.
+    SpecialDay(SpecialDay),
 }
 
 impl From<WorkDay> for Rule {
@@ -48,5 +50,11 @@ impl From<Break> for Rule {
 impl From<Holidays> for Rule {
     fn from(rule: Holidays) -> Self {
         Rule::Holidays(rule)
+    }
+}
+
+impl From<SpecialDay> for Rule {
+    fn from(rule: SpecialDay) -> Self {
+        Rule::SpecialDay(rule)
     }
 }
