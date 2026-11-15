@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import timedelta, timezone, tzinfo
+from datetime import UTC, timedelta, timezone, tzinfo
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -15,7 +15,7 @@ from workclock._zones import zone_name
         (ZoneInfo("Europe/London"), "Europe/London"),
         (pytz.timezone("America/New_York"), "America/New_York"),
         (pytz.utc, "UTC"),
-        (timezone.utc, "UTC"),
+        (UTC, "UTC"),
     ],
 )
 def test_supported_zones_give_their_iana_name(zone: str | tzinfo, name: str) -> None:

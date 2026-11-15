@@ -14,7 +14,7 @@ import holidays
 import pytest
 from workclock import NoWorkingTimeError, OutOfRangeError, UnknownZoneError, compat
 
-UTC = datetime.timezone.utc
+UTC = datetime.UTC
 
 
 def utc(

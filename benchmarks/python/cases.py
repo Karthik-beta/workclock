@@ -1,7 +1,7 @@
 """The schedule and inputs shared by the Python benchmarks."""
 
 from collections.abc import Callable
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
 
 import pytz
@@ -27,7 +27,7 @@ HOLIDAYS = [
     date(2027, 12, 28),
 ]
 WEEKDAYS = [0, 1, 2, 3, 4]
-BASE = datetime(2026, 1, 1, tzinfo=timezone.utc)
+BASE = datetime(2026, 1, 1, tzinfo=UTC)
 
 Between = Callable[[datetime, datetime], Any]
 

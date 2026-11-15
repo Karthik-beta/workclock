@@ -4,7 +4,7 @@ import json
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any
 
 PATH = Path(__file__).parents[2] / "fixtures" / "design_examples.json"
 
@@ -14,14 +14,14 @@ class RuleSpec:
     start: str
     end: str
     days: list[str]
-    zone: Optional[str] = None
+    zone: str | None = None
 
 
 @dataclass(frozen=True)
 class HolidaySpec:
     dates: list[str] = field(default_factory=list)
     ranges: list[list[str]] = field(default_factory=list)
-    zone: Optional[str] = None
+    zone: str | None = None
 
     def all_dates(self) -> set[date]:
         """Every date listed or inside a range."""
@@ -84,9 +84,9 @@ class Build:
     pass
 
 
-Op = Union[Between, Add, Sub, NextPeriod, PreviousPeriod, Build]
+Op = Between | Add | Sub | NextPeriod | PreviousPeriod | Build
 # A `between` result, an `add`/`sub` result, a period, or the kind of error.
-Expect = Union[timedelta, datetime, tuple[datetime, datetime], str]
+Expect = timedelta | datetime | tuple[datetime, datetime] | str
 
 
 @dataclass(frozen=True)
@@ -104,8 +104,7 @@ class Fixture:
 
 
 def instant(text: str) -> datetime:
-    # Python 3.9's fromisoformat does not accept a "Z" suffix.
-    return datetime.fromisoformat(text.replace("Z", "+00:00"))
+    return datetime.fromisoformat(text)
 
 
 def _op(case: dict[str, Any]) -> Op:

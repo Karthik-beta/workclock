@@ -8,14 +8,12 @@ import re
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from datetime import date, datetime, time, timedelta, timezone, tzinfo
+from datetime import UTC, date, datetime, time, timedelta, tzinfo
 from typing import (
     TYPE_CHECKING,
     Any,
-    Optional,
     SupportsIndex,
     TypeVar,
-    Union,
     overload,
 )
 
@@ -34,9 +32,9 @@ if TYPE_CHECKING:
 
 _T = TypeVar("_T")
 _TimeTuple = tuple[int, int, int, int]
-_HoursSpec = tuple[_TimeTuple, _TimeTuple, list[int], Optional[str]]
+_HoursSpec = tuple[_TimeTuple, _TimeTuple, list[int], str | None]
 
-_EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
+_EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 _MICROSECOND = timedelta(microseconds=1)
 # The engine's instants are jiff timestamps, in microseconds since the epoch.
 _FIRST_INSTANT = -377_705_023_201_000_000
@@ -139,7 +137,7 @@ def _each(convert: Callable[..., _T], *columns: Iterable[Any]) -> list[_T]:
     """Apply ``convert`` to each row of ``columns``, naming the row that fails."""
     results: list[_T] = []
     try:
-        for row in zip(*columns):
+        for row in zip(*columns, strict=True):
             results.append(convert(*row))
     except (TypeError, ValueError, OutOfRangeError) as error:
         raise type(error)(f"item {len(results)}: {error}") from None
@@ -305,7 +303,7 @@ class Holidays:
         return (self._sorted_dates, self.time_zone)
 
 
-Rule = Union[WorkDay, Break, Holidays]
+Rule = WorkDay | Break | Holidays
 """Any rule a `Schedule` takes: a `WorkDay`, `Break` or `Holidays`."""
 
 

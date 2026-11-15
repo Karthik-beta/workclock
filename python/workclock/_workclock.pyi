@@ -1,6 +1,4 @@
-from typing import final
-
-from typing_extensions import Self
+from typing import Self, final
 
 __all__ = ["EngineError", "Schedule", "__version__", "day_bounds", "local_date"]
 

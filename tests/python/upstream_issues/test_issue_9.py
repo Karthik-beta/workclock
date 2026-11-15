@@ -7,7 +7,7 @@ call runs in a subprocess so that a hang becomes a timeout, not a stuck run.
 
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from types import ModuleType
 
 import pytest
@@ -44,4 +44,4 @@ def test_subtracting_hours_terminates(btd: ModuleType) -> None:
     # The input is 16:53 PST. The UTC holiday (Veterans Day) starts at 16:00 PST
     # on Nov 10, so the 4 hours are 12:00 to 16:00 PST.
     output = datetime.fromisoformat(result.stdout.strip())
-    assert output == datetime(2021, 11, 10, 20, tzinfo=timezone.utc)
+    assert output == datetime(2021, 11, 10, 20, tzinfo=UTC)

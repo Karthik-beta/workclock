@@ -6,11 +6,9 @@ type check if an operator's return type is too wide.
 
 from __future__ import annotations
 
-from datetime import datetime, time, timedelta, timezone
+from datetime import UTC, datetime, time, timedelta
 
 from workclock.compat import BusinessTimeDelta, WorkDayRule
-
-UTC = timezone.utc
 
 
 def test_operators_return_precise_types() -> None:

@@ -9,7 +9,7 @@ from types import ModuleType
 
 import pytest
 
-UTC = datetime.timezone.utc
+UTC = datetime.UTC
 
 
 @pytest.mark.upstream_bug(raises=TypeError, reason="next_holiday() returns None")

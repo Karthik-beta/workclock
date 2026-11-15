@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import copy
 import pickle
-from datetime import date, datetime, time, timedelta, timezone, tzinfo
+from datetime import UTC, date, datetime, time, timedelta, timezone, tzinfo
 from typing import get_args, get_type_hints
 from zoneinfo import ZoneInfo
 
@@ -21,8 +21,6 @@ from workclock import (
     UnknownZoneError,
     WorkDay,
 )
-
-UTC = timezone.utc
 
 
 def utc(day: int, hour: int, minute: int = 0) -> datetime:

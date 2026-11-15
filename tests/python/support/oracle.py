@@ -6,7 +6,7 @@ against the spec by reading. Every instant, duration and rule time it is given
 must be a whole number of minutes.
 """
 
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -21,10 +21,10 @@ DAY = timedelta(days=1)
 WEEKDAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 # The engine's range ends at jiff's last instant. Python's starts much later
 # than jiff's, and a day's margin keeps every local date representable.
-FIRST = datetime(1, 1, 2, tzinfo=timezone.utc)
-LAST = datetime(9999, 12, 30, 22, tzinfo=timezone.utc)
-PY_MIN = datetime.min.replace(tzinfo=timezone.utc)
-PY_MAX = datetime.max.replace(tzinfo=timezone.utc)
+FIRST = datetime(1, 1, 2, tzinfo=UTC)
+LAST = datetime(9999, 12, 30, 22, tzinfo=UTC)
+PY_MIN = datetime.min.replace(tzinfo=UTC)
+PY_MAX = datetime.max.replace(tzinfo=UTC)
 
 
 class OracleError(Exception):
@@ -61,7 +61,7 @@ class Oracle:
             ],
         )
 
-        window_start = datetime(2001, 1, 1, tzinfo=timezone.utc)
+        window_start = datetime(2001, 1, 1, tzinfo=UTC)
         m = window_start
         while m < window_start + 14 * DAY:
             if oracle._available(m) and not oracle._on_break(m):
@@ -81,7 +81,7 @@ class Oracle:
         if b < a:
             return -self.between(b, a)
         total = ZERO
-        m = a.astimezone(timezone.utc)
+        m = a.astimezone(UTC)
         while m < b:
             if self.is_working(m):
                 total += MINUTE
@@ -93,7 +93,7 @@ class Oracle:
             return self.sub(t, -d)
         left = d
         idle = ZERO
-        x = t.astimezone(timezone.utc)
+        x = t.astimezone(UTC)
         while left > ZERO:
             next_ = step(x, MINUTE)
             if self.is_working(x):
@@ -111,7 +111,7 @@ class Oracle:
             return self.add(t, -d)
         left = d
         idle = ZERO
-        x = t.astimezone(timezone.utc)
+        x = t.astimezone(UTC)
         while left > ZERO:
             prev = step(x, -MINUTE)
             if self.is_working(prev):
@@ -125,7 +125,7 @@ class Oracle:
         return x
 
     def next_period(self, t: datetime) -> Block:
-        t = t.astimezone(timezone.utc)
+        t = t.astimezone(UTC)
         start = t
         while not self.is_working(start):
             start = step(start, MINUTE)
@@ -141,7 +141,7 @@ class Oracle:
         return start, end
 
     def previous_period(self, t: datetime) -> Block:
-        t = t.astimezone(timezone.utc)
+        t = t.astimezone(UTC)
         end = t
         while not self.is_working(step(end, -MINUTE)):
             end -= MINUTE
@@ -243,7 +243,7 @@ def resolve(day: date, at: time, tz: ZoneInfo, next_day: bool = False) -> dateti
     """
     try:
         local = datetime.combine(day + (DAY if next_day else ZERO), at, tzinfo=tz)
-        return local.astimezone(timezone.utc)
+        return local.astimezone(UTC)
     except OverflowError:
         return PY_MIN if day.year == 1 else PY_MAX
 

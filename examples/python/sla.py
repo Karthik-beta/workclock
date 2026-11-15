@@ -31,5 +31,6 @@ print(f"working until {end:%H:%M}")
 
 # Many tickets at once: one call instead of a Python loop.
 tickets = [opened, opened + timedelta(hours=1), now]
-for ticket, deadline in zip(tickets, support.add_many(tickets, timedelta(hours=8))):
+deadlines = support.add_many(tickets, timedelta(hours=8))
+for ticket, deadline in zip(tickets, deadlines, strict=True):
     print(f"{ticket:%a %d %b %H:%M} -> {deadline:%a %d %b %H:%M}")

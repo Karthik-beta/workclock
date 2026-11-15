@@ -9,19 +9,19 @@ subtracting the count for N=0 leaves only the N calls.
 import argparse
 import itertools
 from collections.abc import Callable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from cases import Between, office, pairs, rules
 from workclock import compat
 
 INTERVALS = {
     "single": (
-        datetime(2026, 3, 10, 10, 15, tzinfo=timezone.utc),
-        datetime(2026, 3, 10, 15, 45, tzinfo=timezone.utc),
+        datetime(2026, 3, 10, 10, 15, tzinfo=UTC),
+        datetime(2026, 3, 10, 15, 45, tzinfo=UTC),
     ),
     "year": (
-        datetime(2026, 1, 1, tzinfo=timezone.utc),
-        datetime(2027, 1, 1, tzinfo=timezone.utc),
+        datetime(2026, 1, 1, tzinfo=UTC),
+        datetime(2027, 1, 1, tzinfo=UTC),
     ),
 }
 IMPLEMENTATIONS: dict[str, Callable[[], Between]] = {

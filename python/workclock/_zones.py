@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import timezone, tzinfo
+from datetime import UTC, tzinfo
 
 
 def zone_name(zone: str | tzinfo) -> str:
@@ -14,7 +14,7 @@ def zone_name(zone: str | tzinfo) -> str:
     """
     if isinstance(zone, str):
         return zone
-    if zone is timezone.utc:
+    if zone is UTC:
         return "UTC"
     for attribute in ("key", "zone"):
         name = getattr(zone, attribute, None)

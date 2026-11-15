@@ -4,7 +4,7 @@ They mirror `crates/workclock/tests/support/strategies.rs`: queries fall in
 2026, and every value is a whole number of minutes, as the oracle requires.
 """
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 
 from hypothesis import strategies as st
 
@@ -12,7 +12,7 @@ from support.fixture import HolidaySpec, RuleSpec, ScheduleSpec
 
 ZONES = ["UTC", "Asia/Kolkata", "America/New_York", "Europe/London"]
 DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
-YEAR_START = datetime(2026, 1, 1, tzinfo=timezone.utc)
+YEAR_START = datetime(2026, 1, 1, tzinfo=UTC)
 MINUTES_IN_YEAR = 365 * 24 * 60
 
 zones = st.sampled_from(ZONES)

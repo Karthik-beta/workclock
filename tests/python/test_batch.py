@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-from datetime import datetime, time, timedelta, timezone
+from datetime import UTC, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 import numpy as np
 import pytest
 from workclock import OutOfRangeError, Schedule, WorkDay
-
-UTC = timezone.utc
 
 
 @pytest.fixture
@@ -24,13 +22,13 @@ def test_lists_match_single_calls(nights: Schedule) -> None:
     ends = [utc(6, 6), utc(5, 20), utc(12, 23)]
     hours = [timedelta(hours=h) for h in (4, -3, 0)]
     assert nights.between_many(starts, ends) == [
-        nights.between(a, b) for a, b in zip(starts, ends)
+        nights.between(a, b) for a, b in zip(starts, ends, strict=True)
     ]
     assert nights.add_many(starts, hours) == [
-        nights.add(t, d) for t, d in zip(starts, hours)
+        nights.add(t, d) for t, d in zip(starts, hours, strict=True)
     ]
     assert nights.sub_many(starts, hours) == [
-        nights.sub(t, d) for t, d in zip(starts, hours)
+        nights.sub(t, d) for t, d in zip(starts, hours, strict=True)
     ]
 
 

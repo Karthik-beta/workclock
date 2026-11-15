@@ -25,7 +25,7 @@ from __future__ import annotations
 import bisect
 import datetime as _dt
 from collections.abc import Collection, Iterable
-from typing import Union, overload
+from typing import overload
 
 from workclock import _workclock
 from workclock._errors import NoWorkingTimeError
@@ -50,12 +50,12 @@ __all__ = [
     "localize_unlocalized_dt",
 ]
 
-_UTC = _dt.timezone.utc
+_UTC = _dt.UTC
 _ZERO = _dt.timedelta(0)
 # python-holidays objects fill in years on demand; these are filled in up front.
 _HOLIDAY_YEARS = range(1970, 2101)
 
-Zone = Union[str, _dt.tzinfo]
+Zone = str | _dt.tzinfo
 Period = tuple[_dt.datetime, _dt.datetime]
 
 

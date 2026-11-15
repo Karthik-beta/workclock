@@ -6,12 +6,11 @@ naive, so they are read and returned as UTC.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypeGuard
 
 if TYPE_CHECKING:
     import numpy as np
     from numpy.typing import NDArray
-    from typing_extensions import TypeGuard
 
 _FINER_UNITS = ("ns", "ps", "fs", "as")
 
