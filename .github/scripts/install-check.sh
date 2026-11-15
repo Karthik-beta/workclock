@@ -9,7 +9,7 @@ version="$2"
 check='import workclock; print(workclock.__version__)'
 cd "$(mktemp -d)"
 
-uv venv --python 3.9 venv
+uv venv --python 3.11 venv
 source venv/bin/activate 2>/dev/null || source venv/Scripts/activate
 # A new upload can take a few minutes to show up in the index.
 for attempt in $(seq 10); do

@@ -97,7 +97,7 @@ jobs:
       - if: matrix.manylinux != 'musllinux_1_2'
         shell: bash
         run: |
-          uv venv --python 3.9
+          uv venv --python 3.11
           uv pip install --no-index --find-links dist workclock
           uv run --no-project python -c 'import workclock; print(workclock.__version__)'
       # The image ships tzdata; deleting it checks that the wheel resolves zones
