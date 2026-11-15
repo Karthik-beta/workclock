@@ -7,7 +7,9 @@ from workclock import (
     Holidays,
     NoWorkingTimeError,
     OutOfRangeError,
+    Rule,
     Schedule,
+    SpecialDay,
     UnknownZoneError,
     WorkclockError,
     WorkDay,
@@ -24,13 +26,16 @@ def _hours(rule: RuleSpec) -> tuple[time, time, list[int]]:
 
 
 def build(spec: ScheduleSpec) -> Schedule:
-    rules: list[WorkDay | Break | Holidays] = []
+    rules: list[Rule] = []
     for r in spec.workdays:
         rules.append(WorkDay(*_hours(r), time_zone=r.zone))
     for r in spec.breaks:
         rules.append(Break(*_hours(r), time_zone=r.zone))
     for h in spec.holidays:
         rules.append(Holidays(h.all_dates(), time_zone=h.zone))
+    for s in spec.specialdays:
+        start, end = time.fromisoformat(s.start), time.fromisoformat(s.end)
+        rules.append(SpecialDay(start, end, s.all_dates(), time_zone=s.zone))
     return Schedule(rules, time_zone=spec.zone)
 
 

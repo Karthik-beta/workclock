@@ -10,7 +10,7 @@ from datetime import UTC, date, datetime, time, timedelta
 from typing import Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from support.fixture import RuleSpec, ScheduleSpec
+from support.fixture import RuleSpec, ScheduleSpec, SpecialDaySpec
 
 ErrorKind = Literal["no_working_time", "out_of_range", "unknown_zone"]
 Block = tuple[datetime, datetime]
@@ -39,33 +39,36 @@ class Oracle:
         workdays: list["Rule"],
         breaks: list["Rule"],
         holidays: list["Holidays"],
+        special_days: list["SpecialDay"],
     ) -> None:
         self.workdays = workdays
         self.breaks = breaks
         self.holidays = holidays
+        self.special_days = special_days
         holiday_dates = sum(len(h.dates) for h in holidays)
-        self.search_limit = timedelta(days=366 + 7 * holiday_dates)
+        special_dates = len({d for s in special_days for d in s.dates})
+        self.search_limit = timedelta(days=366 + 7 * (holiday_dates + special_dates))
 
     @classmethod
     def build(cls, spec: ScheduleSpec) -> "Oracle":
-        def rule(r: RuleSpec) -> Rule:
-            return Rule(r, zone(spec.zone if r.zone is None else r.zone))
+        def tz(name: str | None) -> ZoneInfo:
+            return zone(spec.zone if name is None else name)
 
-        zone(spec.zone)
-        oracle = cls(
-            [rule(r) for r in spec.workdays],
-            [rule(r) for r in spec.breaks],
-            [
-                Holidays(h.all_dates(), zone(spec.zone if h.zone is None else h.zone))
-                for h in spec.holidays
-            ],
-        )
+        tz(None)
+        holidays = [Holidays(h.all_dates(), tz(h.zone)) for h in spec.holidays]
+        special_days = [SpecialDay(s, tz(s.zone)) for s in spec.specialdays]
+        special_dates = frozenset(d for s in special_days for d in s.dates)
+        breaks = [Rule(r, tz(r.zone)) for r in spec.breaks]
 
+        # Like holidays, special days take no part in the check: neither their
+        # blocks nor the shifts they replace count.
+        check = cls([Rule(r, tz(r.zone)) for r in spec.workdays], breaks, [], [])
         window_start = datetime(2001, 1, 1, tzinfo=UTC)
         m = window_start
         while m < window_start + 14 * DAY:
-            if oracle._available(m) and not oracle._on_break(m):
-                return oracle
+            if check._available(m) and not check._on_break(m):
+                workdays = [Rule(r, tz(r.zone), special_dates) for r in spec.workdays]
+                return cls(workdays, breaks, holidays, special_days)
             m += MINUTE
         raise OracleError("no_working_time")
 
@@ -157,7 +160,10 @@ class Oracle:
         return start, end
 
     def _available(self, t: datetime) -> bool:
-        return any(r.contains(t) for r in self.workdays)
+        """Workday shifts that do not start on a special date, and special days."""
+        return any(r.contains(t) for r in self.workdays) or any(
+            s.contains(t) for s in self.special_days
+        )
 
     def _on_break(self, t: datetime) -> bool:
         return any(r.contains(t) for r in self.breaks)
@@ -188,14 +194,16 @@ class Blocks:
         raise NotImplementedError
 
 
-class Rule(Blocks):
-    """A WorkDay or a Break."""
+class Shifts(Blocks):
+    """Shifts from `start` to `end` on the local dates for which `on` holds."""
 
-    def __init__(self, spec: RuleSpec, tz: ZoneInfo) -> None:
+    def __init__(self, start: str, end: str, tz: ZoneInfo) -> None:
         super().__init__(tz)
-        self.start = time.fromisoformat(spec.start)
-        self.end = time.fromisoformat(spec.end)
-        self.days = {WEEKDAYS.index(d) for d in spec.days}
+        self.start = time.fromisoformat(start)
+        self.end = time.fromisoformat(end)
+
+    def on(self, day: date) -> bool:
+        raise NotImplementedError
 
     def blocks_near(self, today: date) -> list[Block]:
         """A shift belongs to the date it starts on, so `t` can only fall in the
@@ -205,8 +213,31 @@ class Rule(Blocks):
         return [
             (resolve(d, self.start, self.tz), resolve(d, self.end, self.tz, overnight))
             for d in dates_around(today, before=1, after=0)
-            if d.weekday() in self.days
+            if self.on(d)
         ]
+
+
+class Rule(Shifts):
+    """A WorkDay or a Break, without the shifts that start on one of `skip`."""
+
+    def __init__(
+        self, spec: RuleSpec, tz: ZoneInfo, skip: frozenset[date] = frozenset()
+    ) -> None:
+        super().__init__(spec.start, spec.end, tz)
+        self.days = {WEEKDAYS.index(d) for d in spec.days}
+        self.skip = skip
+
+    def on(self, day: date) -> bool:
+        return day.weekday() in self.days and day not in self.skip
+
+
+class SpecialDay(Shifts):
+    def __init__(self, spec: SpecialDaySpec, tz: ZoneInfo) -> None:
+        super().__init__(spec.start, spec.end, tz)
+        self.dates = spec.all_dates()
+
+    def on(self, day: date) -> bool:
+        return day in self.dates
 
 
 class Holidays(Blocks):

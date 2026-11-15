@@ -35,11 +35,23 @@ class HolidaySpec:
 
 
 @dataclass(frozen=True)
+class SpecialDaySpec:
+    start: str
+    end: str
+    dates: list[str]
+    zone: str | None = None
+
+    def all_dates(self) -> set[date]:
+        return {date.fromisoformat(d) for d in self.dates}
+
+
+@dataclass(frozen=True)
 class ScheduleSpec:
     zone: str
     workdays: list[RuleSpec] = field(default_factory=list)
     breaks: list[RuleSpec] = field(default_factory=list)
     holidays: list[HolidaySpec] = field(default_factory=list)
+    specialdays: list[SpecialDaySpec] = field(default_factory=list)
 
     @classmethod
     def from_json(cls, data: dict[str, Any]) -> "ScheduleSpec":
@@ -48,6 +60,7 @@ class ScheduleSpec:
             workdays=[RuleSpec(**r) for r in data.get("workdays", [])],
             breaks=[RuleSpec(**r) for r in data.get("breaks", [])],
             holidays=[HolidaySpec(**h) for h in data.get("holidays", [])],
+            specialdays=[SpecialDaySpec(**s) for s in data.get("specialdays", [])],
         )
 
 

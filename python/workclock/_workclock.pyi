@@ -7,6 +7,7 @@ __version__: str
 _Time = tuple[int, int, int, int]
 _Hours = tuple[_Time, _Time, list[int], str | None]
 _Holidays = tuple[list[tuple[int, int, int]], str | None]
+_SpecialDay = tuple[_Time, _Time, list[tuple[int, int, int]], str | None]
 
 class EngineError(Exception): ...
 
@@ -21,6 +22,7 @@ class Schedule:
         workdays: list[_Hours],
         breaks: list[_Hours],
         holidays: list[_Holidays],
+        special_days: list[_SpecialDay],
     ) -> Self: ...
     def between(self, a: int, b: int) -> int: ...
     def add(self, t: int, d: int) -> int: ...

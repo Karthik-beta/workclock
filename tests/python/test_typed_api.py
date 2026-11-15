@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import dataclasses
 import pickle
 from datetime import UTC, date, datetime, time, timedelta, timezone, tzinfo
 from typing import get_args, get_type_hints
@@ -18,9 +19,12 @@ from workclock import (
     OutOfRangeError,
     Rule,
     Schedule,
+    SpecialDay,
     UnknownZoneError,
     WorkDay,
 )
+
+WEDNESDAY = date(2026, 1, 7)
 
 
 def utc(day: int, hour: int, minute: int = 0) -> datetime:
@@ -146,7 +150,7 @@ def test_errors_subclass_builtin_exceptions() -> None:
 
 
 def test_build_errors() -> None:
-    # E1, E3, E6
+    # E1, E3, E6, S19
     empty = (
         r"^schedule has no working time: its working hours minus its breaks "
         r"are empty$"
@@ -155,8 +159,25 @@ def test_build_errors() -> None:
         Schedule([])
     with pytest.raises(NoWorkingTimeError, match=empty):
         Schedule([WorkDay(time(9), time(17)), Break(time(9), time(17))])
+    with pytest.raises(NoWorkingTimeError, match=empty):
+        Schedule([SpecialDay(time(8), time(12), [WEDNESDAY])])
+    with pytest.raises(NoWorkingTimeError, match=empty):
+        Schedule(
+            [
+                WorkDay(time(9), time(17)),
+                Break(time(9), time(17)),
+                SpecialDay(time(10), time(12), [WEDNESDAY]),
+            ]
+        )
     with pytest.raises(UnknownZoneError, match="Mars/Olympus_Mons"):
         Schedule([WorkDay(time(9), time(17))], time_zone="Mars/Olympus_Mons")
+    with pytest.raises(UnknownZoneError, match="Mars/Olympus_Mons"):
+        Schedule(
+            [
+                WorkDay(time(9), time(17)),
+                SpecialDay(time(8), time(12), [], time_zone="Mars/Olympus_Mons"),
+            ]
+        )
 
 
 def test_failed_searches_name_their_start() -> None:
@@ -170,8 +191,8 @@ def test_failed_searches_name_their_start() -> None:
     )
     start = datetime(2021, 1, 1, tzinfo=ZoneInfo("Asia/Tokyo"))
     message = (
-        r"^no working time within 366 days, plus seven days per holiday date, "
-        r"of 2021-01-01T00:00:00\+09:00$"
+        r"^no working time within 366 days, plus seven days per holiday date "
+        r"and per special date, of 2021-01-01T00:00:00\+09:00$"
     )
     for search in (
         lambda: schedule.add(start, hours=1),
@@ -250,7 +271,10 @@ def test_invalid_rules_are_rejected() -> None:
         WorkDay(time(9, tzinfo=UTC), time(17))
     with pytest.raises(TypeError, match=r"datetime\.date"):
         Holidays([datetime(2026, 1, 1, tzinfo=UTC)])
-    with pytest.raises(TypeError, match="WorkDay, Break or Holidays"):
+    with pytest.raises(
+        TypeError,
+        match=r"^expected WorkDay, Break, Holidays or SpecialDay, got <object",
+    ):
         Schedule([object()])  # type: ignore[list-item]
 
 
@@ -282,13 +306,195 @@ def test_rules_are_comparable_values() -> None:
     )
 
 
+def test_special_day_errors_name_the_bad_values() -> None:
+    with pytest.raises(TypeError, match=r"^expected a datetime\.time, got '08:00'$"):
+        SpecialDay("08:00", time(12), [WEDNESDAY])  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="has a tzinfo; set the rule's time_zone"):
+        SpecialDay(time(8), time(12, tzinfo=UTC), [WEDNESDAY])
+    with pytest.raises(
+        TypeError,
+        match=r"^dates must be a list of datetime\.date objects, "
+        r"not the string '2026-01-07'$",
+    ):
+        SpecialDay(time(8), time(12), "2026-01-07")  # type: ignore[arg-type]
+    with pytest.raises(
+        TypeError, match=r"^dates must be datetime\.date objects, got '2026-01-07'$"
+    ):
+        SpecialDay(time(8), time(12), ["2026-01-07"])  # type: ignore[list-item]
+    with pytest.raises(
+        TypeError,
+        match=r"^dates must be datetime\.date objects, "
+        r"got datetime\.datetime\(2026, 1, 7, 0, 0\)$",
+    ):
+        SpecialDay(time(8), time(12), [datetime(2026, 1, 7)])
+    with pytest.raises(TypeError, match="has no IANA name"):
+        SpecialDay(time(8), time(12), [WEDNESDAY], time_zone=timezone.min)
+
+
+def test_special_days_are_comparable_values() -> None:
+    once = SpecialDay(time(8), time(12), [WEDNESDAY])
+    twice = SpecialDay(time(8), time(12), (d for d in [WEDNESDAY, WEDNESDAY]))
+    assert twice == once
+    assert hash(twice) == hash(once)
+    assert twice.dates == frozenset({WEDNESDAY})
+    assert once != SpecialDay(time(8), time(13), [WEDNESDAY])
+    assert once != SpecialDay(time(8), time(12), [WEDNESDAY], time_zone="UTC")
+    assert len({once, twice}) == 1
+    assert pickle.loads(pickle.dumps(once)) == once
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        once.start = time(9)  # type: ignore[misc]
+    new_york = SpecialDay(
+        time(8), time(12), [WEDNESDAY], time_zone=ZoneInfo("America/New_York")
+    )
+    assert repr(new_york) == (
+        "SpecialDay(start=datetime.time(8, 0), end=datetime.time(12, 0), "
+        "dates=frozenset({datetime.date(2026, 1, 7)}), time_zone='America/New_York')"
+    )
+
+
+def test_special_days_replace_the_shifts_on_their_dates() -> None:
+    # S1, S2, S3; the dates are read once.
+    dates = iter([WEDNESDAY])
+    schedule = Schedule(
+        [WorkDay(time(9), time(17)), SpecialDay(time(8), time(12), dates)]
+    )
+    assert schedule.between(utc(7, 0), utc(8, 0)) == timedelta(hours=4)
+    assert schedule.add(utc(6, 16), hours=2) == utc(7, 9)
+    assert schedule.sub(utc(8, 10), hours=2) == utc(7, 11)
+
+
+def test_special_days_without_dates_change_nothing() -> None:
+    schedule = Schedule([WorkDay(time(9), time(17)), SpecialDay(time(8), time(12), [])])
+    assert schedule.between(utc(7, 0), utc(8, 0)) == timedelta(hours=8)
+
+
+def test_special_days_on_weekends_add_working_time() -> None:
+    # S4, S5
+    saturday = date(2026, 1, 10)
+    schedule = Schedule(
+        [WorkDay(time(9), time(17)), SpecialDay(time(10), time(14), [saturday])]
+    )
+    assert schedule.between(utc(9, 16), utc(12, 10)) == timedelta(hours=6)
+    assert schedule.add(utc(9, 17), hours=2) == utc(10, 12)
+
+
+def test_special_days_can_be_24_hours_or_overnight() -> None:
+    saturday = date(2026, 1, 10)
+    day = Schedule(
+        [WorkDay(time(9), time(17)), SpecialDay(time(0), time(0), [saturday])]
+    )
+    assert day.between(utc(10, 0), utc(11, 0)) == timedelta(hours=24)
+    night = Schedule(
+        [WorkDay(time(9), time(17)), SpecialDay(time(22), time(2), [saturday])]
+    )
+    assert night.next_period(utc(10, 0)) == (utc(10, 22), utc(11, 2))
+    assert night.between(utc(10, 0), utc(12, 0)) == timedelta(hours=4)
+
+
+def test_special_nights_keep_the_shift_from_the_night_before() -> None:
+    # S6, S7, S8
+    tuesday = date(2026, 1, 6)
+    schedule = Schedule(
+        [WorkDay(time(22), time(6)), SpecialDay(time(22), time(2), [tuesday])]
+    )
+    assert schedule.between(utc(6, 0), utc(6, 6)) == timedelta(hours=6)
+    assert schedule.between(utc(6, 22), utc(7, 6)) == timedelta(hours=4)
+    assert schedule.add(utc(6, 5), hours=2) == utc(6, 23)
+
+
+def test_breaks_and_holidays_apply_on_special_days() -> None:
+    # S9, S10, S11, S12
+    lunch = Schedule(
+        [
+            WorkDay(time(9), time(17)),
+            Break(time(12), time(13)),
+            SpecialDay(time(8), time(14), [WEDNESDAY]),
+        ]
+    )
+    assert lunch.between(utc(7, 0), utc(8, 0)) == timedelta(hours=5)
+    assert lunch.next_period(utc(7, 12, 30)) == (utc(7, 13), utc(7, 14))
+    holiday = Schedule(
+        [
+            WorkDay(time(9), time(17)),
+            Holidays([WEDNESDAY]),
+            SpecialDay(time(8), time(12), [WEDNESDAY]),
+        ]
+    )
+    assert holiday.between(utc(7, 0), utc(8, 0)) == timedelta(0)
+    assert holiday.add(utc(6, 16), hours=2) == utc(8, 10)
+
+
+def test_special_days_on_one_date_add_up() -> None:
+    # S13, S14, S15
+    schedule = Schedule(
+        [
+            SpecialDay(time(14), time(18), [WEDNESDAY]),
+            WorkDay(time(9), time(17)),
+            SpecialDay(time(8), time(12), [WEDNESDAY]),
+        ]
+    )
+    assert schedule.between(utc(7, 0), utc(8, 0)) == timedelta(hours=8)
+    assert schedule.next_period(utc(7, 12)) == (utc(7, 14), utc(7, 18))
+    assert schedule.previous_period(utc(7, 14)) == (utc(7, 8), utc(7, 12))
+
+
+def test_special_days_on_dst_changes_are_shorter_or_longer() -> None:
+    # S16, S17
+    new_york = ZoneInfo("America/New_York")
+    schedule = Schedule(
+        [
+            WorkDay(time(9), time(17)),
+            SpecialDay(time(1), time(5), [date(2026, 3, 8), date(2026, 11, 1)]),
+        ],
+        time_zone=new_york,
+    )
+    spring = (
+        datetime(2026, 3, 8, tzinfo=new_york),
+        datetime(2026, 3, 9, tzinfo=new_york),
+    )
+    autumn = (
+        datetime(2026, 11, 1, tzinfo=new_york),
+        datetime(2026, 11, 2, tzinfo=new_york),
+    )
+    assert schedule.between(*spring) == timedelta(hours=3)
+    assert schedule.between(*autumn) == timedelta(hours=5)
+
+
+def test_special_dates_are_calendar_dates_in_each_workday_zone() -> None:
+    # S18: Kolkata's Wednesday shift starts on Tuesday in New York.
+    schedule = Schedule(
+        [
+            WorkDay(time(9), time(17)),
+            SpecialDay(time(10), time(12), [WEDNESDAY], time_zone="America/New_York"),
+        ],
+        time_zone="Asia/Kolkata",
+    )
+    assert schedule.between(utc(7, 0), utc(8, 0)) == timedelta(hours=2)
+
+
+def test_each_special_date_lengthens_the_search_bound() -> None:
+    # S20, S21: every special Monday falls inside the break.
+    mondays = [date(2026, 1, 12) + timedelta(weeks=n) for n in range(62)]
+    schedule = Schedule(
+        [
+            WorkDay(time(9), time(17), [0]),
+            Break(time(12), time(13), [0]),
+            SpecialDay(time(12), time(13), mondays),
+        ]
+    )
+    after_the_gap = datetime(2027, 3, 22, 9, tzinfo=UTC)
+    assert schedule.add(utc(6, 0), hours=1) == after_the_gap + timedelta(hours=1)
+    assert schedule.sub(after_the_gap, hours=1) == utc(5, 16)
+
+
 def test_rule_is_the_type_of_schedule_rules() -> None:
     assert "Rule" in workclock.__all__
+    assert "SpecialDay" in workclock.__all__
     rules = vars(Schedule)["rules"]
     assert isinstance(rules, property)
     hints = get_type_hints(rules.fget)
     assert hints["return"] == tuple[Rule, ...]
-    assert get_args(Rule) == (WorkDay, Break, Holidays)
+    assert get_args(Rule) == (WorkDay, Break, Holidays, SpecialDay)
 
 
 def test_schedules_pickle_and_deep_copy() -> None:
@@ -297,11 +503,13 @@ def test_schedules_pickle_and_deep_copy() -> None:
             WorkDay(time(9), time(17), time_zone="Europe/London"),
             Break(time(12), time(13)),
             Holidays([date(2026, 1, 7)]),
+            SpecialDay(time(8), time(12), [date(2026, 1, 8)], time_zone="UTC"),
         ],
         time_zone="Asia/Kolkata",
     )
     start, end = utc(5, 0), utc(12, 0)
     for copied in (pickle.loads(pickle.dumps(schedule)), copy.deepcopy(schedule)):
+        assert copied.rules == schedule.rules
         assert repr(copied) == repr(schedule)
         assert copied.add(start, hours=20) == schedule.add(start, hours=20)
         assert copied.between(start, end) == schedule.between(start, end)

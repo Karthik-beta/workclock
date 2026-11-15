@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime, time, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 import numpy as np
 import pytest
-from workclock import OutOfRangeError, Schedule, WorkDay
+from workclock import OutOfRangeError, Schedule, SpecialDay, WorkDay
 
 
 @pytest.fixture
@@ -30,6 +30,26 @@ def test_lists_match_single_calls(nights: Schedule) -> None:
     assert nights.sub_many(starts, hours) == [
         nights.sub(t, d) for t, d in zip(starts, hours, strict=True)
     ]
+
+
+def test_batches_with_special_days_match_single_calls() -> None:
+    # S6-S8: Tuesday's night is shorter, Monday's runs into Tuesday as usual.
+    schedule = Schedule(
+        [WorkDay(time(22), time(6)), SpecialDay(time(22), time(2), [date(2026, 1, 6)])]
+    )
+    starts = [utc(5, 22), utc(6, 0), utc(6, 22), utc(7, 1)]
+    ends = [utc(7, 6), utc(6, 6), utc(7, 6), utc(8, 6)]
+    hours = [timedelta(hours=h) for h in (10, 2, 4, -1)]
+    assert schedule.between_many(starts, ends) == [
+        schedule.between(a, b) for a, b in zip(starts, ends, strict=True)
+    ]
+    assert schedule.add_many(starts, hours) == [
+        schedule.add(t, d) for t, d in zip(starts, hours, strict=True)
+    ]
+    assert schedule.sub_many(ends, hours) == [
+        schedule.sub(t, d) for t, d in zip(ends, hours, strict=True)
+    ]
+    assert schedule.add_many([utc(6, 5)], timedelta(hours=2)) == [utc(6, 23)]
 
 
 def test_a_single_amount_applies_to_every_datetime(nights: Schedule) -> None:

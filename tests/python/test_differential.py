@@ -21,7 +21,7 @@ from hypothesis import assume, given
 from hypothesis import strategies as st
 from support.fixture import HolidaySpec, RuleSpec, ScheduleSpec
 from support.oracle import Oracle, OracleError
-from support.strategies import DAYS, moments, schedules
+from support.strategies import DAYS, moments, schedules_without_special_days
 from workclock import NoWorkingTimeError, compat
 
 ZONES = ["UTC", "Asia/Kolkata"]
@@ -124,7 +124,7 @@ def test_subtracting_matches_upstream_and_oracle(
     assert ours == theirs == Oracle.build(spec).sub(t, d)
 
 
-@given(spec=schedules, t=moments, d=hours_amounts)
+@given(spec=schedules_without_special_days, t=moments, d=hours_amounts)
 def test_compat_matches_oracle_beyond_upstream_domain(
     spec: ScheduleSpec, t: datetime.datetime, d: datetime.timedelta
 ) -> None:

@@ -12,7 +12,7 @@ use jiff::tz::TimeZone;
 use jiff::{SignedDuration, Timestamp};
 use pyo3::exceptions::{PyException, PyValueError};
 use pyo3::prelude::*;
-use workclock::{Break, Error, Holidays, Schedule as CoreSchedule, Weekdays, WorkDay};
+use workclock::{Break, Error, Holidays, Schedule as CoreSchedule, SpecialDay, Weekdays, WorkDay};
 
 pyo3::create_exception!(
     _workclock,
@@ -29,6 +29,8 @@ type DateTuple = (i16, i8, i8);
 type HoursTuple = (TimeTuple, TimeTuple, Vec<i8>, Option<String>);
 /// `(dates, zone)` of a holiday rule.
 type HolidaysTuple = (Vec<DateTuple>, Option<String>);
+/// `(start, end, dates, zone)` of a special-day rule.
+type SpecialDayTuple = (TimeTuple, TimeTuple, Vec<DateTuple>, Option<String>);
 
 /// The `(kind, message)` arguments of an `EngineError`.
 fn describe(error: &Error) -> (&'static str, String) {
@@ -56,6 +58,10 @@ fn time((hour, minute, second, micro): TimeTuple) -> PyResult<Time> {
 
 fn date((year, month, day): DateTuple) -> PyResult<Date> {
     Date::new(year, month, day).map_err(value_error)
+}
+
+fn dates(tuples: Vec<DateTuple>) -> PyResult<Vec<Date>> {
+    tuples.into_iter().map(date).collect()
 }
 
 fn weekdays(days: &[i8]) -> PyResult<Weekdays> {
@@ -117,12 +123,13 @@ impl Schedule {
 #[pymethods]
 impl Schedule {
     #[new]
-    #[pyo3(signature = (zone, workdays, breaks, holidays))]
+    #[pyo3(signature = (zone, workdays, breaks, holidays, special_days))]
     fn new(
         zone: Option<String>,
         workdays: Vec<HoursTuple>,
         breaks: Vec<HoursTuple>,
         holidays: Vec<HolidaysTuple>,
+        special_days: Vec<SpecialDayTuple>,
     ) -> PyResult<Self> {
         let mut builder = CoreSchedule::builder();
         if let Some(zone) = zone {
@@ -134,9 +141,13 @@ impl Schedule {
         for spec in breaks {
             builder = builder.rule(hours(spec, Break::new, Break::time_zone)?);
         }
-        for (dates, zone) in holidays {
-            let dates = dates.into_iter().map(date).collect::<PyResult<Vec<_>>>()?;
-            builder = builder.rule(in_zone(Holidays::new(dates), zone, Holidays::time_zone));
+        for (holiday_dates, zone) in holidays {
+            let rule = Holidays::new(dates(holiday_dates)?);
+            builder = builder.rule(in_zone(rule, zone, Holidays::time_zone));
+        }
+        for (start, end, special_dates, zone) in special_days {
+            let rule = SpecialDay::new(time(start)?, time(end)?, dates(special_dates)?);
+            builder = builder.rule(in_zone(rule, zone, SpecialDay::time_zone));
         }
         engine(builder.build().map(Self))
     }
