@@ -389,9 +389,9 @@ Library code does not panic.
   or if its available time minus its breaks is empty over a 14-day reference
   window (Monday 2001-01-01 onward, UTC). Holidays and special days are
   excluded from this check because there are finitely many of them: the check
-  ignores both the special days' blocks and the shifts they replace. A
-  schedule whose only available rules are special days therefore fails to
-  build (S19).
+  counts every WorkDay shift, including those a special day replaces, and no
+  special-day block. A schedule whose only available rules are special days
+  therefore fails to build (S19).
 - **Search bound.** `add`, `sub`, `next_period` and `previous_period` stop
   with the same error if they cross 366 days, plus seven days per holiday
   date and per distinct special date, without finding working time. Without

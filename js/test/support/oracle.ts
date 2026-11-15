@@ -62,8 +62,8 @@ export class Oracle {
     const specialDays = (spec.specialdays ?? []).map((s) => new SpecialDay(s, zone(s.zone)));
     const specialDates = new Set(specialDays.flatMap((s) => [...s.dates]));
 
-    // Like holidays, special days take no part in the check: neither their
-    // blocks nor the shifts they replace.
+    // Like holidays, special days take no part in the check: their blocks do
+    // not count, and the shifts they replace still do.
     const check = new Oracle(workdays(), [], breaks, [], 0);
     const windowStart = Date.UTC(2001, 0, 1);
     for (let m = windowStart; m < windowStart + 14 * DAY; m += MINUTE) {
