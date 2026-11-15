@@ -34,8 +34,9 @@ Options considered for what a special date does to the other rules:
 ## Decision
 
 Add a `SpecialDay` rule with `start`, `end`, a set of local `dates` and a time
-zone that defaults to the schedule's, as specified in
-[DESIGN.md](../../DESIGN.md#specialday):
+zone that defaults to the schedule's. Its section in
+[DESIGN.md](../../DESIGN.md), added with the bindings, gives worked examples.
+The rule:
 
 - On each date it produces the block from `start` to `end`, exactly as WorkDay
   does on a matching weekday, overnight blocks and DST resolution included.
